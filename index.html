@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PPL Fitness Dashboard - Your Workout Hub</title>
+    
+    <!-- Bulma CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="ppl-workout-dashboard/style.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar is-primary" role="navigation">
+        <div class="navbar-brand">
+            <a class="navbar-item" href="index.html">
+                <i class="fas fa-dumbbell mr-2"></i>
+                <strong>PPL Fitness Hub</strong>
+            </a>
+            
+            <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false" data-target="navbarBasic">
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+            </a>
+        </div>
+
+        <div id="navbarBasic" class="navbar-menu">
+            <div class="navbar-end">
+                <a class="navbar-item">
+                    <i class="fas fa-user mr-1"></i>
+                    Alex
+                </a>
+                <a class="navbar-item">
+                    <i class="fas fa-cog"></i>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero is-primary is-medium hero-gradient">
+        <div class="hero-body">
+            <div class="container has-text-centered">
+                <h1 class="title is-2">
+                    <i class="fas fa-fire mr-3"></i>
+                    Ready for your Pull Day workout?
+                </h1>
+                <h2 class="subtitle is-4" id="current-date">
+                    Tuesday, September 9, 2025
+                </h2>
+                <div class="hero-stats columns is-mobile is-centered">
+                    <div class="column is-narrow">
+                        <div class="stat-box">
+                            <span class="stat-number">2</span>
+                            <span class="stat-label">Current Streak</span>
+                        </div>
+                    </div>
+                    <div class="column is-narrow">
+                        <div class="stat-box">
+                            <span class="stat-number">3</span>
+                            <span class="stat-label">Total Workouts</span>
+                        </div>
+                    </div>
+                    <div class="column is-narrow">
+                        <div class="stat-box">
+                            <span class="stat-number">2.5</span>
+                            <span class="stat-label">Hours Trained</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Main Content -->
+    <div class="container mt-5 mb-6">
+        <!-- Today's Workout Highlight -->
+        <section class="section">
+            <div class="columns is-centered">
+                <div class="column is-8">
+                    <div class="card workout-highlight is-primary">
+                        <div class="card-content">
+                            <div class="media">
+                                <div class="media-left">
+                                    <figure class="image is-64x64">
+                                        <div class="workout-icon pull-icon">
+                                            <i class="fas fa-arrow-down"></i>
+                                        </div>
+                                    </figure>
+                                </div>
+                                <div class="media-content">
+                                    <p class="title is-4 has-text-white">Today's Workout: Pull Day</p>
+                                    <p class="subtitle is-6 has-text-white-ter">Back & Biceps • 45-55 min • Beginner</p>
+                                    <p class="has-text-white-bis">Focus on squeezing your shoulder blades together during pull exercises</p>
+                                </div>
+                                <div class="media-right">
+                                    <button class="button is-light is-large" onclick="startWorkout('pull')">
+                                        <i class="fas fa-play mr-2"></i>
+                                        Start Now
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Workout Navigation Cards -->
+        <section class="section">
+            <h2 class="title is-3 has-text-centered mb-5">
+                <i class="fas fa-calendar-week mr-2"></i>
+                Your Training Program
+            </h2>
+            
+            <div class="columns is-multiline">
+                <!-- Push Day Card -->
+                <div class="column is-4">
+                    <div class="card workout-card push-card">
+                        <div class="card-content">
+                            <div class="workout-header has-text-centered">
+                                <div class="workout-icon push-icon mb-3">
+                                    <i class="fas fa-fist-raised"></i>
+                                </div>
+                                <h3 class="title is-4">Push Day</h3>
+                                <p class="subtitle is-6">Chest, Shoulders, Triceps</p>
+                            </div>
+                            
+                            <div class="workout-details">
+                                <div class="level is-mobile">
+                                    <div class="level-item has-text-centered">
+                                        <div>
+                                            <p class="heading">Exercises</p>
+                                            <p class="title is-6">6</p>
+                                        </div>
+                                    </div>
+                                    <div class="level-item has-text-centered">
+                                        <div>
+                                            <p class="heading">Duration</p>
+                                            <p class="title is-6">45-55min</p>
+                                        </div>
+                                    </div>
+                                    <div class="level-item has-text-centered">
+                                        <div>
+                                            <p class="heading">Sets</p>
+                                            <p class="title is-6">17</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="schedule-info">
+                                    <span class="tag is-info">Next: Thursday</span>
+                                    <span class="tag is-success">
+                                        <i class="fas fa-check mr-1"></i>
+                                        Last Monday
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        <footer class="card-footer">
+                            <a href="push-day-workout/index.html" class="card-footer-item">
+                                <i class="fas fa-play mr-2"></i>
+                                Start Workout
+                            </a>
+                        </footer>
+                    </div>
+                </div>
+
+                <!-- Pull Day Card (Today - Highlighted) -->
+                <div class="column is-4">
+                    <div class="card workout-card pull-card is-active">
+                        <div class="card-content">
+                            <div class="workout-header has-text-centered">
+                                <div class="today-badge">
+                                    <span class="tag is-warning">
+                                        <i class="fas fa-star mr-1"></i>
+                                        TODAY
+                                    </span>
+                                </div>
+                                <div class="workout-icon pull-icon mb-3">
+                                    <i class="fas fa-arrow-down"></i>
+                                </div>
+                                <h3 class="title is-4">Pull Day</h3>
+                                <p class="subtitle is-6">Back & Biceps</p>
+                            </div>
+                            
+                            <div class="workout-details">
+                                <div class="level is-mobile">
+                                    <div class="level-item has-text-centered">
+                                        <div>
+                                            <p class="heading">Exercises</p>
+                                            <p class="title is-6">6</p>
+                                        </div>
+                                    </div>
+                                    <div class="level-item has-text-centered">
+                                        <div>
+                                            <p class="heading">Duration</p>
+                                            <p class="title is-6">45-55min</p>
+                                        </div>
+                                    </div>
+                                    <div class="level-item has-text-centered">
+                                        <div>
+                                            <p class="heading">Sets</p>
+                                            <p class="title is-6">17</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="schedule-info">
+                                    <span class="tag is-primary">Today's Focus</span>
+                                    <span class="tag is-success">
+                                        <i class="fas fa-check mr-1"></i>
+                                        Last Friday
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        <footer class="card-footer">
+                            <a href="pull-day-workout/index.html" class="card-footer-item has-background-warning">
+                                <i class="fas fa-play mr-2"></i>
+                                Start Today's Workout
+                            </a>
+                        </footer>
+                    </div>
+                </div>
+
+                <!-- Legs Day Card -->
+                <div class="column is-4">
+                    <div class="card workout-card legs-card">
+                        <div class="card-content">
+                            <div class="workout-header has-text-centered">
+                                <div class="workout-icon legs-icon mb-3">
+                                    <i class="fas fa-running"></i>
+                                </div>
+                                <h3 class="title is-4">Legs Day</h3>
+                                <p class="subtitle is-6">Quads, Hamstrings, Glutes, Calves</p>
+                            </div>
+                            
+                            <div class="workout-details">
+                                <div class="level is-mobile">
+                                    <div class="level-item has-text-centered">
+                                        <div>
+                                            <p class="heading">Exercises</p>
+                                            <p class="title is-6">6</p>
+                                        </div>
+                                    </div>
+                                    <div class="level-item has-text-centered">
+                                        <div>
+                                            <p class="heading">Duration</p>
+                                            <p class="title is-6">45-55min</p>
+                                        </div>
+                                    </div>
+                                    <div class="level-item has-text-centered">
+                                        <div>
+                                            <p class="heading">Sets</p>
+                                            <p class="title is-6">17</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="schedule-info">
+                                    <span class="tag is-info">Next: Tomorrow</span>
+                                </div>
+                            </div>
+                        </div>
+                        <footer class="card-footer">
+                            <a href="legs-day-workout/index.html" class="card-footer-item">
+                                <i class="fas fa-play mr-2"></i>
+                                Start Workout
+                            </a>
+                        </footer>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Dashboard Widgets -->
+        <section class="section">
+            <div class="columns is-multiline">
+                <!-- Weekly Schedule -->
+                <div class="column is-6">
+                    <div class="card">
+                        <header class="card-header">
+                            <p class="card-header-title">
+                                <i class="fas fa-calendar mr-2"></i>
+                                Weekly Schedule
+                            </p>
+                        </header>
+                        <div class="card-content">
+                            <div class="schedule-week" id="weekly-schedule">
+                                <!-- Populated by JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Stats -->
+                <div class="column is-6">
+                    <div class="card">
+                        <header class="card-header">
+                            <p class="card-header-title">
+                                <i class="fas fa-chart-line mr-2"></i>
+                                Progress Overview
+                            </p>
+                        </header>
+                        <div class="card-content">
+                            <div class="stats-grid">
+                                <div class="stat-item">
+                                    <span class="stat-value">51</span>
+                                    <span class="stat-label">Total Sets</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-value">612</span>
+                                    <span class="stat-label">Total Reps</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-value">66kg</span>
+                                    <span class="stat-label">Current Weight</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-value">25kg</span>
+                                    <span class="stat-label">Lat Pulldown PR</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Workouts -->
+                <div class="column is-6">
+                    <div class="card">
+                        <header class="card-header">
+                            <p class="card-header-title">
+                                <i class="fas fa-history mr-2"></i>
+                                Recent Activity
+                            </p>
+                        </header>
+                        <div class="card-content">
+                            <div id="recent-workouts">
+                                <!-- Populated by JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Motivational Content -->
+                <div class="column is-6">
+                    <div class="card">
+                        <header class="card-header">
+                            <p class="card-header-title">
+                                <i class="fas fa-quote-left mr-2"></i>
+                                Daily Motivation
+                            </p>
+                        </header>
+                        <div class="card-content">
+                            <blockquote class="has-text-centered">
+                                <p class="is-italic" id="daily-quote">
+                                    "Progress, not perfection. You're getting stronger every day!"
+                                </p>
+                            </blockquote>
+                            
+                            <div class="tip-section mt-4">
+                                <h4 class="title is-6">Today's Tip:</h4>
+                                <p class="content" id="daily-tip">
+                                    Focus on squeezing your shoulder blades together during pull exercises
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="content has-text-centered">
+            <p>
+                <strong>PPL Fitness Dashboard</strong> - Your complete workout companion.
+                <br>
+                Keep pushing your limits! 💪
+            </p>
+        </div>
+    </footer>
+
+    <!-- JavaScript -->
+    <script src="ppl-workout-dashboard/app.js"></script>
+</body>
+</html>

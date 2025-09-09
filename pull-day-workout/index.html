@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; frame-src 'self' https://www.youtube.com https://youtube.com;"
+    />
+    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+    <meta http-equiv="X-Frame-Options" content="SAMEORIGIN" />
+    <title>Pull Day Workout - Tuesday, September 9, 2025</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="app">
+      <!-- Navigation Header -->
+      <header class="header">
+        <div class="container">
+          <a href="../index.html" class="back-btn">← Back to Dashboard</a>
+        </div>
+      </header>
+      
+      <!-- Progress Bar -->
+      <div class="progress-nav">
+        <div class="container">
+          <div class="progress-bar-container">
+            <div class="progress-bar">
+              <div class="progress-fill" id="main-progress-fill"></div>
+            </div>
+            <div class="phase-indicators">
+              <button class="phase-indicator locked" data-phase="checklist">
+                <span class="phase-number">1</span>
+                <span class="phase-name">Checklist</span>
+              </button>
+              <button class="phase-indicator locked" data-phase="warm-up">
+                <span class="phase-number">2</span>
+                <span class="phase-name">Warm-up</span>
+              </button>
+              <button class="phase-indicator locked" data-phase="workout">
+                <span class="phase-number">3</span>
+                <span class="phase-name">Workout</span>
+              </button>
+              <button class="phase-indicator locked" data-phase="stretching">
+                <span class="phase-number">4</span>
+                <span class="phase-name">Stretching</span>
+              </button>
+              <button class="phase-indicator locked" data-phase="complete">
+                <span class="phase-number">5</span>
+                <span class="phase-name">Complete</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Content -->
+      <main class="main-content">
+        <!-- Welcome Phase -->
+        <section id="welcome-phase" class="phase active">
+          <div class="container">
+            <div class="welcome-card">
+              <div class="header-nav">
+                <a href="../index.html" class="btn btn--outline btn--sm">
+                  <i class="fas fa-arrow-left mr-1"></i>
+                  Back to Dashboard
+                </a>
+              </div>
+              <h1>🔙 Pull Day Workout</h1>
+              <div class="workout-info">
+                <div class="info-item">
+                  <span class="info-label">Date:</span>
+                  <span class="info-value">Tuesday, September 9, 2025</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Duration:</span>
+                  <span class="info-value">45-55 minutes</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Muscle Groups:</span>
+                  <span class="info-value">Back, Biceps</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Equipment:</span>
+                  <span class="info-value">Cable machines, Dumbbells</span>
+                </div>
+              </div>
+              <button class="btn btn--primary btn--lg" id="start-workout-btn">
+                Start Pull Day Workout
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Pre-Workout Checklist Phase -->
+        <section id="checklist-phase" class="phase">
+          <div class="container">
+            <div class="phase-header">
+              <h2>Pre-Workout Checklist ✓</h2>
+              <p>Complete all items before starting your workout</p>
+            </div>
+
+            <div class="checklist-card card">
+              <div class="card__body">
+                <div class="checklist-items">
+                  <div class="checklist-item">
+                    <input
+                      type="checkbox"
+                      id="meal"
+                      class="checklist-checkbox"
+                    />
+                    <label for="meal"
+                      >Ate pre-workout meal 1-2 hours ago (banana + peanut
+                      butter)</label
+                    >
+                  </div>
+                  <div class="checklist-item">
+                    <input
+                      type="checkbox"
+                      id="hydration"
+                      class="checklist-checkbox"
+                    />
+                    <label for="hydration"
+                      >Hydrated well today (16-20oz water)</label
+                    >
+                  </div>
+                  <div class="checklist-item">
+                    <input
+                      type="checkbox"
+                      id="equipment"
+                      class="checklist-checkbox"
+                    />
+                    <label for="equipment"
+                      >Have gym towel and water bottle ready</label
+                    >
+                  </div>
+                  <div class="checklist-item">
+                    <input
+                      type="checkbox"
+                      id="clothes"
+                      class="checklist-checkbox"
+                    />
+                    <label for="clothes"
+                      >Wearing comfortable workout clothes</label
+                    >
+                  </div>
+                  <div class="checklist-item">
+                    <input
+                      type="checkbox"
+                      id="phone"
+                      class="checklist-checkbox"
+                    />
+                    <label for="phone"
+                      >Have this workout plan accessible on phone</label
+                    >
+                  </div>
+                  <div class="checklist-item">
+                    <input
+                      type="checkbox"
+                      id="goals"
+                      class="checklist-checkbox"
+                    />
+                    <label for="goals"
+                      >Set realistic weight goals for tonight's session</label
+                    >
+                  </div>
+                </div>
+                <button
+                  class="btn btn--primary btn--full-width"
+                  id="checklist-complete-btn"
+                  disabled
+                >
+                  Complete Checklist & Continue
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Warm-Up Phase -->
+        <section id="warm-up-phase" class="phase">
+          <div class="container">
+            <div class="phase-header">
+              <h2>Warm-Up (10 minutes) 🔥</h2>
+              <p>Prepare your body for the workout ahead</p>
+            </div>
+
+            <div class="warm-up-content">
+              <!-- Cardio Timer -->
+              <div class="card timer-card">
+                <div class="card__body">
+                  <h3>Light Cardio</h3>
+                  <p>
+                    Treadmill or bike - start slow, gradually increase to light
+                    sweat
+                  </p>
+                  <div class="timer-display">
+                    <span class="time" id="cardio-timer">05:00</span>
+                  </div>
+                  <div class="timer-controls">
+                    <button class="btn btn--primary" id="cardio-start">
+                      Start
+                    </button>
+                    <button
+                      class="btn btn--secondary"
+                      id="cardio-pause"
+                      disabled
+                    >
+                      Pause
+                    </button>
+                    <button class="btn btn--outline" id="cardio-reset">
+                      Reset
+                    </button>
+                  </div>
+                  <div class="timer-status" id="cardio-status">
+                    Ready to start
+                  </div>
+                </div>
+              </div>
+
+              <!-- Warm-up Exercises -->
+              <div class="card">
+                <div class="card__body">
+                  <h3>Dynamic Warm-up Exercises</h3>
+                  <div class="exercise-list">
+                    <div class="exercise-item">
+                      <div class="exercise-content">
+                        <input
+                          type="checkbox"
+                          id="arm-swings"
+                          class="exercise-checkbox"
+                        />
+                        <label for="arm-swings">
+                          <strong>Arm Swings</strong> - 10 each direction
+                          <small>Forward and backward, then side to side</small>
+                        </label>
+                      </div>
+                      <div class="video-container">
+                        <iframe
+                          src="https://www.youtube.com/embed/0G1MkquCbjs"
+                          title="YouTube video player"
+                          frameborder="0"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowfullscreen
+                        >
+                        </iframe>
+                      </div>
+                    </div>
+                    <div class="exercise-item">
+                      <div class="exercise-content">
+                        <input
+                          type="checkbox"
+                          id="band-pulls"
+                          class="exercise-checkbox"
+                        />
+                        <label for="band-pulls">
+                          <strong>Band Pull-Aparts</strong> - 15 reps
+                          <small
+                            >Light resistance band, pull apart at chest
+                            level</small
+                          >
+                        </label>
+                      </div>
+                      <div class="video-container">
+                        <iframe
+                          src="https://www.youtube.com/embed/Jcn93rBhUps"
+                          title="YouTube video player"
+                          frameborder="0"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowfullscreen
+                        >
+                        </iframe>
+                      </div>
+                    </div>
+                    <div class="exercise-item">
+                      <div class="exercise-content">
+                        <input
+                          type="checkbox"
+                          id="wall-slides"
+                          class="exercise-checkbox"
+                        />
+                        <label for="wall-slides">
+                          <strong>Scapular Wall Slides</strong> - 10 reps
+                          <small
+                            >Back against wall, slide arms up and down like snow
+                            angel</small
+                          >
+                        </label>
+                      </div>
+                      <div class="video-container">
+                        <iframe
+                          src="https://www.youtube.com/embed/P1eGqnBzum4"
+                          title="YouTube video player"
+                          frameborder="0"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowfullscreen
+                        >
+                        </iframe>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    class="btn btn--primary btn--full-width"
+                    id="warm-up-complete-btn"
+                    disabled
+                  >
+                    Complete Warm-Up & Start Workout
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Main Workout Phase -->
+        <section id="workout-phase" class="phase">
+          <div class="container">
+            <div class="phase-header">
+              <h2>Main Workout (25-30 minutes) 💪</h2>
+              <p>Focus on proper form and controlled movements</p>
+            </div>
+
+            <div class="workout-progress">
+              <div class="progress-stats">
+                <span class="sets-completed"
+                  >Sets: <span id="sets-count">0</span>/17</span
+                >
+                <span class="exercises-completed"
+                  >Exercises: <span id="exercises-count">0</span>/6</span
+                >
+              </div>
+            </div>
+
+            <div class="exercise-cards" id="exercise-cards">
+              <!-- Exercise cards will be populated by JS -->
+            </div>
+
+            <button
+              class="btn btn--primary btn--full-width"
+              id="workout-complete-btn"
+              disabled
+            >
+              Complete Workout & Start Stretching
+            </button>
+          </div>
+
+          <!-- Rest Timer Modal -->
+          <div id="rest-timer-modal" class="modal hidden">
+            <div class="modal-overlay"></div>
+            <div class="modal-content rest-timer-content">
+              <h3>Rest Period</h3>
+              <div class="rest-timer-display">
+                <span class="rest-time" id="rest-timer">01:30</span>
+              </div>
+              <div class="rest-controls">
+                <button class="btn btn--outline" id="skip-rest">
+                  Skip Rest
+                </button>
+                <button class="btn btn--secondary" id="add-rest-time">
+                  +30s
+                </button>
+              </div>
+              <div class="rest-status" id="rest-status">Rest and recover</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Stretching Phase -->
+        <section id="stretching-phase" class="phase">
+          <div class="container">
+            <div class="phase-header">
+              <h2>Stretching & Cool Down (10 minutes) 🧘</h2>
+              <p>Improve flexibility and aid recovery</p>
+            </div>
+
+            <div class="stretching-content">
+              <div class="card">
+                <div class="card__body">
+                  <h3>Stretching Routine</h3>
+                  <div class="stretch-list" id="stretch-list">
+                    <!-- Stretch items will be populated by JS -->
+                  </div>
+                  <button
+                    class="btn btn--primary btn--full-width"
+                    id="stretching-complete-btn"
+                    disabled
+                  >
+                    Complete Stretching & Finish Workout
+                  </button>
+                </div>
+              </div>
+
+              <!-- Cool-down Cardio -->
+              <div class="card timer-card">
+                <div class="card__body">
+                  <h3>Cool-Down Walk/Bike</h3>
+                  <p>Comfortable pace where you can hold conversation</p>
+                  <div class="timer-display">
+                    <span class="time" id="cooldown-timer">10:00</span>
+                  </div>
+                  <div class="timer-controls">
+                    <button class="btn btn--primary" id="cooldown-start">
+                      Start
+                    </button>
+                    <button
+                      class="btn btn--secondary"
+                      id="cooldown-pause"
+                      disabled
+                    >
+                      Pause
+                    </button>
+                    <button class="btn btn--outline" id="cooldown-reset">
+                      Reset
+                    </button>
+                  </div>
+                  <div class="timer-status" id="cooldown-status">
+                    Ready to start
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Stretch Timer Modal -->
+            <div id="stretch-timer-modal" class="modal hidden">
+              <div class="modal-overlay"></div>
+              <div class="modal-content stretch-timer-content">
+                <h3 id="current-stretch-name">Lat Stretch</h3>
+                <div class="stretch-timer-display">
+                  <span class="stretch-time" id="stretch-timer">00:30</span>
+                </div>
+                <p class="stretch-instructions" id="stretch-instructions">
+                  Reach one arm overhead and lean to opposite side
+                </p>
+                <div class="stretch-controls">
+                  <button class="btn btn--secondary" id="finish-stretch">
+                    Finish Stretch
+                  </button>
+                </div>
+                <div class="stretch-status" id="stretch-status">
+                  Hold this position
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Complete Phase -->
+        <section id="complete-phase" class="phase">
+          <div class="container">
+            <div class="phase-header">
+              <h2>🎉 Workout Complete!</h2>
+              <p>Great job on completing your Pull Day workout</p>
+            </div>
+
+            <div class="completion-card card">
+              <div class="card__body">
+                <div class="completion-stats">
+                  <div class="stat-item">
+                    <span class="stat-value" id="final-sets">17</span>
+                    <span class="stat-label">Sets Completed</span>
+                  </div>
+                  <div class="stat-item">
+                    <span class="stat-value" id="final-exercises">6</span>
+                    <span class="stat-label">Exercises</span>
+                  </div>
+                  <div class="stat-item">
+                    <span class="stat-value" id="final-time">45</span>
+                    <span class="stat-label">Minutes</span>
+                  </div>
+                </div>
+
+                <div class="post-workout-checklist">
+                  <h3>Post-Workout Checklist</h3>
+                  <div class="checklist-items">
+                    <div class="checklist-item">
+                      <input type="checkbox" id="cooldown-complete" />
+                      <label for="cooldown-complete"
+                        >Completed 10-minute cool-down cardio</label
+                      >
+                    </div>
+                    <div class="checklist-item">
+                      <input type="checkbox" id="stretching-done" />
+                      <label for="stretching-done"
+                        >Stretched all major muscle groups worked today</label
+                      >
+                    </div>
+                    <div class="checklist-item">
+                      <input type="checkbox" id="hydrate" />
+                      <label for="hydrate"
+                        >Drinking water to rehydrate properly</label
+                      >
+                    </div>
+                    <div class="checklist-item">
+                      <input type="checkbox" id="nutrition" />
+                      <label for="nutrition"
+                        >Will eat protein + carbs within 30 minutes at
+                        home</label
+                      >
+                    </div>
+                    <div class="checklist-item">
+                      <input type="checkbox" id="log-weights" />
+                      <label for="log-weights"
+                        >Logged today's weights used for progression
+                        tracking</label
+                      >
+                    </div>
+                    <div class="checklist-item">
+                      <input type="checkbox" id="shower" />
+                      <label for="shower"
+                        >Ready to shower and change into clean clothes</label
+                      >
+                    </div>
+                  </div>
+                </div>
+
+                <div class="completion-actions">
+                  <a href="../index.html" class="btn btn--outline mr-3">
+                    <i class="fas fa-home mr-2"></i>
+                    Back to Dashboard
+                  </a>
+                  <button
+                    class="btn btn--primary btn--lg"
+                    onclick="location.reload()"
+                  >
+                    Start New Workout
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <!-- Confidence Tips Panel -->
+      <div class="confidence-panel" id="confidence-panel">
+        <button class="confidence-toggle" id="confidence-toggle">
+          💡 Tips
+        </button>
+        <div class="confidence-content" id="confidence-content">
+          <h4>Pull Day Confidence Tips</h4>
+          <div class="tip-category">
+            <h5>Equipment</h5>
+            <ul>
+              <li>
+                Cable machines are perfect for back training - very beginner
+                friendly
+              </li>
+              <li>Most cable machines have pictures showing proper form</li>
+              <li>Ask gym staff to show you how to adjust cable height</li>
+            </ul>
+          </div>
+          <div class="tip-category">
+            <h5>Exercise</h5>
+            <ul>
+              <li>
+                Everyone starts light on back exercises - form is more important
+              </li>
+              <li>Focus on squeezing your shoulder blades together</li>
+              <li>Pulling exercises help improve posture from desk work</li>
+            </ul>
+          </div>
+          <div class="tip-category">
+            <h5>Social</h5>
+            <ul>
+              <li>Most people are focused on their own workout</li>
+              <li>You can ask to 'work in' during rest periods</li>
+              <li>Everyone was a beginner once - don't feel self-conscious</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Audio for notifications -->
+      <audio id="timer-sound" preload="auto">
+        <source
+          src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+HyvmAcCEON0fPTgjMGHm7A7+OZQA0PVqzn77BdGAg+ltryxnkpBSl+zPLaizsIGGS57OihUAwLTKXh8LZjHAU2jdXzzn0vBSF1xe/glEILElyx6OyrWBUIQ5zd8sFjHAg7ltTzzYIvBSF1xe/glEILElyx6OyrWBUIQ5zd8sFjHAg7ltTzzYIvBSJ2xu/glEILElyx6OyrWBUIQ5zd8sFjHAg7ltTzzYIvBSJ2xu/glEILElyx6OyrWBUIQ5zd8sFjHAg7ltTzzYIvBSJ2xu/glEILElyx6OyrWBUIQ5zd8sFjHAg7ltTzzYIvBSJ2xu/glEILElyx6OyrWBUIQ5zd8sFjHAg7ltTzzYIvBSJ2xu/glEILE1yx6OyrWBUIQ5zd8sFjHAg7ltTzzYIvBSJ2xu/glEILElyx6OyrWBUIQ5zd8sFjHAg7ltTzzYIvBSJ2xu/glEILElyx6OyrWBUIQ5zd8sFjHAg7ltTzzYIvBSJ2xu/glEILElyx6OyrWBUIQ5zd8sFjHAg7ltTzzYIvBSJ2xu/glEILElyx6OyrWBUIQ5zd8sFjHAg7ltTzzYIvBSJ2xu/glEILElyx6OyrWBUIQ5zd8sFjHAg7ltTzzYIvBSJ2xu/glEILElyx6OyrWBUIQ5zd8sFjHAg7ltTzzYIvBSJ2xu/glEILElyx6OyrWBUIQ5zd8sFjHAg7ltTzzYIvBSJ2xu/glEILElyx6OyrWBUIQ5zd8sFjHAg7ltTzzYIvBSJ2xu/glEILElyx6OyrWBUIQ5zd8sFjHAg7ltTzzYIvBSJ2xu/glEILElyx6OyrWBUIQ5zd8sFjHAg7ltTzzYIvBSJ2xu/glEILElyx6OyrWBUIQ5zd8sFjHAg7ltTzzYIvBSJ2xu/glEILElyx6OyrWBUIQ5zd8sFjHAg7ltTzzYIvBSJ2xu/glEILElyx6OyrWBUIQ5zd8sFjHAg7ltTzzYIvBSJ2xu/glEIL"
+          type="audio/wav"
+        />
+      </audio>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

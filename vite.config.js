@@ -7,7 +7,6 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: 'index.html',
-        dashboard: 'ppl-workout-dashboard/index.html',
         push: 'push-day-workout/index.html',
         pull: 'pull-day-workout/index.html',
         legs: 'legs-day-workout/index.html'

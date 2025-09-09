@@ -151,12 +151,60 @@ class DashboardApp {
         }
         
         return {
-            streak: 2,
-            totalWorkouts: 3,
-            hoursTrained: 2.5,
-            lastWorkout: 'Push Day',
-            nextWorkout: 'Pull Day'
+            streak: this.calculateStreak(),
+            totalWorkouts: this.calculateWeeklyWorkouts(),
+            hoursTrained: this.calculateWeeklyHours(),
+            lastWorkout: this.getLastWorkout(),
+            nextWorkout: this.getTodaysWorkout()
         };
+    }
+    
+    calculateStreak() {
+        const today = new Date().getDay();
+        const todayIndex = today === 0 ? 6 : today - 1;
+        const workouts = ['Push', 'Pull', 'Legs', 'Push', 'Pull', 'Legs', 'Rest'];
+        
+        let streak = 0;
+        for (let i = todayIndex - 1; i >= 0; i--) {
+            if (workouts[i] !== 'Rest') {
+                streak++;
+            } else {
+                break;
+            }
+        }
+        return Math.max(streak, 1);
+    }
+    
+    calculateWeeklyWorkouts() {
+        const today = new Date().getDay();
+        const todayIndex = today === 0 ? 6 : today - 1;
+        const workouts = ['Push', 'Pull', 'Legs', 'Push', 'Pull', 'Legs', 'Rest'];
+        
+        let completed = 0;
+        for (let i = 0; i < todayIndex; i++) {
+            if (workouts[i] !== 'Rest') {
+                completed++;
+            }
+        }
+        return completed;
+    }
+    
+    calculateWeeklyHours() {
+        const completed = this.calculateWeeklyWorkouts();
+        return (completed * 0.75).toFixed(1); // 45min average per workout
+    }
+    
+    getLastWorkout() {
+        const today = new Date().getDay();
+        const todayIndex = today === 0 ? 6 : today - 1;
+        const workouts = ['Push', 'Pull', 'Legs', 'Push', 'Pull', 'Legs', 'Rest'];
+        
+        for (let i = todayIndex - 1; i >= 0; i--) {
+            if (workouts[i] !== 'Rest') {
+                return `${workouts[i]} Day`;
+            }
+        }
+        return 'None this week';
     }
 
     updateStatsDisplay(stats) {
@@ -166,6 +214,175 @@ class DashboardApp {
             statNumbers[1].textContent = stats.totalWorkouts;
             statNumbers[2].textContent = `${stats.hoursTrained}h`;
         }
+        
+        // Update progress bar for streak
+        const progressBar = document.querySelector('.stat-progress .progress-bar');
+        if (progressBar) {
+            const progressPercent = Math.min((stats.streak / 6) * 100, 100);
+            progressBar.style.width = `${progressPercent}%`;
+        }
+        
+        // Update weekly trend
+        const statTrend = document.querySelector('.stat-trend span');
+        if (statTrend) {
+            const todaysWorkout = this.getTodaysWorkout();
+            if (todaysWorkout !== 'Rest') {
+                statTrend.textContent = '+1 today';
+            } else {
+                statTrend.textContent = 'Rest day';
+            }
+        }
+        
+        // Update hero section with today's workout
+        this.updateTodaysWorkout();
+    }
+
+    getTodaysWorkout() {
+        const workouts = ['Push', 'Pull', 'Legs', 'Push', 'Pull', 'Legs', 'Rest'];
+        const today = new Date().getDay();
+        const todayIndex = today === 0 ? 6 : today - 1;
+        return workouts[todayIndex];
+    }
+
+    updateTodaysWorkout() {
+        const todaysWorkout = this.getTodaysWorkout();
+        const highlightText = document.querySelector('.highlight-text');
+        const heroTitle = document.querySelector('.hero-title');
+        
+        if (highlightText && heroTitle) {
+            if (todaysWorkout === 'Rest') {
+                highlightText.textContent = 'Rest Day';
+                heroTitle.innerHTML = `Time for your <span class="highlight-text">Rest Day</span> recovery!`;
+            } else {
+                highlightText.textContent = `${todaysWorkout} Day`;
+                heroTitle.innerHTML = `Ready for your <span class="highlight-text">${todaysWorkout} Day</span> workout?`;
+            }
+        }
+        
+        // Update CTA button
+        const ctaButton = document.querySelector('.cta-button.primary');
+        if (ctaButton && todaysWorkout !== 'Rest') {
+            const buttonContent = ctaButton.querySelector('.button-content span');
+            if (buttonContent) {
+                buttonContent.textContent = `Start ${todaysWorkout} Day`;
+            }
+            ctaButton.setAttribute('onclick', `startWorkout('${todaysWorkout.toLowerCase()}')`);
+        } else if (ctaButton && todaysWorkout === 'Rest') {
+            const buttonContent = ctaButton.querySelector('.button-content span');
+            if (buttonContent) {
+                buttonContent.textContent = 'Rest & Recover';
+            }
+            ctaButton.setAttribute('onclick', 'showRestDayMessage()');
+        }
+        
+        // Update all day-based interactions
+        this.updateWorkoutCards(todaysWorkout);
+        this.updateMotivationMessage(todaysWorkout);
+        this.updateHeroBackground(todaysWorkout);
+    }
+    
+    updateWorkoutCards(todaysWorkout) {
+        const workoutCards = document.querySelectorAll('.workout-card');
+        
+        workoutCards.forEach(card => {
+            const workoutName = card.querySelector('.workout-name').textContent.replace(' Day', '');
+            const statusBadge = card.querySelector('.status-badge');
+            const nextSession = card.querySelector('.next-session');
+            const workoutBtn = card.querySelector('.workout-btn');
+            
+            // Remove all status classes
+            card.classList.remove('active', 'completed', 'upcoming');
+            statusBadge.className = 'status-badge';
+            workoutBtn.classList.remove('active');
+            
+            if (workoutName === todaysWorkout) {
+                // Today's workout
+                card.classList.add('active');
+                statusBadge.classList.add('today');
+                statusBadge.innerHTML = '<i class="fas fa-star"></i>';
+                nextSession.textContent = "Today's Focus";
+                workoutBtn.classList.add('active');
+            } else if (this.isWorkoutCompleted(workoutName)) {
+                // Completed workout
+                card.classList.add('completed');
+                statusBadge.classList.add('completed');
+                statusBadge.innerHTML = '<i class="fas fa-check"></i>';
+                nextSession.textContent = this.getNextWorkoutDay(workoutName);
+            } else {
+                // Upcoming workout
+                card.classList.add('upcoming');
+                statusBadge.classList.add('upcoming');
+                statusBadge.innerHTML = '<i class="fas fa-clock"></i>';
+                nextSession.textContent = this.getNextWorkoutDay(workoutName);
+            }
+        });
+    }
+    
+    isWorkoutCompleted(workoutType) {
+        const today = new Date().getDay();
+        const todayIndex = today === 0 ? 6 : today - 1;
+        const workouts = ['Push', 'Pull', 'Legs', 'Push', 'Pull', 'Legs', 'Rest'];
+        
+        // Check if this workout type was already done this week
+        for (let i = 0; i < todayIndex; i++) {
+            if (workouts[i] === workoutType) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    getNextWorkoutDay(workoutType) {
+        const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        const workouts = ['Push', 'Pull', 'Legs', 'Push', 'Pull', 'Legs', 'Rest'];
+        const today = new Date().getDay();
+        const todayIndex = today === 0 ? 6 : today - 1;
+        
+        const nextDays = [];
+        for (let i = 0; i < workouts.length; i++) {
+            if (workouts[i] === workoutType) {
+                if (i > todayIndex) {
+                    nextDays.push(days[i]);
+                }
+            }
+        }
+        
+        if (nextDays.length === 0) {
+            // Next week
+            for (let i = 0; i < workouts.length; i++) {
+                if (workouts[i] === workoutType) {
+                    nextDays.push(days[i]);
+                }
+            }
+        }
+        
+        return nextDays.length > 1 ? `Next: ${nextDays.join(' & ')}` : `Next: ${nextDays[0] || 'TBD'}`;
+    }
+    
+    updateMotivationMessage(todaysWorkout) {
+        const motivationText = document.querySelector('.motivation-text');
+        if (!motivationText) return;
+        
+        const messages = {
+            'Push': "Focus on controlled movements and feel the burn in your chest and shoulders!",
+            'Pull': "Squeeze your shoulder blades together and feel your back muscles working!",
+            'Legs': "Drive through your heels and feel the power in your legs!",
+            'Rest': "Recovery is when your muscles grow stronger. Enjoy your rest day!"
+        };
+        
+        motivationText.textContent = `"${messages[todaysWorkout] || messages['Rest']}"`;
+    }
+    
+    updateHeroBackground(todaysWorkout) {
+        const heroSection = document.querySelector('.modern-hero');
+        if (!heroSection) return;
+        
+        // Remove existing workout classes
+        heroSection.classList.remove('push-theme', 'pull-theme', 'legs-theme', 'rest-theme');
+        
+        // Add today's workout theme
+        const themeClass = todaysWorkout === 'Rest' ? 'rest-theme' : `${todaysWorkout.toLowerCase()}-theme`;
+        heroSection.classList.add(themeClass);
     }
 
     setupTouchFeedback() {
@@ -198,7 +415,7 @@ class DashboardApp {
 
         try {
             const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-            const workouts = ['Push', 'Pull', 'Legs', 'Push', 'Pull', 'Rest', 'Rest'];
+            const workouts = ['Push', 'Pull', 'Legs', 'Push', 'Pull', 'Legs', 'Rest'];
             const today = new Date().getDay();
             const todayIndex = today === 0 ? 6 : today - 1;
 
@@ -232,11 +449,16 @@ class DashboardApp {
         if (!progressContainer) return;
 
         try {
+            const completedWorkouts = this.calculateWeeklyWorkouts();
+            const totalSets = completedWorkouts * 16;
+            const totalReps = totalSets * 12;
+            const weekProgress = Math.round((completedWorkouts / 6) * 100);
+            
             const stats = [
-                { value: '51', label: 'Total Sets' },
-                { value: '612', label: 'Total Reps' },
-                { value: '66kg', label: 'Current Weight' },
-                { value: '25kg', label: 'Lat Pulldown PR' }
+                { value: totalSets.toString(), label: 'Total Sets', icon: 'layer-group' },
+                { value: totalReps.toString(), label: 'Total Reps', icon: 'redo' },
+                { value: `${weekProgress}%`, label: 'Week Progress', icon: 'chart-line' },
+                { value: `${this.calculateWeeklyHours()}h`, label: 'Time Trained', icon: 'clock' }
             ];
 
             const fragment = document.createDocumentFragment();
@@ -245,8 +467,13 @@ class DashboardApp {
                 const item = document.createElement('div');
                 item.className = 'progress-item';
                 item.innerHTML = `
-                    <span class="progress-value">${stat.value}</span>
-                    <span class="progress-label">${stat.label}</span>
+                    <div class="progress-icon">
+                        <i class="fas fa-${stat.icon}"></i>
+                    </div>
+                    <div class="progress-details">
+                        <span class="progress-value">${stat.value}</span>
+                        <span class="progress-label">${stat.label}</span>
+                    </div>
                 `;
                 fragment.appendChild(item);
             });
@@ -263,29 +490,7 @@ class DashboardApp {
         if (!recentContainer) return;
 
         try {
-            const workouts = [
-                {
-                    type: 'Push Day',
-                    date: 'Yesterday',
-                    duration: '52 min',
-                    rating: 4,
-                    gradient: 'var(--push-gradient)'
-                },
-                {
-                    type: 'Pull Day',
-                    date: '2 days ago',
-                    duration: '48 min',
-                    rating: 5,
-                    gradient: 'var(--pull-gradient)'
-                },
-                {
-                    type: 'Legs Day',
-                    date: '4 days ago',
-                    duration: '55 min',
-                    rating: 3,
-                    gradient: 'var(--legs-gradient)'
-                }
-            ];
+            const workouts = this.generateRecentWorkouts();
 
             const fragment = document.createDocumentFragment();
             
@@ -307,6 +512,10 @@ class DashboardApp {
                         <div class="workout-details">
                             <h4>${workout.type}</h4>
                             <p>${workout.date} • ${workout.duration}</p>
+                            <div class="workout-stats-mini">
+                                <span><i class="fas fa-dumbbell"></i> ${workout.sets} sets</span>
+                                <span><i class="fas fa-fire"></i> ${workout.calories} cal</span>
+                            </div>
                         </div>
                     </div>
                     <div class="workout-rating">
@@ -322,6 +531,56 @@ class DashboardApp {
         } catch (error) {
             console.error('Recent activity population failed:', error);
         }
+    }
+    
+    generateRecentWorkouts() {
+        const today = new Date().getDay();
+        const todayIndex = today === 0 ? 6 : today - 1;
+        const workouts = ['Push', 'Pull', 'Legs', 'Push', 'Pull', 'Legs', 'Rest'];
+        
+        const recentWorkouts = [];
+        let dayOffset = 1;
+        
+        for (let i = todayIndex - 1; i >= 0 && recentWorkouts.length < 3; i--) {
+            if (workouts[i] !== 'Rest') {
+                const workoutType = `${workouts[i]} Day`;
+                const gradient = workouts[i] === 'Push' ? 'var(--push-gradient)' :
+                               workouts[i] === 'Pull' ? 'var(--pull-gradient)' : 'var(--legs-gradient)';
+                
+                recentWorkouts.push({
+                    type: workoutType,
+                    date: dayOffset === 1 ? 'Yesterday' : `${dayOffset} days ago`,
+                    duration: `${45 + Math.floor(Math.random() * 15)} min`,
+                    sets: workouts[i] === 'Push' ? 17 : 16,
+                    calories: 250 + Math.floor(Math.random() * 100),
+                    rating: 4 + Math.floor(Math.random() * 2),
+                    gradient: gradient
+                });
+                dayOffset++;
+            } else {
+                dayOffset++;
+            }
+        }
+        
+        while (recentWorkouts.length < 3) {
+            const workoutTypes = ['Push Day', 'Pull Day', 'Legs Day'];
+            const randomType = workoutTypes[Math.floor(Math.random() * workoutTypes.length)];
+            const gradient = randomType === 'Push Day' ? 'var(--push-gradient)' :
+                           randomType === 'Pull Day' ? 'var(--pull-gradient)' : 'var(--legs-gradient)';
+            
+            recentWorkouts.push({
+                type: randomType,
+                date: `${dayOffset} days ago`,
+                duration: `${45 + Math.floor(Math.random() * 15)} min`,
+                sets: randomType === 'Push Day' ? 17 : 16,
+                calories: 250 + Math.floor(Math.random() * 100),
+                rating: 3 + Math.floor(Math.random() * 3),
+                gradient: gradient
+            });
+            dayOffset++;
+        }
+        
+        return recentWorkouts;
     }
 
     showFeedback(message) {
@@ -399,6 +658,13 @@ function startWorkout(type) {
         setTimeout(() => {
             window.location.href = workoutUrls[type];
         }, 500);
+    }
+}
+
+// Global function for rest day message
+function showRestDayMessage() {
+    if (dashboardAppInstance) {
+        dashboardAppInstance.showFeedback('🛌 Rest day! Your muscles need time to recover and grow stronger.');
     }
 }
 

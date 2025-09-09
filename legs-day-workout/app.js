@@ -1,3 +1,18 @@
+// Simple Auth Manager for demo purposes
+class AuthManager {
+    constructor() {
+        this.guestMode = false;
+    }
+    
+    enableGuestMode() {
+        this.guestMode = true;
+    }
+    
+    canAccessWorkout() {
+        return this.guestMode; // Always allow in guest mode for demo
+    }
+}
+
 // Legs Day Workout App JavaScript - Security & Performance Fixed
 class WorkoutApp {
     // Constants
@@ -23,6 +38,7 @@ class WorkoutApp {
         this.currentPhase = 'pre-workout';
         this.timers = new Map();
         this.cachedElements = new Map();
+        this.eventListeners = new Map();
         this.audioContext = null;
         this.state = {
             preWorkoutChecklist: {},
@@ -43,10 +59,14 @@ class WorkoutApp {
     }
 
     init() {
-        this.cacheElements();
-        this.setupEventListeners();
-        this.updatePhaseButtons();
-        this.setupConfidencePanel();
+        try {
+            this.cacheElements();
+            this.setupEventListeners();
+            this.updatePhaseButtons();
+            this.setupConfidencePanel();
+        } catch (error) {
+            console.error('Legs workout app initialization failed:', error);
+        }
     }
     
     cacheElements() {
@@ -75,44 +95,54 @@ class WorkoutApp {
         });
 
         // Phase progression buttons - Fixed event listeners
-        const startWarmupBtn = document.getElementById('start-warmup');
+        const startWarmupBtn = this.cachedElements.get('startWarmup');
         if (startWarmupBtn) {
-            startWarmupBtn.addEventListener('click', (e) => {
+            const handler = (e) => {
                 e.preventDefault();
-        this.goToPhase('warm-up');
-            });
+                this.goToPhase('warm-up');
+            };
+            startWarmupBtn.addEventListener('click', handler);
+            this.eventListeners.set('startWarmup', { element: startWarmupBtn, handler });
         }
 
-        const startMainBtn = document.getElementById('start-main');
+        const startMainBtn = this.cachedElements.get('startMain');
         if (startMainBtn) {
-            startMainBtn.addEventListener('click', (e) => {
+            const handler = (e) => {
                 e.preventDefault();
-        this.goToPhase('main-workout');
-            });
+                this.goToPhase('main-workout');
+            };
+            startMainBtn.addEventListener('click', handler);
+            this.eventListeners.set('startMain', { element: startMainBtn, handler });
         }
 
-        const startStretchingBtn = document.getElementById('start-stretching');
+        const startStretchingBtn = this.cachedElements.get('startStretching');
         if (startStretchingBtn) {
-            startStretchingBtn.addEventListener('click', (e) => {
+            const handler = (e) => {
                 e.preventDefault();
-        this.goToPhase('post-workout');
-            });
+                this.goToPhase('post-workout');
+            };
+            startStretchingBtn.addEventListener('click', handler);
+            this.eventListeners.set('startStretching', { element: startStretchingBtn, handler });
         }
 
-        const completeWorkoutBtn = document.getElementById('complete-workout');
+        const completeWorkoutBtn = this.cachedElements.get('completeWorkout');
         if (completeWorkoutBtn) {
-            completeWorkoutBtn.addEventListener('click', (e) => {
+            const handler = (e) => {
                 e.preventDefault();
-        this.goToPhase('completion');
-            });
+                this.goToPhase('completion');
+            };
+            completeWorkoutBtn.addEventListener('click', handler);
+            this.eventListeners.set('completeWorkout', { element: completeWorkoutBtn, handler });
         }
 
-        const restartWorkoutBtn = document.getElementById('restart-workout');
+        const restartWorkoutBtn = this.cachedElements.get('restartWorkout');
         if (restartWorkoutBtn) {
-            restartWorkoutBtn.addEventListener('click', (e) => {
+            const handler = (e) => {
                 e.preventDefault();
                 this.restartWorkout();
-            });
+            };
+            restartWorkoutBtn.addEventListener('click', handler);
+            this.eventListeners.set('restartWorkout', { element: restartWorkoutBtn, handler });
         }
 
         // Progress bar step navigation
@@ -725,25 +755,33 @@ class WorkoutApp {
     }
 
     showNotification(message) {
-        const sanitizedMessage = this.sanitizeInput(message);
-        const notification = document.createElement('div');
-        notification.className = 'notification-popup';
-        notification.textContent = sanitizedMessage;
+        try {
+            // Prevent duplicate notifications
+            const existing = document.querySelector('.notification-popup');
+            if (existing) existing.remove();
+            
+            const sanitizedMessage = this.sanitizeInput(message);
+            const notification = document.createElement('div');
+            notification.className = 'notification-popup';
+            notification.textContent = sanitizedMessage;
 
-        document.body.appendChild(notification);
+            document.body.appendChild(notification);
 
-        setTimeout(() => {
-            notification.classList.add('show');
-        }, 100);
+            requestAnimationFrame(() => {
+                notification.classList.add('show');
+            });
 
-        setTimeout(() => {
-            notification.classList.remove('show');
             setTimeout(() => {
-                if (notification.parentNode) {
-                    notification.parentNode.removeChild(notification);
-                }
-            }, 300);
-        }, 3000);
+                notification.classList.remove('show');
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.parentNode.removeChild(notification);
+                    }
+                }, 300);
+            }, 3000);
+        } catch (error) {
+            console.error('Notification display failed:', error);
+        }
     }
 
     restartWorkout() {
@@ -895,11 +933,36 @@ class WorkoutApp {
     clearProgress() {
         localStorage.removeItem('legsWorkoutProgress');
     }
+    
+    cleanup() {
+        // Clean up timers
+        this.timers.forEach((timer, timerId) => {
+            if (timer.intervalId) {
+                clearInterval(timer.intervalId);
+            }
+        });
+        this.timers.clear();
+        
+        // Clean up audio context
+        if (this.audioContext) {
+            this.audioContext.close();
+        }
+        
+        // Clean up event listeners
+        this.eventListeners.forEach(({ element, handler }) => {
+            element.removeEventListener('click', handler);
+        });
+        this.eventListeners.clear();
+        this.cachedElements.clear();
+    }
 }
+
+// Global app instance for cleanup
+let legsWorkoutAppInstance = null;
 
 // Initialize the app when the DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    new WorkoutApp();
+    legsWorkoutAppInstance = new WorkoutApp();
     
     // Add haptic feedback for mobile devices (if supported)
     if ('vibrate' in navigator) {
@@ -908,6 +971,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 navigator.vibrate(50);
             }
         });
+    }
+});
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', () => {
+    if (legsWorkoutAppInstance && typeof legsWorkoutAppInstance.cleanup === 'function') {
+        legsWorkoutAppInstance.cleanup();
     }
 });
 

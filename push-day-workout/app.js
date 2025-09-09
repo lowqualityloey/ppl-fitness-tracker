@@ -2,7 +2,9 @@
 class WorkoutApp {
     constructor() {
         this.currentPhase = 'pre-workout';
-        this.timers = {};
+        this.timers = new Map();
+        this.cachedElements = new Map();
+        this.eventListeners = new Map();
         this.state = {
             preWorkoutChecklist: {},
             warmupExercises: {},
@@ -22,10 +24,31 @@ class WorkoutApp {
     }
 
     init() {
-        this.setupEventListeners();
-        this.restoreWorkoutState();
-        this.updatePhaseButtons();
-        this.setupConfidencePanel();
+        try {
+            this.cacheElements();
+            this.setupEventListeners();
+            this.restoreWorkoutState();
+            this.updatePhaseButtons();
+            this.setupConfidencePanel();
+        } catch (error) {
+            console.error('Workout app initialization failed:', error);
+        }
+    }
+    
+    cacheElements() {
+        const elements = {
+            startWarmup: document.getElementById('start-warmup'),
+            startMain: document.getElementById('start-main'),
+            startStretching: document.getElementById('start-stretching'),
+            completeWorkout: document.getElementById('complete-workout'),
+            restartWorkout: document.getElementById('restart-workout'),
+            confidenceToggle: document.getElementById('confidence-toggle'),
+            confidenceContent: document.getElementById('confidence-content')
+        };
+        
+        Object.entries(elements).forEach(([key, element]) => {
+            this.cachedElements.set(key, element);
+        });
     }
 
     setupEventListeners() {
@@ -170,25 +193,41 @@ class WorkoutApp {
             return;
         }
 
-        this.timers[timerId] = {
+        this.timers.set(timerId, {
             seconds: initialSeconds,
             initialSeconds: initialSeconds,
             isRunning: false,
-            intervalId: null
-        };
+            intervalId: null,
+            display: timerDisplay
+        });
 
         this.updateTimerDisplay(timerId);
 
         if (startBtn) {
-            startBtn.addEventListener('click', () => this.startTimer(timerId));
+            const startHandler = () => {
+                if (this.timers.get(timerId).isRunning) {
+                    this.pauseTimer(timerId);
+                    startBtn.textContent = 'Start';
+                } else {
+                    this.startTimer(timerId);
+                    startBtn.textContent = 'Pause';
+                }
+            };
+            startBtn.addEventListener('click', startHandler);
         }
 
         if (pauseBtn) {
-            pauseBtn.addEventListener('click', () => this.pauseTimer(timerId));
+            pauseBtn.addEventListener('click', () => {
+                this.pauseTimer(timerId);
+                if (startBtn) startBtn.textContent = 'Start';
+            });
         }
 
         if (resetBtn) {
-            resetBtn.addEventListener('click', () => this.resetTimer(timerId));
+            resetBtn.addEventListener('click', () => {
+                this.resetTimer(timerId);
+                if (startBtn) startBtn.textContent = 'Start';
+            });
         }
     }
 
@@ -202,12 +241,13 @@ class WorkoutApp {
             return;
         }
 
-        this.timers[timerId] = {
-            seconds: 90, // 1.5 minutes
+        this.timers.set(timerId, {
+            seconds: 90,
             initialSeconds: 90,
             isRunning: false,
-            intervalId: null
-        };
+            intervalId: null,
+            display: timerDisplay
+        });
 
         this.updateTimerDisplay(timerId);
 
@@ -236,12 +276,13 @@ class WorkoutApp {
                 return;
             }
 
-            this.timers[stretch.id] = {
+            this.timers.set(stretch.id, {
                 seconds: stretch.seconds,
                 initialSeconds: stretch.seconds,
                 isRunning: false,
-                intervalId: null
-            };
+                intervalId: null,
+                display: timerDisplay
+            });
 
             this.updateTimerDisplay(stretch.id);
 
@@ -254,121 +295,159 @@ class WorkoutApp {
     }
 
     startTimer(timerId) {
-        const timer = this.timers[timerId];
+        const timer = this.timers.get(timerId) || this.timers[timerId];
         if (!timer || timer.isRunning) return;
 
-        timer.isRunning = true;
-        const timerElement = document.querySelector(`[id$="${timerId}"]`)?.closest('.timer-container') || 
-                           document.querySelector(`[id$="${timerId}"]`)?.closest('.rest-timer') ||
-                           document.querySelector(`[id$="${timerId}"]`)?.closest('.stretch-timer');
-        
-        if (timerElement) {
-            timerElement.classList.add('timer-running');
-        }
-
-        timer.intervalId = setInterval(() => {
-            timer.seconds--;
-            this.updateTimerDisplay(timerId);
-
-            if (timer.seconds <= 0) {
-                this.completeTimer(timerId);
+        try {
+            timer.isRunning = true;
+            const timerElement = document.querySelector(`[id$="${timerId}"]`)?.closest('.timer-container') || 
+                               document.querySelector(`[id$="${timerId}"]`)?.closest('.rest-timer') ||
+                               document.querySelector(`[id$="${timerId}"]`)?.closest('.stretch-timer');
+            
+            if (timerElement) {
+                timerElement.classList.add('timer-running');
             }
-        }, 1000);
+
+            timer.intervalId = setInterval(() => {
+                timer.seconds--;
+                this.updateTimerDisplay(timerId);
+
+                if (timer.seconds <= 0) {
+                    this.completeTimer(timerId);
+                }
+            }, 1000);
+        } catch (error) {
+            console.error(`Timer start failed for ${timerId}:`, error);
+        }
     }
 
     pauseTimer(timerId) {
-        const timer = this.timers[timerId];
+        const timer = this.timers.get(timerId);
         if (!timer) return;
 
-        timer.isRunning = false;
-        clearInterval(timer.intervalId);
-        
-        const timerElement = document.querySelector(`[id$="${timerId}"]`)?.closest('.timer-container');
-        if (timerElement) {
-            timerElement.classList.remove('timer-running');
-            timerElement.classList.add('timer-paused');
+        try {
+            timer.isRunning = false;
+            clearInterval(timer.intervalId);
+            
+            const timerElement = document.querySelector(`[id$="${timerId}"]`)?.closest('.timer-container');
+            if (timerElement) {
+                timerElement.classList.remove('timer-running');
+                timerElement.classList.add('timer-paused');
+            }
+        } catch (error) {
+            console.error(`Timer pause failed for ${timerId}:`, error);
         }
     }
 
     resetTimer(timerId) {
-        const timer = this.timers[timerId];
+        const timer = this.timers.get(timerId);
         if (!timer) return;
 
-        this.pauseTimer(timerId);
-        timer.seconds = timer.initialSeconds;
-        this.updateTimerDisplay(timerId);
-        
-        const timerElement = document.querySelector(`[id$="${timerId}"]`)?.closest('.timer-container');
-        if (timerElement) {
-            timerElement.classList.remove('timer-running', 'timer-paused', 'timer-finished');
+        try {
+            this.pauseTimer(timerId);
+            timer.seconds = timer.initialSeconds;
+            this.updateTimerDisplay(timerId);
+            
+            const timerElement = document.querySelector(`[id$="${timerId}"]`)?.closest('.timer-container');
+            if (timerElement) {
+                timerElement.classList.remove('timer-running', 'timer-paused', 'timer-finished');
+            }
+        } catch (error) {
+            console.error(`Timer reset failed for ${timerId}:`, error);
         }
     }
 
     completeTimer(timerId) {
-        const timer = this.timers[timerId];
+        const timer = this.timers.get(timerId) || this.timers[timerId];
         if (!timer) return;
 
-        timer.isRunning = false;
-        clearInterval(timer.intervalId);
-        
-        const timerElement = document.querySelector(`[id$="${timerId}"]`)?.closest('.timer-container') || 
-                           document.querySelector(`[id$="${timerId}"]`)?.closest('.rest-timer') ||
-                           document.querySelector(`[id$="${timerId}"]`)?.closest('.stretch-timer');
-        
-        if (timerElement) {
-            timerElement.classList.remove('timer-running');
-            timerElement.classList.add('timer-finished');
-        }
-
-        // Show completion notification
-        this.showNotification('⏰ Timer Complete!');
-
-        // Auto-check exercise if it's a stretch timer
-        if (timerId.includes('stretch-timer')) {
-            const exerciseId = `stretch-${timerId.split('-')[2]}`;
-            const checkbox = document.getElementById(exerciseId);
-            if (checkbox && !checkbox.checked) {
-                checkbox.checked = true;
-                this.handleStretchingChange(exerciseId, true);
+        try {
+            timer.isRunning = false;
+            clearInterval(timer.intervalId);
+            
+            const timerElement = document.querySelector(`[id$="${timerId}"]`)?.closest('.timer-container') || 
+                               document.querySelector(`[id$="${timerId}"]`)?.closest('.rest-timer') ||
+                               document.querySelector(`[id$="${timerId}"]`)?.closest('.stretch-timer');
+            
+            if (timerElement) {
+                timerElement.classList.remove('timer-running');
+                timerElement.classList.add('timer-finished');
             }
-        }
 
-        // Reset rest timer button text
-        if (timerId.includes('rest-timer')) {
-            const exerciseNum = timerId.split('-')[2];
-            const startBtn = document.getElementById(`start-rest-${exerciseNum}`);
-            if (startBtn) {
-                startBtn.textContent = 'Start Rest Timer';
-                startBtn.disabled = false;
-            }
-        }
+            this.showNotification('⏰ Timer Complete!');
 
-        // Reset stretch timer button text
-        if (timerId.includes('stretch-timer')) {
-            const stretchNum = timerId.split('-')[2];
-            const startBtn = document.getElementById(`start-stretch-${stretchNum}`);
-            if (startBtn) {
-                startBtn.textContent = 'Complete!';
-                startBtn.disabled = true;
-                startBtn.style.background = 'var(--color-success)';
+            // Handle cardio timer completion
+            if (timerId === 'cardio') {
+                const checkbox = document.getElementById('cardio-done');
+                if (checkbox && !checkbox.checked) {
+                    checkbox.checked = true;
+                    this.handleWarmupExerciseChange('cardio-done', true);
+                }
+                const startBtn = document.getElementById('start-cardio');
+                if (startBtn) startBtn.textContent = 'Complete!';
             }
+
+            // Handle cooldown timer completion
+            if (timerId === 'cooldown') {
+                const checkbox = document.getElementById('cooldown-done');
+                if (checkbox && !checkbox.checked) {
+                    checkbox.checked = true;
+                    this.handleStretchingChange('cooldown-done', true);
+                }
+                const startBtn = document.getElementById('start-cooldown');
+                if (startBtn) startBtn.textContent = 'Complete!';
+            }
+
+            // Auto-check exercise if it's a stretch timer
+            if (timerId.includes('stretch-timer')) {
+                const exerciseId = `stretch-${timerId.split('-')[2]}`;
+                const checkbox = document.getElementById(exerciseId);
+                if (checkbox && !checkbox.checked) {
+                    checkbox.checked = true;
+                    this.handleStretchingChange(exerciseId, true);
+                }
+            }
+
+            // Reset rest timer button text
+            if (timerId.includes('rest-timer')) {
+                const exerciseNum = timerId.split('-')[2];
+                const startBtn = document.getElementById(`start-rest-${exerciseNum}`);
+                if (startBtn) {
+                    startBtn.textContent = 'Start Rest Timer';
+                    startBtn.disabled = false;
+                }
+            }
+
+            // Reset stretch timer button text
+            if (timerId.includes('stretch-timer')) {
+                const stretchNum = timerId.split('-')[2];
+                const startBtn = document.getElementById(`start-stretch-${stretchNum}`);
+                if (startBtn) {
+                    startBtn.textContent = 'Complete!';
+                    startBtn.disabled = true;
+                    startBtn.style.background = 'var(--color-success)';
+                }
+            }
+        } catch (error) {
+            console.error(`Timer completion failed for ${timerId}:`, error);
         }
     }
 
     updateTimerDisplay(timerId) {
-        const timer = this.timers[timerId];
-        let timerDisplay = document.getElementById(timerId);
+        const timer = this.timers.get(timerId) || this.timers[timerId];
+        if (!timer) return;
         
-        // Handle different timer ID formats
-        if (!timerDisplay) {
-            timerDisplay = document.getElementById(`${timerId}-timer`);
-        }
-        
-        if (!timer || !timerDisplay) return;
+        try {
+            let timerDisplay = timer.display || document.getElementById(`${timerId}-timer`);
+            
+            if (!timerDisplay) return;
 
-        const minutes = Math.floor(timer.seconds / 60);
-        const seconds = timer.seconds % 60;
-        timerDisplay.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            const minutes = Math.floor(timer.seconds / 60);
+            const seconds = timer.seconds % 60;
+            timerDisplay.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        } catch (error) {
+            console.error(`Timer display update failed for ${timerId}:`, error);
+        }
     }
 
     handleChecklistChange(type, itemId, checked) {
@@ -600,41 +679,65 @@ class WorkoutApp {
     }
 
     showNotification(message) {
-        // Create notification element
-        const notification = document.createElement('div');
-        notification.className = 'notification';
-        notification.textContent = message;
-        notification.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: var(--color-success);
-            color: var(--color-btn-primary-text);
-            padding: 12px 16px;
-            border-radius: 8px;
-            font-weight: 500;
-            z-index: 1000;
-            transform: translateX(100%);
-            transition: transform 0.3s ease;
-            box-shadow: var(--shadow-lg);
-        `;
+        try {
+            // Prevent duplicate notifications
+            const existing = document.querySelector('.notification');
+            if (existing) existing.remove();
+            
+            const notification = document.createElement('div');
+            notification.className = 'notification';
+            notification.textContent = message;
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: var(--color-success);
+                color: var(--color-btn-primary-text);
+                padding: 12px 16px;
+                border-radius: 8px;
+                font-weight: 500;
+                z-index: 1000;
+                transform: translateX(100%);
+                transition: transform 0.3s ease;
+                box-shadow: var(--shadow-lg);
+            `;
 
-        document.body.appendChild(notification);
+            document.body.appendChild(notification);
 
-        // Animate in
-        setTimeout(() => {
-            notification.style.transform = 'translateX(0)';
-        }, 100);
+            // Animate in
+            requestAnimationFrame(() => {
+                notification.style.transform = 'translateX(0)';
+            });
 
-        // Remove after 3 seconds
-        setTimeout(() => {
-            notification.style.transform = 'translateX(100%)';
+            // Remove after 3 seconds
             setTimeout(() => {
-                if (notification.parentNode) {
-                    notification.parentNode.removeChild(notification);
-                }
-            }, 300);
-        }, 3000);
+                notification.style.transform = 'translateX(100%)';
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.parentNode.removeChild(notification);
+                    }
+                }, 300);
+            }, 3000);
+        } catch (error) {
+            console.error('Notification display failed:', error);
+        }
+    }
+    
+    cleanup() {
+        // Clean up timers
+        this.timers.forEach((timer, timerId) => {
+            if (timer.intervalId) {
+                clearInterval(timer.intervalId);
+            }
+        });
+        this.timers.clear();
+        
+        // Clean up event listeners
+        this.eventListeners.forEach(({ element, handler }) => {
+            element.removeEventListener('click', handler);
+        });
+        this.eventListeners.clear();
+        this.cachedElements.clear();
     }
 
     saveProgress() {
@@ -721,7 +824,7 @@ class WorkoutApp {
         });
 
         // Reset all timers
-        Object.keys(this.timers).forEach(timerId => {
+        this.timers.forEach((timer, timerId) => {
             this.resetTimer(timerId);
         });
 
@@ -762,10 +865,20 @@ class WorkoutApp {
     }
 }
 
+// Global app instance for cleanup
+let workoutAppInstance = null;
+
 // Initialize the app when the DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     console.log('DOM loaded, initializing workout app...');
-    new WorkoutApp();
+    workoutAppInstance = new WorkoutApp();
+});
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', () => {
+    if (workoutAppInstance && typeof workoutAppInstance.cleanup === 'function') {
+        workoutAppInstance.cleanup();
+    }
 });
 
 // Prevent zoom on double tap for better mobile experience

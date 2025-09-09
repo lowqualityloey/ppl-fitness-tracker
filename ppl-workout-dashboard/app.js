@@ -1,663 +1,435 @@
-// PPL Fitness Dashboard - Interactive JavaScript
-
-class PPLDashboard {
-  constructor() {
-    // Application data from the provided JSON
-    this.userData = {
-      name: 'Jonell',
-      age: 30,
-      weight: '66kg',
-      height: '165cm',
-      ethnicity: 'Asian',
-      fitness_level: 'Beginner',
-      current_date: 'Tuesday, September 9, 2025',
-      timezone: 'NZST',
+// Modern Dashboard App
+class DashboardApp {
+    constructor() {
+        this.cachedElements = new Map();
+        this.eventListeners = new Map();
+        this.init();
     }
 
-    this.workoutSchedule = {
-      monday: {
-        type: 'Push',
-        muscles: 'Chest, Shoulders, Triceps',
-        duration: '45-55 min',
-        difficulty: 'Beginner',
-        status: 'completed',
-      },
-      tuesday: {
-        type: 'Pull',
-        muscles: 'Back, Biceps',
-        duration: '45-55 min',
-        difficulty: 'Beginner',
-        status: 'scheduled',
-        is_today: true,
-      },
-      wednesday: {
-        type: 'Legs',
-        muscles: 'Quads, Hamstrings, Glutes, Calves',
-        duration: '45-55 min',
-        difficulty: 'Beginner',
-        status: 'upcoming',
-      },
-      thursday: {
-        type: 'Push',
-        muscles: 'Chest, Shoulders, Triceps',
-        duration: '45-55 min',
-        difficulty: 'Beginner',
-        status: 'upcoming',
-      },
-      friday: {
-        type: 'Pull',
-        muscles: 'Back, Biceps',
-        duration: '45-55 min',
-        difficulty: 'Beginner',
-        status: 'upcoming',
-      },
-      saturday: {
-        type: 'Rest',
-        activity: 'Active Recovery / Light Walking',
-        duration: 'Optional',
-        status: 'upcoming',
-      },
-      sunday: {
-        type: 'Rest',
-        activity: 'Active Recovery / Light Walking',
-        duration: 'Optional',
-        status: 'upcoming',
-      },
-    }
-
-    this.stats = {
-      total_workouts: 3,
-      current_streak: 2,
-      this_week_completed: 1,
-      this_week_total: 3,
-      favorite_exercise: 'Lat Pulldown',
-      total_sets: 51,
-      total_reps: 612,
-      hours_trained: 2.5,
-    }
-
-    this.recentWorkouts = [
-      {
-        date: 'Monday, Sep 8, 2025',
-        type: 'Push Day',
-        duration: '48 minutes',
-        exercises: 6,
-        sets_completed: 17,
-        rating: 4,
-      },
-      {
-        date: 'Friday, Sep 5, 2025',
-        type: 'Pull Day',
-        duration: '52 minutes',
-        exercises: 6,
-        sets_completed: 17,
-        rating: 5,
-      },
-      {
-        date: 'Wednesday, Sep 3, 2025',
-        type: 'Legs Day',
-        duration: '45 minutes',
-        exercises: 6,
-        sets_completed: 17,
-        rating: 3,
-      },
-    ]
-
-    this.motivationalQuotes = [
-      "The only bad workout is the one that didn't happen.",
-      "Progress, not perfection. You're getting stronger every day!",
-      "Your body can do it. It's time to convince your mind.",
-      "Every rep counts. Every set matters. You've got this!",
-      "Strength doesn't come from what you can do. It comes from overcoming what you thought you couldn't.",
-    ]
-
-    this.todaysTips = [
-      'Focus on squeezing your shoulder blades together during pull exercises',
-      'Cable machines are perfect for beginners - they guide your movement',
-      'Start with lighter weights and perfect your form first',
-      "Remember to breathe: exhale during the 'work' phase of each rep",
-      "Don't rush between sets - proper rest helps muscle recovery",
-    ]
-
-    this.workoutLinks = {
-      push: 'push-day-workout/index.html',
-      pull: 'pull-day-workout/index.html',
-      legs: 'legs-day-workout/index.html',
-    }
-
-    this.init()
-  }
-
-  init() {
-    console.log('PPL Dashboard initializing...')
-
-    // Setup mobile menu
-    this.setupMobileMenu()
-
-    // Populate dashboard content
-    this.populateWeeklySchedule()
-    this.populateRecentWorkouts()
-    this.setDailyMotivation()
-
-    // Setup event listeners
-    this.setupEventListeners()
-
-    // Add some visual flair
-    this.addAnimations()
-
-    console.log('PPL Dashboard ready!')
-  }
-
-  setupMobileMenu() {
-    // Get all "navbar-burger" elements
-    const navbarBurgers = Array.prototype.slice.call(
-      document.querySelectorAll('.navbar-burger'),
-      0
-    )
-
-    // Add a click event on each of them
-    navbarBurgers.forEach((el) => {
-      el.addEventListener('click', () => {
-        // Get the target from the "data-target" attribute
-        const target = el.dataset.target
-        const targetElement = document.getElementById(target)
-
-        // Toggle the "is-active" class on both the "navbar-burger" and the "navbar-menu"
-        el.classList.toggle('is-active')
-        targetElement.classList.toggle('is-active')
-      })
-    })
-  }
-
-  populateWeeklySchedule() {
-    const scheduleContainer = document.getElementById('weekly-schedule')
-    if (!scheduleContainer) return
-
-    const days = [
-      'monday',
-      'tuesday',
-      'wednesday',
-      'thursday',
-      'friday',
-      'saturday',
-      'sunday',
-    ]
-    const dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-    const dayEmojis = {
-      Push: '💪',
-      Pull: '🔙',
-      Legs: '🦵',
-      Rest: '😴',
-    }
-
-    scheduleContainer.innerHTML = ''
-
-    days.forEach((day, index) => {
-      const workout = this.workoutSchedule[day]
-      const isToday = workout.is_today || false
-      const isCompleted = workout.status === 'completed'
-      const isRest = workout.type === 'Rest'
-
-      const dayElement = document.createElement('div')
-      let cssClasses = 'schedule-day'
-
-      if (isToday) cssClasses += ' today'
-      if (isCompleted) cssClasses += ' completed'
-      if (isRest) cssClasses += ' rest'
-
-      dayElement.className = cssClasses
-
-      const emoji = dayEmojis[workout.type] || '💪'
-      const displayType = isRest ? 'Rest' : workout.type
-
-      dayElement.innerHTML = `
-                <div class="day-name">${dayLabels[index]}</div>
-                <div class="day-emoji">${emoji}</div>
-                <div class="day-workout">${displayType}</div>
-            `
-
-      // Add click event for non-rest days
-      if (!isRest) {
-        dayElement.style.cursor = 'pointer'
-        dayElement.addEventListener('click', () => {
-          this.showWorkoutDetails(workout)
-        })
-      }
-
-      scheduleContainer.appendChild(dayElement)
-    })
-
-    console.log('Weekly schedule populated')
-  }
-
-  populateRecentWorkouts() {
-    const container = document.getElementById('recent-workouts')
-    if (!container) return
-
-    container.innerHTML = ''
-
-    this.recentWorkouts.forEach((workout) => {
-      const workoutElement = document.createElement('div')
-      workoutElement.className = 'workout-item'
-
-      const stars = this.generateStarRating(workout.rating)
-
-      workoutElement.innerHTML = `
-                <div class="workout-info">
-                    <h4>${workout.type}</h4>
-                    <p>${workout.date} • ${workout.duration} • ${workout.sets_completed} sets</p>
-                </div>
-                <div class="workout-rating">
-                    ${stars}
-                </div>
-            `
-
-      container.appendChild(workoutElement)
-    })
-
-    console.log('Recent workouts populated')
-  }
-
-  generateStarRating(rating) {
-    let stars = ''
-    for (let i = 1; i <= 5; i++) {
-      if (i <= rating) {
-        stars += '<i class="fas fa-star star"></i>'
-      } else {
-        stars += '<i class="far fa-star star empty"></i>'
-      }
-    }
-    return stars
-  }
-
-  setDailyMotivation() {
-    // Set random motivational quote
-    const quoteElement = document.getElementById('daily-quote')
-    if (quoteElement) {
-      const randomQuote =
-        this.motivationalQuotes[
-          Math.floor(Math.random() * this.motivationalQuotes.length)
-        ]
-      quoteElement.textContent = randomQuote
-    }
-
-    // Set daily tip (use first tip for Pull day)
-    const tipElement = document.getElementById('daily-tip')
-    if (tipElement) {
-      tipElement.textContent = this.todaysTips[0] // Pull day specific tip
-    }
-  }
-
-  setupEventListeners() {
-    // Equipment checklist interactions
-    const checkboxes = document.querySelectorAll(
-      '.equipment-list .checkbox input'
-    )
-    checkboxes.forEach((checkbox) => {
-      checkbox.addEventListener('change', (e) => {
-        const label = e.target.closest('.checkbox')
-        if (e.target.checked) {
-          label.classList.add('is-success-highlighted')
-          this.showNotification(
-            'Equipment Ready! ✅',
-            'Great preparation leads to great workouts!',
-            'success'
-          )
-          setTimeout(() => {
-            label.classList.remove('is-success-highlighted')
-          }, 1000)
+    init() {
+        try {
+            this.cacheElements();
+            this.updateCurrentDate();
+            this.updateTimeGreeting();
+            this.setupEventListeners();
+            this.loadUserStats();
+            this.setupTouchFeedback();
+            this.populateWeeklySchedule();
+            this.populateProgressOverview();
+            this.populateRecentActivity();
+        } catch (error) {
+            console.error('Dashboard initialization failed:', error);
         }
-      })
-    })
+    }
 
-    // Workout card hover effects
-    const workoutCards = document.querySelectorAll('.workout-card')
-    workoutCards.forEach((card) => {
-      card.addEventListener('mouseenter', () => {
-        card.style.transform = 'translateY(-8px)'
-      })
+    cacheElements() {
+        const elements = {
+            currentDate: document.getElementById('current-date'),
+            timeGreeting: document.getElementById('time-greeting'),
+            mobileMenuBtn: document.getElementById('mobile-menu-btn'),
+            mobileMenu: document.getElementById('mobile-menu'),
+            closeMenuBtn: document.getElementById('close-menu'),
+            weeklySchedule: document.getElementById('weekly-schedule'),
+            progressOverview: document.getElementById('progress-overview'),
+            recentWorkouts: document.getElementById('recent-workouts')
+        };
+        
+        Object.entries(elements).forEach(([key, element]) => {
+            this.cachedElements.set(key, element);
+        });
+    }
 
-      card.addEventListener('mouseleave', () => {
-        card.style.transform = 'translateY(0)'
-      })
-    })
+    updateCurrentDate() {
+        const dateElement = this.cachedElements.get('currentDate');
+        if (dateElement) {
+            try {
+                const now = new Date();
+                const options = { 
+                    weekday: 'long', 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                };
+                dateElement.textContent = now.toLocaleDateString('en-US', options);
+            } catch (error) {
+                console.error('Date update failed:', error);
+            }
+        }
+    }
 
-    // Stats hover effects with info
-    const statItems = document.querySelectorAll('.stat-item')
-    statItems.forEach((item) => {
-      item.addEventListener('mouseenter', () => {
-        item.style.transform = 'translateY(-4px) scale(1.05)'
-      })
+    updateTimeGreeting() {
+        const greetingElement = this.cachedElements.get('timeGreeting');
+        if (greetingElement) {
+            try {
+                const hour = new Date().getHours();
+                let greeting = 'Good Morning';
+                
+                if (hour >= 12 && hour < 17) {
+                    greeting = 'Good Afternoon';
+                } else if (hour >= 17) {
+                    greeting = 'Good Evening';
+                }
+                
+                greetingElement.textContent = greeting;
+            } catch (error) {
+                console.error('Greeting update failed:', error);
+            }
+        }
+    }
 
-      item.addEventListener('mouseleave', () => {
-        item.style.transform = 'translateY(0) scale(1)'
-      })
-
-      // Add click to show more info
-      item.addEventListener('click', () => {
-        const statLabel = item.querySelector('.stat-label').textContent
-        const statValue = item.querySelector('.stat-value').textContent
-
-        let message = ''
-        switch (statLabel) {
-          case 'Total Sets':
-            message =
-              "You've completed 51 sets across all your workouts. Each set brings you closer to your goals!"
-            break
-          case 'Total Reps':
-            message =
-              "612 reps completed! That's a lot of muscle-building repetitions. Keep it up!"
-            break
-          case 'Current Weight':
-            message =
-              'Your current weight is 66kg. Track your progress and adjust your nutrition as needed.'
-            break
-          case 'Lat Pulldown PR':
-            message =
-              'Your personal record for Lat Pulldown is 25kg. Ready to challenge yourself with more weight?'
-            break
-          default:
-            message = `Great progress on your ${statLabel}!`
+    setupEventListeners() {
+        // Mobile menu
+        const mobileMenuBtn = this.cachedElements.get('mobileMenuBtn');
+        const mobileMenu = this.cachedElements.get('mobileMenu');
+        const closeMenuBtn = this.cachedElements.get('closeMenuBtn');
+        
+        if (mobileMenuBtn && mobileMenu) {
+            const openHandler = () => mobileMenu.classList.add('active');
+            mobileMenuBtn.addEventListener('click', openHandler);
+            this.eventListeners.set('mobileMenuOpen', { element: mobileMenuBtn, handler: openHandler });
+        }
+        
+        if (closeMenuBtn && mobileMenu) {
+            const closeHandler = () => mobileMenu.classList.remove('active');
+            closeMenuBtn.addEventListener('click', closeHandler);
+            this.eventListeners.set('mobileMenuClose', { element: closeMenuBtn, handler: closeHandler });
+        }
+        
+        // Close menu on overlay click
+        if (mobileMenu) {
+            const overlayHandler = (e) => {
+                if (e.target === mobileMenu) {
+                    mobileMenu.classList.remove('active');
+                }
+            };
+            mobileMenu.addEventListener('click', overlayHandler);
+            this.eventListeners.set('mobileMenuOverlay', { element: mobileMenu, handler: overlayHandler });
         }
 
-        this.showNotification(`${statLabel}: ${statValue}`, message, 'info')
-      })
-    })
-  }
+        // Bottom navigation
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.preventDefault();
+                document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+                item.classList.add('active');
+                this.showFeedback('Navigation updated');
+            });
+        });
 
-  addAnimations() {
-    // Add staggered animation to cards
-    const cards = document.querySelectorAll('.card')
-    cards.forEach((card, index) => {
-      card.style.animationDelay = `${index * 100}ms`
-    })
+        // Action buttons
+        document.querySelectorAll('.action-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const action = btn.querySelector('span').textContent;
+                this.showFeedback(`${action} coming soon!`);
+            });
+        });
 
-    // Add floating animation to today's workout highlight
-    const highlightCard = document.querySelector('.workout-highlight')
-    if (highlightCard) {
-      setInterval(() => {
-        highlightCard.style.transform = 'translateY(-2px)'
-        setTimeout(() => {
-          highlightCard.style.transform = 'translateY(0)'
-        }, 1000)
-      }, 3000)
+        // Menu items
+        document.querySelectorAll('.menu-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.preventDefault();
+                const action = item.querySelector('span').textContent;
+                this.showFeedback(`${action} selected`);
+                if (mobileMenu) {
+                    mobileMenu.classList.remove('active');
+                }
+            });
+        });
     }
-  }
 
-  showWorkoutDetails(workout) {
-    const message = `
-            ${workout.type} Day Details:
-            • Muscles: ${workout.muscles}
-            • Duration: ${workout.duration}
-            • Difficulty: ${workout.difficulty}
-            • Status: ${workout.status}
-        `
+    loadUserStats() {
+        // Simulate loading user stats from localStorage or API
+        const stats = this.getUserStats();
+        this.updateStatsDisplay(stats);
+    }
 
-    this.showNotification(`${workout.type} Day`, message, 'info')
-  }
+    getUserStats() {
+        // Get stats from localStorage or return defaults
+        const saved = localStorage.getItem('userStats');
+        if (saved) {
+            return JSON.parse(saved);
+        }
+        
+        return {
+            streak: 2,
+            totalWorkouts: 3,
+            hoursTrained: 2.5,
+            lastWorkout: 'Push Day',
+            nextWorkout: 'Pull Day'
+        };
+    }
 
-  showNotification(title, message, type = 'success') {
-    // Create notification element with improved styling
-    const notification = document.createElement('div')
-    notification.className = `notification is-${type} is-floating`
+    updateStatsDisplay(stats) {
+        const statNumbers = document.querySelectorAll('.stat-number-modern');
+        if (statNumbers.length >= 3) {
+            statNumbers[0].textContent = stats.streak;
+            statNumbers[1].textContent = stats.totalWorkouts;
+            statNumbers[2].textContent = `${stats.hoursTrained}h`;
+        }
+    }
 
-    notification.innerHTML = `
-            <button class="delete"></button>
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <span style="font-size: 1.2em;">
-                    ${
-                      type === 'success'
-                        ? '✅'
-                        : type === 'info'
-                        ? 'ℹ️'
-                        : type === 'warning'
-                        ? '⚠️'
-                        : '🔥'
+    setupTouchFeedback() {
+        // Add haptic feedback for mobile devices
+        if ('vibrate' in navigator) {
+            document.querySelectorAll('.workout-btn, .action-btn, .cta-button').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    navigator.vibrate(50);
+                });
+            });
+        }
+
+        // Add visual feedback for touch interactions
+        document.querySelectorAll('.workout-card, .stat-card-modern').forEach(card => {
+            card.addEventListener('touchstart', () => {
+                card.style.transform = 'scale(0.98)';
+            });
+            
+            card.addEventListener('touchend', () => {
+                setTimeout(() => {
+                    card.style.transform = '';
+                }, 150);
+            });
+        });
+    }
+
+    populateWeeklySchedule() {
+        const scheduleContainer = this.cachedElements.get('weeklySchedule');
+        if (!scheduleContainer) return;
+
+        try {
+            const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+            const workouts = ['Push', 'Pull', 'Legs', 'Push', 'Pull', 'Rest', 'Rest'];
+            const today = new Date().getDay();
+            const todayIndex = today === 0 ? 6 : today - 1;
+
+            const fragment = document.createDocumentFragment();
+            
+            days.forEach((day, index) => {
+                const dayElement = document.createElement('div');
+                dayElement.className = 'schedule-day';
+                
+                if (index === todayIndex) dayElement.classList.add('today');
+                else if (index < todayIndex) dayElement.classList.add('completed');
+                else if (workouts[index] === 'Rest') dayElement.classList.add('rest');
+
+                dayElement.innerHTML = `
+                    <div class="day-name">${day}</div>
+                    <div class="day-workout">${workouts[index]}</div>
+                `;
+                
+                fragment.appendChild(dayElement);
+            });
+            
+            scheduleContainer.innerHTML = '';
+            scheduleContainer.appendChild(fragment);
+        } catch (error) {
+            console.error('Weekly schedule population failed:', error);
+        }
+    }
+
+    populateProgressOverview() {
+        const progressContainer = this.cachedElements.get('progressOverview');
+        if (!progressContainer) return;
+
+        try {
+            const stats = [
+                { value: '51', label: 'Total Sets' },
+                { value: '612', label: 'Total Reps' },
+                { value: '66kg', label: 'Current Weight' },
+                { value: '25kg', label: 'Lat Pulldown PR' }
+            ];
+
+            const fragment = document.createDocumentFragment();
+            
+            stats.forEach(stat => {
+                const item = document.createElement('div');
+                item.className = 'progress-item';
+                item.innerHTML = `
+                    <span class="progress-value">${stat.value}</span>
+                    <span class="progress-label">${stat.label}</span>
+                `;
+                fragment.appendChild(item);
+            });
+            
+            progressContainer.innerHTML = '';
+            progressContainer.appendChild(fragment);
+        } catch (error) {
+            console.error('Progress overview population failed:', error);
+        }
+    }
+
+    populateRecentActivity() {
+        const recentContainer = this.cachedElements.get('recentWorkouts');
+        if (!recentContainer) return;
+
+        try {
+            const workouts = [
+                {
+                    type: 'Push Day',
+                    date: 'Yesterday',
+                    duration: '52 min',
+                    rating: 4,
+                    gradient: 'var(--push-gradient)'
+                },
+                {
+                    type: 'Pull Day',
+                    date: '2 days ago',
+                    duration: '48 min',
+                    rating: 5,
+                    gradient: 'var(--pull-gradient)'
+                },
+                {
+                    type: 'Legs Day',
+                    date: '4 days ago',
+                    duration: '55 min',
+                    rating: 3,
+                    gradient: 'var(--legs-gradient)'
+                }
+            ];
+
+            const fragment = document.createDocumentFragment();
+            
+            workouts.forEach(workout => {
+                const stars = Array.from({ length: 5 }, (_, i) => 
+                    `<i class="fas fa-star ${i < workout.rating ? '' : 'empty'}"></i>`
+                ).join('');
+
+                const icon = workout.type === 'Push Day' ? 'fist-raised' : 
+                            workout.type === 'Pull Day' ? 'arrow-down' : 'running';
+
+                const workoutItem = document.createElement('div');
+                workoutItem.className = 'workout-item';
+                workoutItem.innerHTML = `
+                    <div class="workout-info">
+                        <div class="workout-type-icon" style="background: ${workout.gradient}">
+                            <i class="fas fa-${icon}"></i>
+                        </div>
+                        <div class="workout-details">
+                            <h4>${workout.type}</h4>
+                            <p>${workout.date} • ${workout.duration}</p>
+                        </div>
+                    </div>
+                    <div class="workout-rating">
+                        ${stars}
+                    </div>
+                `;
+                
+                fragment.appendChild(workoutItem);
+            });
+            
+            recentContainer.innerHTML = '';
+            recentContainer.appendChild(fragment);
+        } catch (error) {
+            console.error('Recent activity population failed:', error);
+        }
+    }
+
+    showFeedback(message) {
+        try {
+            // Prevent duplicate notifications
+            const existing = document.querySelector('.toast-notification');
+            if (existing) existing.remove();
+            
+            const toast = document.createElement('div');
+            toast.className = 'toast-notification';
+            toast.textContent = message;
+            toast.style.cssText = `
+                position: fixed;
+                top: 100px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: rgba(0, 0, 0, 0.8);
+                color: white;
+                padding: 0.75rem 1rem;
+                border-radius: 8px;
+                font-size: 0.875rem;
+                z-index: 1000;
+                opacity: 0;
+                transition: opacity 0.3s ease;
+            `;
+
+            document.body.appendChild(toast);
+
+            // Animate in
+            requestAnimationFrame(() => {
+                toast.style.opacity = '1';
+            });
+
+            // Remove after 2 seconds
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => {
+                    if (toast.parentNode) {
+                        toast.parentNode.removeChild(toast);
                     }
-                </span>
-                <div>
-                    <strong>${title}</strong><br>
-                    <span style="font-size: 0.9em;">${message.replace(
-                      /\n/g,
-                      '<br>'
-                    )}</span>
-                </div>
-            </div>
-        `
-
-    document.body.appendChild(notification)
-
-    // Add close functionality
-    const deleteBtn = notification.querySelector('.delete')
-    deleteBtn.addEventListener('click', () => {
-      notification.style.animation = 'slideOutRight 0.3s ease-in-out forwards'
-      setTimeout(() => notification.remove(), 300)
-    })
-
-    // Auto remove after 4 seconds
-    setTimeout(() => {
-      if (notification.parentNode) {
-        notification.style.animation = 'slideOutRight 0.3s ease-in-out forwards'
-        setTimeout(() => notification.remove(), 300)
-      }
-    }, 4000)
-  }
-
-  // Enhanced workout starting with better loading states
-  startWorkout(workoutType) {
-    console.log(`Starting ${workoutType} workout...`)
-
-    // Find the button that was clicked
-    const startButton =
-      event?.target?.closest('button') || event?.target?.closest('a')
-
-    if (startButton) {
-      // Store original content
-      const originalContent = startButton.innerHTML
-
-      // Add enhanced loading state
-      startButton.classList.add('is-loading')
-      startButton.innerHTML = `
-                <span class="icon">
-                    <i class="fas fa-spinner fa-pulse"></i>
-                </span>
-                <span>Loading...</span>
-            `
-      startButton.disabled = true
-      startButton.style.opacity = '0.8'
-
-      // Show immediate feedback
-      this.showNotification(
-        `Starting ${
-          workoutType.charAt(0).toUpperCase() + workoutType.slice(1)
-        } Workout`,
-        'Preparing your workout session...',
-        'info'
-      )
-
-      setTimeout(() => {
-        // Restore button
-        startButton.classList.remove('is-loading')
-        startButton.innerHTML = originalContent
-        startButton.disabled = false
-        startButton.style.opacity = '1'
-
-        // Navigate to workout page
-        if (this.workoutLinks[workoutType.toLowerCase()]) {
-          this.showNotification(
-            `Starting ${
-              workoutType.charAt(0).toUpperCase() + workoutType.slice(1)
-            } Workout! 💪`,
-            `Navigating to your ${workoutType} workout...`,
-            'success'
-          )
-
-          // Navigate to the workout page
-          setTimeout(() => {
-            window.location.href = this.workoutLinks[workoutType.toLowerCase()]
-          }, 1000)
-        } else {
-          this.showNotification(
-            'Workout Coming Soon',
-            `${workoutType} workout page is under development. Stay tuned!`,
-            'warning'
-          )
+                }, 300);
+            }, 2000);
+        } catch (error) {
+            console.error('Feedback display failed:', error);
         }
-      }, 2000) // 2 second loading simulation
     }
-  }
-
-  // Update current date display
-  updateCurrentDate() {
-    const dateElement = document.getElementById('current-date')
-    if (dateElement) {
-      const now = new Date()
-      const options = {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      }
-      dateElement.textContent = now.toLocaleDateString('en-US', options)
+    
+    cleanup() {
+        // Clean up event listeners
+        this.eventListeners.forEach(({ element, handler }) => {
+            element.removeEventListener('click', handler);
+        });
+        this.eventListeners.clear();
+        this.cachedElements.clear();
     }
-  }
-
-  // Simulate real-time updates
-  startRealTimeUpdates() {
-    // Update current date every minute
-    setInterval(() => {
-      this.updateCurrentDate()
-    }, 60000)
-
-    // Add periodic motivational messages (less frequent)
-    setInterval(() => {
-      const motivationMessages = [
-        "Keep pushing! You're doing great! 💪",
-        'Remember to stay hydrated! 💧',
-        'Your consistency is building strength! 🔥',
-        'Every day is a step closer to your goals! 🎯',
-      ]
-
-      const randomMessage =
-        motivationMessages[
-          Math.floor(Math.random() * motivationMessages.length)
-        ]
-      this.showNotification('Motivation Boost', randomMessage, 'info')
-    }, 600000) // Every 10 minutes
-  }
-
-  // Initialize progress tracking
-  initProgressTracking() {
-    // Simulate progress updates (less frequent)
-    const progressElements = document.querySelectorAll('.stat-value')
-
-    setInterval(() => {
-      progressElements.forEach((element) => {
-        const currentValue = parseInt(element.textContent)
-        if (!isNaN(currentValue) && Math.random() > 0.95) {
-          // Very occasionally increment stats to simulate progress
-          element.textContent = (currentValue + 1).toString()
-          element.parentElement.classList.add('is-success-highlighted')
-
-          this.showNotification(
-            'Progress Update! 📈',
-            'Your stats have been updated with recent activity!',
-            'success'
-          )
-
-          setTimeout(() => {
-            element.parentElement.classList.remove('is-success-highlighted')
-          }, 2000)
-        }
-      })
-    }, 120000) // Every 2 minutes
-  }
 }
 
-// Global function for starting workouts (called from HTML)
-function startWorkout(workoutType) {
-  if (window.pplDashboard) {
-    window.pplDashboard.startWorkout(workoutType)
-  }
+// Global function for workout navigation
+function startWorkout(type) {
+    const workoutUrls = {
+        push: 'push-day-workout/index.html',
+        pull: 'pull-day-workout/index.html',
+        legs: 'legs-day-workout/index.html'
+    };
+
+    if (workoutUrls[type]) {
+        // Add loading state
+        const btn = event.target.closest('.cta-button');
+        if (btn) {
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Loading...</span>';
+            btn.style.opacity = '0.7';
+        }
+
+        // Navigate after short delay for UX
+        setTimeout(() => {
+            window.location.href = workoutUrls[type];
+        }, 500);
+    }
 }
 
-// Initialize the dashboard when DOM is loaded
+// Global app instance for cleanup
+let dashboardAppInstance = null;
+
+// Initialize app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('DOM loaded, initializing PPL Dashboard...')
+    dashboardAppInstance = new DashboardApp();
+});
 
-  // Create global instance
-  window.pplDashboard = new PPLDashboard()
-
-  // Start real-time features
-  window.pplDashboard.startRealTimeUpdates()
-  window.pplDashboard.initProgressTracking()
-
-  // Welcome message
-  setTimeout(() => {
-    window.pplDashboard.showNotification(
-      'Welcome to PPL Fitness! 🏋️‍♂️',
-      "Your dashboard is ready. Today's focus: Pull Day! Ready to build some back strength?",
-      'success'
-    )
-  }, 1000)
-})
-
-// Add service worker for offline functionality
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker
-      .register('/sw.js')
-      .then((registration) => {
-        console.log('ServiceWorker registration successful')
-      })
-      .catch((err) => {
-        console.log('ServiceWorker registration failed: ', err)
-      })
-  })
-}
-
-// Handle online/offline status
-window.addEventListener('online', () => {
-  if (window.pplDashboard) {
-    window.pplDashboard.showNotification(
-      'Connection Restored! 🌐',
-      "You're back online and ready to sync your progress!",
-      'success'
-    )
-  }
-})
-
-window.addEventListener('offline', () => {
-  if (window.pplDashboard) {
-    window.pplDashboard.showNotification(
-      'Offline Mode Active 📱',
-      'No worries! You can still use your dashboard offline.',
-      'info'
-    )
-  }
-})
-
-// Add keyboard shortcuts
-document.addEventListener('keydown', (e) => {
-  if (e.ctrlKey || e.metaKey) {
-    switch (e.key) {
-      case '1':
-        e.preventDefault()
-        startWorkout('push')
-        break
-      case '2':
-        e.preventDefault()
-        startWorkout('pull')
-        break
-      case '3':
-        e.preventDefault()
-        startWorkout('legs')
-        break
+// Cleanup on page unload
+window.addEventListener('beforeunload', () => {
+    if (dashboardAppInstance && typeof dashboardAppInstance.cleanup === 'function') {
+        dashboardAppInstance.cleanup();
     }
-  }
-})
+});
 
-// Export for module usage
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = PPLDashboard
-}
+// Prevent zoom on double tap (mobile)
+let lastTouchEnd = 0;
+document.addEventListener('touchend', (event) => {
+    const now = (new Date()).getTime();
+    if (now - lastTouchEnd <= 300) {
+        event.preventDefault();
+    }
+    lastTouchEnd = now;
+}, false);
+
+// Handle orientation changes
+window.addEventListener('orientationchange', () => {
+    setTimeout(() => {
+        window.scrollTo(0, 0);
+    }, 100);
+});

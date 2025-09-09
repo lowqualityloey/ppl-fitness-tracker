@@ -11,6 +11,8 @@ class PullDayWorkoutApp {
       'complete',
     ]
     this.phaseProgress = 0
+    this.cachedElements = new Map()
+    this.eventListeners = new Map()
 
     // Workout state
     this.completedSets = 0
@@ -250,6 +252,7 @@ class PullDayWorkoutApp {
     }
 
     try {
+      this.cacheElements()
       this.setupEventListeners()
       this.updateProgressBar()
       this.renderExerciseCards()
@@ -265,6 +268,23 @@ class PullDayWorkoutApp {
         this.init()
       }, 500)
     }
+  }
+  
+  cacheElements() {
+    const elements = {
+      exerciseCards: document.getElementById('exercise-cards'),
+      stretchList: document.getElementById('stretch-list'),
+      mainProgressFill: document.getElementById('main-progress-fill'),
+      setsCount: document.getElementById('sets-count'),
+      exercisesCount: document.getElementById('exercises-count'),
+      finalSets: document.getElementById('final-sets'),
+      finalExercises: document.getElementById('final-exercises'),
+      finalTime: document.getElementById('final-time')
+    }
+    
+    Object.entries(elements).forEach(([key, element]) => {
+      this.cachedElements.set(key, element)
+    })
   }
 
   setupEventListeners() {
@@ -452,13 +472,17 @@ class PullDayWorkoutApp {
   }
 
   updateProgressBar() {
-    const phaseIndex = this.phases.indexOf(this.currentPhase)
-    const progress = (phaseIndex / (this.phases.length - 1)) * 100
+    try {
+      const phaseIndex = this.phases.indexOf(this.currentPhase)
+      const progress = (phaseIndex / (this.phases.length - 1)) * 100
 
-    const progressFill = document.getElementById('main-progress-fill')
-    if (progressFill) {
-      progressFill.style.width = `${progress}%`
-      console.log('Progress bar updated:', progress + '%')
+      const progressFill = this.cachedElements.get('mainProgressFill')
+      if (progressFill) {
+        progressFill.style.width = `${progress}%`
+        console.log('Progress bar updated:', progress + '%')
+      }
+    } catch (error) {
+      console.error('Progress bar update failed:', error)
     }
   }
 
@@ -659,20 +683,26 @@ class PullDayWorkoutApp {
 
   // Main Workout Phase
   renderExerciseCards() {
-    const container = document.getElementById('exercise-cards')
+    const container = this.cachedElements.get('exerciseCards')
     if (!container) {
       console.log('Exercise cards container not found, will render later')
       return
     }
 
-    container.innerHTML = ''
+    try {
+      const fragment = document.createDocumentFragment()
 
-    this.exercises.forEach((exercise, index) => {
-      const card = this.createExerciseCard(exercise, index)
-      container.appendChild(card)
-    })
-
-    console.log('Exercise cards rendered')
+      this.exercises.forEach((exercise, index) => {
+        const card = this.createExerciseCard(exercise, index)
+        fragment.appendChild(card)
+      })
+      
+      container.innerHTML = ''
+      container.appendChild(fragment)
+      console.log('Exercise cards rendered')
+    } catch (error) {
+      console.error('Exercise cards rendering failed:', error)
+    }
   }
 
   createExerciseCard(exercise, index) {
@@ -819,21 +849,25 @@ class PullDayWorkoutApp {
   }
 
   updateWorkoutProgress() {
-    const setsCount = document.getElementById('sets-count')
-    const exercisesCount = document.getElementById('exercises-count')
-    const completeBtn = document.getElementById('workout-complete-btn')
+    try {
+      const setsCount = this.cachedElements.get('setsCount')
+      const exercisesCount = this.cachedElements.get('exercisesCount')
+      const completeBtn = document.getElementById('workout-complete-btn')
 
-    if (setsCount) setsCount.textContent = this.completedSets
-    if (exercisesCount) exercisesCount.textContent = this.completedExercises
+      if (setsCount) setsCount.textContent = this.completedSets
+      if (exercisesCount) exercisesCount.textContent = this.completedExercises
 
-    if (completeBtn) {
-      const canComplete = this.completedSets >= this.totalSets
-      completeBtn.disabled = !canComplete
+      if (completeBtn) {
+        const canComplete = this.completedSets >= this.totalSets
+        completeBtn.disabled = !canComplete
 
-      if (canComplete) {
-        completeBtn.classList.add('btn--primary')
-        completeBtn.classList.remove('btn--outline')
+        if (canComplete) {
+          completeBtn.classList.add('btn--primary')
+          completeBtn.classList.remove('btn--outline')
+        }
       }
+    } catch (error) {
+      console.error('Workout progress update failed:', error)
     }
   }
 
@@ -945,20 +979,26 @@ class PullDayWorkoutApp {
 
   // Stretching Phase
   renderStretchList() {
-    const container = document.getElementById('stretch-list')
+    const container = this.cachedElements.get('stretchList')
     if (!container) {
       console.log('Stretch list container not found, will render later')
       return
     }
 
-    container.innerHTML = ''
+    try {
+      const fragment = document.createDocumentFragment()
 
-    this.stretches.forEach((stretch, index) => {
-      const item = this.createStretchItem(stretch, index)
-      container.appendChild(item)
-    })
-
-    console.log('Stretch list rendered')
+      this.stretches.forEach((stretch, index) => {
+        const item = this.createStretchItem(stretch, index)
+        fragment.appendChild(item)
+      })
+      
+      container.innerHTML = ''
+      container.appendChild(fragment)
+      console.log('Stretch list rendered')
+    } catch (error) {
+      console.error('Stretch list rendering failed:', error)
+    }
   }
 
   createStretchItem(stretch, index) {
@@ -1260,16 +1300,20 @@ class PullDayWorkoutApp {
   }
 
   updateFinalStats() {
-    const finalSets = document.getElementById('final-sets')
-    const finalExercises = document.getElementById('final-exercises')
-    const finalTime = document.getElementById('final-time')
+    try {
+      const finalSets = this.cachedElements.get('finalSets')
+      const finalExercises = this.cachedElements.get('finalExercises')
+      const finalTime = this.cachedElements.get('finalTime')
 
-    if (finalSets) finalSets.textContent = this.completedSets
-    if (finalExercises) finalExercises.textContent = this.completedExercises
+      if (finalSets) finalSets.textContent = this.completedSets
+      if (finalExercises) finalExercises.textContent = this.completedExercises
 
-    if (finalTime && this.workoutStartTime) {
-      const duration = Math.floor((Date.now() - this.workoutStartTime) / 60000)
-      finalTime.textContent = duration
+      if (finalTime && this.workoutStartTime) {
+        const duration = Math.floor((Date.now() - this.workoutStartTime) / 60000)
+        finalTime.textContent = duration
+      }
+    } catch (error) {
+      console.error('Final stats update failed:', error)
     }
   }
 
@@ -1295,36 +1339,40 @@ class PullDayWorkoutApp {
   }
 
   showNotification(message, type = 'success') {
-    // Prevent duplicate notifications
-    const existingNotifications = document.querySelectorAll('.notification')
-    const isDuplicate = Array.from(existingNotifications).some(
-      (n) => n.textContent === message
-    )
+    try {
+      // Prevent duplicate notifications
+      const existingNotifications = document.querySelectorAll('.notification')
+      const isDuplicate = Array.from(existingNotifications).some(
+        (n) => n.textContent === message
+      )
 
-    if (isDuplicate) {
-      console.log('Duplicate notification prevented:', message)
-      return
-    }
+      if (isDuplicate) {
+        console.log('Duplicate notification prevented:', message)
+        return
+      }
 
-    console.log('Notification:', message)
-    const notification = document.createElement('div')
-    notification.className = `notification ${type}`
-    notification.textContent = message
+      console.log('Notification:', message)
+      const notification = document.createElement('div')
+      notification.className = `notification ${type}`
+      notification.textContent = message
 
-    document.body.appendChild(notification)
+      document.body.appendChild(notification)
 
-    setTimeout(() => {
-      notification.classList.add('show')
-    }, 100)
+      requestAnimationFrame(() => {
+        notification.classList.add('show')
+      })
 
-    setTimeout(() => {
-      notification.classList.remove('show')
       setTimeout(() => {
-        if (notification.parentNode) {
-          notification.parentNode.removeChild(notification)
-        }
-      }, 300)
-    }, 3000)
+        notification.classList.remove('show')
+        setTimeout(() => {
+          if (notification.parentNode) {
+            notification.parentNode.removeChild(notification)
+          }
+        }, 300)
+      }, 3000)
+    } catch (error) {
+      console.error('Notification display failed:', error)
+    }
   }
 
   // Progress persistence methods
@@ -1430,6 +1478,21 @@ class PullDayWorkoutApp {
   clearProgress() {
     localStorage.removeItem('pullDayProgress')
   }
+  
+  cleanup() {
+    // Clean up timers
+    if (this.cardioTimer) clearInterval(this.cardioTimer)
+    if (this.restTimer) clearInterval(this.restTimer)
+    if (this.stretchTimer) clearInterval(this.stretchTimer)
+    if (this.cooldownTimer) clearInterval(this.cooldownTimer)
+    
+    // Clean up event listeners
+    this.eventListeners.forEach(({ element, handler }) => {
+      element.removeEventListener('click', handler)
+    })
+    this.eventListeners.clear()
+    this.cachedElements.clear()
+  }
 }
 
 // Initialize the app when DOM is loaded
@@ -1443,6 +1506,13 @@ if (document.readyState !== 'loading') {
   console.log('DOM already loaded, initializing Pull Day Workout App...')
   window.pullDayApp = new PullDayWorkoutApp()
 }
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', () => {
+  if (window.pullDayApp && typeof window.pullDayApp.cleanup === 'function') {
+    window.pullDayApp.cleanup()
+  }
+})
 
 // Service worker registration for offline functionality
 if ('serviceWorker' in navigator) {

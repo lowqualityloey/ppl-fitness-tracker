@@ -1,0 +1,84 @@
+/* Accessibility improvements for better text contrast */
+
+/* Override Bulma's low contrast text classes */
+.has-text-white-ter {
+    color: rgba(255, 255, 255, 0.95) !important;
+}
+
+.has-text-white-bis {
+    color: rgba(255, 255, 255, 0.9) !important;
+}
+
+/* Improve heading contrast */
+.heading {
+    color: var(--color-text) !important;
+    font-weight: var(--font-weight-semibold) !important;
+}
+
+/* Better contrast for card text */
+.card .subtitle {
+    color: var(--color-charcoal-700) !important;
+    font-weight: var(--font-weight-medium) !important;
+}
+
+/* Improve tag readability */
+.tag {
+    font-weight: var(--font-weight-medium) !important;
+}
+
+.tag.is-info {
+    background-color: var(--color-teal-600) !important;
+    color: white !important;
+}
+
+.tag.is-success {
+    background-color: var(--color-success) !important;
+    color: white !important;
+}
+
+.tag.is-warning {
+    background-color: var(--color-warning) !important;
+    color: white !important;
+    font-weight: var(--font-weight-bold) !important;
+}
+
+/* Focus indicators for better accessibility */
+.card:focus-within {
+    outline: 3px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+.button:focus-visible {
+    outline: 3px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+    .has-text-white-ter,
+    .has-text-white-bis {
+        color: white !important;
+    }
+    
+    .card {
+        border: 2px solid var(--color-text) !important;
+    }
+    
+    .tag {
+        border: 1px solid var(--color-text) !important;
+    }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    .card,
+    .workout-card,
+    .button {
+        transition: none !important;
+        animation: none !important;
+    }
+    
+    .workout-highlight::before {
+        animation: none !important;
+    }
+}

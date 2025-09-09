@@ -760,6 +760,69 @@ select.form-control {
   left: var(--space-20);
 }
 
+/* Responsive Back Button */
+.back-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  transition: all var(--duration-normal) var(--ease-standard);
+}
+
+.back-btn i {
+  font-size: var(--font-size-base);
+}
+
+.back-text {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+/* Desktop: Show full text */
+@media (min-width: 769px) {
+  .back-btn {
+    padding: var(--space-8) var(--space-16);
+  }
+}
+
+/* Tablet: Shorter text */
+@media (max-width: 768px) and (min-width: 481px) {
+  .back-text {
+    display: none;
+  }
+  
+  .back-btn {
+    padding: var(--space-8) var(--space-12);
+    min-width: 44px;
+    justify-content: center;
+  }
+  
+  .back-btn::after {
+    content: "Back";
+    font-size: var(--font-size-xs);
+    margin-left: var(--space-4);
+  }
+}
+
+/* Mobile: Icon only */
+@media (max-width: 480px) {
+  .back-text {
+    display: none;
+  }
+  
+  .back-btn {
+    width: 40px;
+    height: 40px;
+    padding: var(--space-8);
+    border-radius: 50%;
+    justify-content: center;
+    min-width: 40px;
+  }
+  
+  .back-btn i {
+    font-size: var(--font-size-lg);
+  }
+}
+
 .completion-actions {
   display: flex;
   justify-content: center;
@@ -1480,6 +1543,10 @@ select.form-control {
 @media (max-width: 768px) {
   .header {
     padding: var(--space-12) var(--space-16);
+  }
+  
+  .header-nav {
+    left: var(--space-16);
   }
   
   .progress-container {

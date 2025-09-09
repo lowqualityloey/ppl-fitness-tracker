@@ -152,10 +152,10 @@ class DashboardApp {
         
         return {
             streak: 2,
-            totalWorkouts: 3,
-            hoursTrained: 2.5,
-            lastWorkout: 'Push Day',
-            nextWorkout: 'Pull Day'
+            totalWorkouts: 6,
+            hoursTrained: 4.5,
+            lastWorkout: 'Legs Day',
+            nextWorkout: this.getTodaysWorkout()
         };
     }
 
@@ -165,6 +165,48 @@ class DashboardApp {
             statNumbers[0].textContent = stats.streak;
             statNumbers[1].textContent = stats.totalWorkouts;
             statNumbers[2].textContent = `${stats.hoursTrained}h`;
+        }
+        
+        // Update hero section with today's workout
+        this.updateTodaysWorkout();
+    }
+
+    getTodaysWorkout() {
+        const workouts = ['Push', 'Pull', 'Legs', 'Push', 'Pull', 'Legs', 'Rest'];
+        const today = new Date().getDay();
+        const todayIndex = today === 0 ? 6 : today - 1;
+        return workouts[todayIndex];
+    }
+
+    updateTodaysWorkout() {
+        const todaysWorkout = this.getTodaysWorkout();
+        const highlightText = document.querySelector('.highlight-text');
+        const heroTitle = document.querySelector('.hero-title');
+        
+        if (highlightText && heroTitle) {
+            if (todaysWorkout === 'Rest') {
+                highlightText.textContent = 'Rest Day';
+                heroTitle.innerHTML = `Time for your <span class="highlight-text">Rest Day</span> recovery!`;
+            } else {
+                highlightText.textContent = `${todaysWorkout} Day`;
+                heroTitle.innerHTML = `Ready for your <span class="highlight-text">${todaysWorkout} Day</span> workout?`;
+            }
+        }
+        
+        // Update CTA button
+        const ctaButton = document.querySelector('.cta-button.primary');
+        if (ctaButton && todaysWorkout !== 'Rest') {
+            const buttonContent = ctaButton.querySelector('.button-content span');
+            if (buttonContent) {
+                buttonContent.textContent = `Start ${todaysWorkout} Day`;
+            }
+            ctaButton.setAttribute('onclick', `startWorkout('${todaysWorkout.toLowerCase()}')`);
+        } else if (ctaButton && todaysWorkout === 'Rest') {
+            const buttonContent = ctaButton.querySelector('.button-content span');
+            if (buttonContent) {
+                buttonContent.textContent = 'Rest & Recover';
+            }
+            ctaButton.setAttribute('onclick', 'showRestDayMessage()');
         }
     }
 
@@ -198,7 +240,7 @@ class DashboardApp {
 
         try {
             const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-            const workouts = ['Push', 'Pull', 'Legs', 'Push', 'Pull', 'Rest', 'Rest'];
+            const workouts = ['Push', 'Pull', 'Legs', 'Push', 'Pull', 'Legs', 'Rest'];
             const today = new Date().getDay();
             const todayIndex = today === 0 ? 6 : today - 1;
 
@@ -399,6 +441,13 @@ function startWorkout(type) {
         setTimeout(() => {
             window.location.href = workoutUrls[type];
         }, 500);
+    }
+}
+
+// Global function for rest day message
+function showRestDayMessage() {
+    if (dashboardAppInstance) {
+        dashboardAppInstance.showFeedback('🛌 Rest day! Your muscles need time to recover and grow stronger.');
     }
 }
 

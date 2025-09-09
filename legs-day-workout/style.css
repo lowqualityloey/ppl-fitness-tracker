@@ -1633,7 +1633,27 @@ select.form-control {
   
   .confidence-panel {
     bottom: var(--space-16);
+    left: var(--space-16);
     right: var(--space-16);
+  }
+  
+  .confidence-toggle {
+    width: 100%;
+    text-align: center;
+  }
+  
+  .confidence-content {
+    position: fixed;
+    bottom: 80px;
+    left: var(--space-16);
+    right: var(--space-16);
+    width: auto;
+    max-height: 60vh;
+    overflow-y: auto;
+  }
+  
+  .main-content {
+    padding-bottom: 120px;
   }
   
   .exercise-card.compact {

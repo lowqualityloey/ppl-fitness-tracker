@@ -1381,6 +1381,7 @@ select.form-control {
   
   .main-content {
     padding: var(--space-16);
+    padding-bottom: 120px;
   }
   
   .progress-bar {
@@ -1422,14 +1423,25 @@ select.form-control {
     text-align: center;
   }
   
-  .confidence-content {
-    width: 280px;
-    right: -20px;
-  }
-  
   .confidence-panel {
     bottom: var(--space-16);
+    left: var(--space-16);
     right: var(--space-16);
+  }
+  
+  .confidence-toggle {
+    width: 100%;
+    text-align: center;
+  }
+  
+  .confidence-content {
+    position: fixed;
+    bottom: 80px;
+    left: var(--space-16);
+    right: var(--space-16);
+    width: auto;
+    max-height: 60vh;
+    overflow-y: auto;
   }
   
   .exercise-card.compact {

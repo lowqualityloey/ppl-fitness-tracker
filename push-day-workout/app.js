@@ -625,7 +625,9 @@ class WorkoutApp {
         this.saveProgress();
         
         // Scroll to top when changing phases
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        setTimeout(() => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }, 100);
 
         // Show phase-specific notifications
         const phaseMessages = {

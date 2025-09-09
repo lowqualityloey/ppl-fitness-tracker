@@ -36,7 +36,26 @@ A comprehensive web-based fitness tracking application for Push-Pull-Legs (PPL) 
 
 ## Getting Started
 
-### Quick Start
+### Development Setup
+1. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+2. Start development server:
+   ```bash
+   npm run dev
+   ```
+
+3. Open http://localhost:3000 in your browser
+
+### Production Build
+```bash
+npm run build
+npm run preview
+```
+
+### Quick Start (Static)
 1. Open `index.html` in your web browser
 2. Navigate to your desired workout day
 3. Follow the guided workout phases
@@ -93,6 +112,7 @@ ppl-fitness-tracker/
 
 ## Technology Stack
 
+- **Build Tool**: Vite
 - **Frontend**: HTML5, CSS3, JavaScript (ES6+)
 - **Styling**: Bulma CSS Framework
 - **Icons**: Font Awesome

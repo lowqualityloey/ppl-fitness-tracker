@@ -17,7 +17,10 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "db:up": "supabase start -x realtime,storage-api,imgproxy,edge-runtime,logflare,vector",
+    "db:down": "supabase stop",
+    "db:status": "supabase status -o env"
   },
   "dependencies": {
     "next": "16.3.4",
@@ -31,6 +34,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.4",
+    "supabase": "2.117.0",
     "typescript": "^5",
     "vite": "^7.1.7",
     "vitest": "^5.0.0"

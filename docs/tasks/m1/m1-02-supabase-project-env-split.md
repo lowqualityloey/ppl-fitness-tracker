@@ -63,7 +63,7 @@ The M0 spike (`docs/spikes/2026-09-08-drizzle-rls-enforcement.md`) already did t
 ### Scenario 3: Negative — app role does not yet exist (expected at this stage)
 - **Given** this task completes before M1-04
 - **When** a connection attempt is made using the `app_authenticated` role name
-- **Then** it fails with "role does not exist" — proving no shortcut created the role here, keeping M1-04's scope clean
+- **Then** it fails to authenticate — verified 2026-09-08: Postgres's auth handshake checks the password *before* revealing whether the role exists, as a role-enumeration defense, so the actual error is `password authentication failed for user "app_authenticated"`, not "role does not exist" as originally assumed here. Confirmed via `SELECT rolname FROM pg_roles WHERE rolname = 'app_authenticated'` returning zero rows on the owner connection — the role genuinely isn't there; the error message is just not the literal string this task originally expected.
 
 ---
 

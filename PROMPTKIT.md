@@ -26,11 +26,11 @@
 - No tests, no backend, no auth
 - **Known broken**: `npm run build` exits 0 but emits **zero JavaScript**. All four `<script>` tags are classic scripts, so Vite neither transforms nor copies them and leaves the original `src` in the output HTML. Every page in `dist/` 404s on its script and is inert. Do not treat a successful `build` exit code as evidence of a working build.
 
-### Target stack (v1, decided but not yet built)
+### Target stack (v1 — scaffold exists as of 2026-09-08, M1 in progress)
 
 - **Language & Runtime**: TypeScript `strict`, Node.js **≥ 20.9** (required by Next.js 16 — Node 18 is unsupported). nvm default is v24.20.0 LTS; see the shell footgun in §3.
-- **Framework**: Next.js 16 (App Router), React 19 — ADR-0001
-- **Styling & Design System**: Tailwind CSS v4, shadcn/ui, tokens derived from `DESIGN.md` — ADR-0005
+- **Framework**: Next.js 16 (App Router), React 19 — ADR-0001. **Scaffolded** (`M1-01`/#3): `next.config.ts`, `tsconfig.json`, `eslint.config.mjs`, `src/app/` with a placeholder home page. Runs on port 3001 alongside the legacy Vite server on 3000.
+- **Styling & Design System**: Tailwind CSS v4, shadcn/ui, tokens derived from `DESIGN.md` — ADR-0005. **Not yet added** — this lands in M3, not the M1 scaffold; `src/app/globals.css` is currently a bare reset.
 - **State & Data Fetching**: Server Actions + Route Handlers; `useOptimistic` for set-tap; client outbox in IndexedDB
 - **Backend & Database**: Supabase — PostgreSQL **17.6** (measured on the local stack 2026-09-08; earlier drafts said 16), Supabase Auth (email magic link), Supabase Realtime — ADR-0002
 - **ORM**: Drizzle, connecting as a non-owner `app_authenticated` role — ADR-0003
@@ -72,14 +72,41 @@ Verify before trusting a build: `node --version` must report ≥ 20.9. If it rep
 
 *Optional permanent fix (user's environment, not the repo):* creating a `~/.zshenv` with the same `PATH` prepend as `~/.zshrc:119-122` would make all zsh invocations resolve correctly, since `.zshenv` is sourced for every shell including non-interactive. Not applied — the explicit-source form above works without touching dotfiles.
 
-### Target (do not invoke until M1 scaffolds them)
+### Target (scaffolded 2026-09-08 by `M1-01` / issue #3 — verified commands)
 
-- **Dev Server**: `npm run dev`
-- **Unit / Integration Tests**: `npm test`
-- **E2E Tests**: `npm run test:e2e`
-- **Typecheck**: `npx tsc --noEmit`
-- **Lint & Format**: `npm run lint`
-- **DB migrations**: `npx drizzle-kit generate` / `migrate` (owner role, `MIGRATION_DATABASE_URL`)
+Next.js 16 lives at the repo root alongside the legacy app (`PROMPTKIT.md` §4: no
+monorepo, single `package.json`). It runs on **port 3001**, not 3000 — the legacy
+Vite dev server keeps 3000, and both coexist until M4 decommissions the legacy
+pages. Verified: both `npm run dev` and `npm run next:dev` running simultaneously,
+each serving correctly, zero collision.
+
+- **Dev Server**: `npm run next:dev` (port 3001; legacy `npm run dev` stays on 3000)
+- **Build**: `npm run next:build` — emits real JS chunks under `.next/`, unlike the
+  legacy `npm run build`, which is verified zero-JS (see the note above) and stays
+  that way until M4
+- **Start (production)**: `npm run next:start`
+- **Unit / Integration Tests**: `npm test` (Vitest; passes with exit 0 and no tests
+  until `M1-16`/#18 adds the first ones — this is intentional for the RED phase, not
+  a gap)
+- **E2E Tests**: `npm run test:e2e` (Playwright; no spec files yet)
+- **Typecheck**: `npm run typecheck` (runs `next typegen` first, then
+  `tsc --noEmit`; verified to reject implicit `any` — strict mode is enforced,
+  not just declared). Bare `npx tsc --noEmit` fails on a fresh checkout with
+  `Cannot find name 'LayoutProps'` — that type is generated into `.next/types`
+  by Next.js itself and isn't present until `next dev`, `next build`, or
+  `next typegen` has run once. `npm run typecheck` handles this; a bare `tsc`
+  invocation will not.
+- **Lint**: `npm run lint` (ESLint flat config, `eslint-config-next`; legacy
+  directories and `spikes/` are explicitly ignored, not linted)
+- **DB migrations**: `npx drizzle-kit generate` / `migrate` (owner role,
+  `MIGRATION_DATABASE_URL`) — not yet scaffolded, lands in `M1-03`/#5
+
+Node version note: `next build`'s Turbopack warns that it ignored
+`package-lock.json` because `/home/heyloey` (this machine's home directory) sits
+outside this git repository. Harmless — the warning is about lockfile *root
+detection* for Turbopack's own caching, not about which lockfile npm actually
+uses to install. If it becomes noisy, `turbopack.root` in `next.config.ts` can
+silence it.
 
 ---
 

@@ -1,0 +1,26 @@
+/*
+ * Minimal reset for the M1 scaffold. Design tokens from DESIGN.md land in
+ * M3 (ADR-0004, ADR-0005) — light-only v1, so no prefers-color-scheme dark
+ * block is added here to avoid it becoming stale before dark mode exists.
+ */
+
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+body {
+  min-height: 100%;
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}

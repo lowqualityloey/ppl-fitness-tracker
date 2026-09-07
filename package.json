@@ -20,9 +20,12 @@
     "test:e2e": "playwright test",
     "db:up": "supabase start -x realtime,storage-api,imgproxy,edge-runtime,logflare,vector",
     "db:down": "supabase stop",
-    "db:status": "supabase status -o env"
+    "db:status": "supabase status -o env",
+    "db:migrate": "drizzle-kit migrate",
+    "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
+    "drizzle-orm": "^0.36.4",
     "next": "16.3.4",
     "react": "19.2.8",
     "react-dom": "19.2.8"
@@ -32,8 +35,10 @@
     "@types/node": "^24",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.3.4",
+    "pg": "^8.12.0",
     "supabase": "2.117.0",
     "typescript": "^5",
     "vite": "^7.1.7",

@@ -18,278 +18,349 @@ describe('M1-03: Schema Constraints & Verification', () => {
   describe('Scenario 1: Schema objects exist and are correctly configured', () => {
     it('should have all 9 tables created', async () => {
       const result = await client.query(`
-        SELECT COUNT(*) as count FROM information_schema.tables
-        WHERE table_schema = 'public' AND table_name IN (
-          'profiles', 'exercises', 'routine_days', 'routine_exercises',
-          'workout_sessions', 'session_sets', 'session_tasks',
-          'personal_records', 'sync_mutations', 'import_batches'
-        )
+        SELECT table_name 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_type = 'BASE TABLE'
+        ORDER BY table_name
       `);
-      expect(Number(result.rows[0].count)).toBe(10);
+      
+      const tableNames = result.rows.map(row => row.table_name);
+      const expectedTables = [
+        'exercises',
+        'import_batches', 
+        'personal_records',
+        'profiles',
+        'routine_days',
+        'routine_exercises', 
+        'session_sets',
+        'session_tasks',
+        'sync_mutations',
+        'workout_sessions'
+      ];
+      
+      expectedTables.forEach(tableName => {
+        expect(tableNames).toContain(tableName);
+      });
     });
 
     it('should have all 5 enum types', async () => {
       const result = await client.query(`
-        SELECT COUNT(*) as count FROM pg_type
-        WHERE typtype = 'e' AND typname IN (
-          'session_status', 'session_phase', 'session_source',
-          'weight_unit', 'task_key'
-        )
+        SELECT typname 
+        FROM pg_type 
+        WHERE typnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public')
+        AND typtype = 'e'
+        ORDER BY typname
       `);
-      expect(Number(result.rows[0].count)).toBe(5);
+      
+      const enumNames = result.rows.map(row => row.typname);
+      const expectedEnums = [
+        'session_phase',
+        'session_source', 
+        'session_status',
+        'task_key',
+        'weight_unit'
+      ];
+      
+      expectedEnums.forEach(enumName => {
+        expect(enumNames).toContain(enumName);
+      });
     });
 
     it('should have weight_sane and reps_sane check constraints on session_sets', async () => {
       const result = await client.query(`
-        SELECT conname FROM pg_constraint
-        WHERE conrelid = 'session_sets'::regclass
-        AND conname IN ('weight_sane', 'reps_sane')
+        SELECT con.conname, pg_get_constraintdef(con.oid) as definition
+        FROM pg_constraint con
+        JOIN pg_class rel ON rel.oid = con.conrelid
+        JOIN pg_namespace nsp ON nsp.oid = connamespace
+        WHERE nsp.nspname = 'public'
+        AND rel.relname = 'session_sets'
+        AND con.contype = 'c'
+        ORDER BY con.conname
       `);
-      expect(result.rows.length).toBe(2);
-      expect(result.rows.map((r: any) => r.conname).sort()).toEqual([
-        'reps_sane',
-        'weight_sane',
-      ]);
+
+      const constraints = result.rows.map(row => ({ 
+        name: row.conname, 
+        definition: row.definition 
+      }));
+
+      const weightConstraint = constraints.find(c => c.name === 'weight_sane');
+      expect(weightConstraint).toBeDefined();
+      expect(weightConstraint!.definition).toContain('weight_kg >=');
+      expect(weightConstraint!.definition).toContain('1000');
+
+      const repsConstraint = constraints.find(c => c.name === 'reps_sane');
+      expect(repsConstraint).toBeDefined();  
+      expect(repsConstraint!.definition).toContain('reps >=');
+      expect(repsConstraint!.definition).toContain('1000');
     });
 
     it('should have one_active_session_per_day partial unique index', async () => {
       const result = await client.query(`
-        SELECT indexname FROM pg_indexes
-        WHERE schemaname = 'public' AND tablename = 'workout_sessions'
-        AND indexname = 'one_active_session_per_day'
+        SELECT 
+          i.relname as index_name,
+          pg_get_indexdef(i.oid) as index_definition
+        FROM pg_class i
+        JOIN pg_index ix ON i.oid = ix.indexrelid
+        JOIN pg_class t ON t.oid = ix.indrelid
+        JOIN pg_namespace n ON n.oid = t.relnamespace
+        WHERE n.nspname = 'public'
+        AND t.relname = 'workout_sessions'
+        AND i.relname = 'one_active_session_per_day'
       `);
-      expect(result.rows.length).toBe(1);
+
+      expect(result.rows).toHaveLength(1);
+      const indexDef = result.rows[0].index_definition;
+      expect(indexDef).toContain('user_id');
+      expect(indexDef).toContain('routine_day_id'); 
+      expect(indexDef).toContain('local_date');
+      expect(indexDef).toContain("status = 'in_progress'");
     });
   });
 
   describe('Scenario 2: Check constraints reject invalid data', () => {
     it('should enforce weight_kg 0–1000 constraint', async () => {
-      const profileId = '11111111-1111-1111-1111-111111111111';
-      await client.query(
-        'INSERT INTO profiles (id, email) VALUES ($1, $2)',
-        [profileId, 'test@example.com'],
-      );
+      // Create required parent records
+      await client.query(`
+        INSERT INTO profiles (id, email) 
+        VALUES ('00000000-0000-0000-0000-000000000001'::uuid, 'test1@example.com')
+        ON CONFLICT (id) DO NOTHING
+      `);
+      
+      await client.query(`
+        INSERT INTO routine_days (id, slug, name) 
+        VALUES ('00000000-0000-0000-0000-000000000002'::uuid, 'test-push', 'Test Push')
+        ON CONFLICT (id) DO NOTHING
+      `);
 
-      const routineDayId = '22222222-2222-2222-2222-222222222222';
-      await client.query(
-        'INSERT INTO routine_days (id, slug, name) VALUES ($1, $2, $3)',
-        [routineDayId, 'test', 'Test'],
-      );
+      // First insert a valid workout session and exercise to reference
+      const sessionResult = await client.query(`
+        INSERT INTO workout_sessions 
+        (user_id, routine_day_id, client_id, local_date, started_at) 
+        VALUES 
+        ('00000000-0000-0000-0000-000000000001'::uuid, 
+         '00000000-0000-0000-0000-000000000002'::uuid,
+         '00000000-0000-0000-0000-000000000003'::uuid,
+         '2024-01-01', 
+         NOW())
+        RETURNING id
+      `);
+      const sessionId = sessionResult.rows[0].id;
 
-      const sessionId = '33333333-3333-3333-3333-333333333333';
-      await client.query(
-        `INSERT INTO workout_sessions (
-          id, user_id, routine_day_id, client_id, local_date, started_at, status
-        ) VALUES ($1, $2, $3, gen_random_uuid(), current_date, now(), 'in_progress')`,
-        [sessionId, profileId, routineDayId],
-      );
+      const exerciseResult = await client.query(`
+        INSERT INTO exercises (slug, name, muscle_groups)
+        VALUES ('test-bench-press', 'Test Bench Press', '{"chest"}')
+        RETURNING id
+      `);
+      const exerciseId = exerciseResult.rows[0].id;
 
-      const exerciseId = '44444444-4444-4444-4444-444444444444';
-      await client.query(
-        'INSERT INTO exercises (id, slug, name, muscle_groups) VALUES ($1, $2, $3, $4)',
-        [exerciseId, 'test', 'Test', ['test']],
-      );
-
+      // Test: weight too high should fail
       try {
-        await client.query(
-          `INSERT INTO session_sets (
-            id, user_id, session_id, exercise_id, set_index,
-            weight_kg, client_ts, updated_at
-          ) VALUES (gen_random_uuid(), $1, $2, $3, 1, 1500, now(), now())`,
-          [profileId, sessionId, exerciseId],
-        );
-        throw new Error('Should have rejected weight_kg = 1500');
+        await client.query(`
+          INSERT INTO session_sets 
+          (user_id, session_id, exercise_id, set_index, weight_kg, client_ts)
+          VALUES 
+          ('00000000-0000-0000-0000-000000000001'::uuid, 
+           $1, $2, 0, 1500, NOW())
+        `, [sessionId, exerciseId]);
+        
+        throw new Error('Should have failed with check constraint violation');
       } catch (err) {
-        if ((err as any)?.message?.includes('Should have rejected')) {
-          throw err;
-        }
-        expect((err as any)?.code).toBe('23514');
+        expect((err as any)?.code).toBe('23514'); // check_violation
+        expect((err as any)?.message).toContain('weight_sane');
       }
 
-      await client.query('DELETE FROM workout_sessions WHERE id = $1', [
-        sessionId,
-      ]);
-      await client.query('DELETE FROM routine_days WHERE id = $1', [
-        routineDayId,
-      ]);
-      await client.query('DELETE FROM profiles WHERE id = $1', [profileId]);
+      // Test: negative weight should fail  
+      try {
+        await client.query(`
+          INSERT INTO session_sets 
+          (user_id, session_id, exercise_id, set_index, weight_kg, client_ts)
+          VALUES 
+          ('00000000-0000-0000-0000-000000000001'::uuid, 
+           $1, $2, 1, -5, NOW())
+        `, [sessionId, exerciseId]);
+        
+        throw new Error('Should have failed with check constraint violation');
+      } catch (err) {
+        expect((err as any)?.code).toBe('23514'); // check_violation
+        expect((err as any)?.message).toContain('weight_sane');
+      }
+
+      // Cleanup
+      await client.query('DELETE FROM session_sets WHERE session_id = $1', [sessionId]);
+      await client.query('DELETE FROM workout_sessions WHERE id = $1', [sessionId]);
+      await client.query('DELETE FROM exercises WHERE id = $1', [exerciseId]);
     });
 
     it('should enforce reps 0–1000 constraint', async () => {
-      const profileId = '55555555-5555-5555-5555-555555555555';
-      await client.query(
-        'INSERT INTO profiles (id, email) VALUES ($1, $2)',
-        [profileId, 'test2@example.com'],
-      );
+      // Setup session and exercise
+      const sessionResult = await client.query(`
+        INSERT INTO workout_sessions 
+        (user_id, routine_day_id, client_id, local_date, started_at) 
+        VALUES 
+        ('00000000-0000-0000-0000-000000000001'::uuid, 
+         '00000000-0000-0000-0000-000000000002'::uuid,
+         '00000000-0000-0000-0000-000000000004'::uuid,
+         '2024-01-01', 
+         NOW())
+        RETURNING id
+      `);
+      const sessionId = sessionResult.rows[0].id;
 
-      const routineDayId = '66666666-6666-6666-6666-666666666666';
-      await client.query(
-        'INSERT INTO routine_days (id, slug, name) VALUES ($1, $2, $3)',
-        [routineDayId, 'test2', 'Test2'],
-      );
+      const exerciseResult = await client.query(`
+        INSERT INTO exercises (slug, name, muscle_groups)
+        VALUES ('test-squats', 'Test Squats', '{"legs"}')
+        RETURNING id
+      `);
+      const exerciseId = exerciseResult.rows[0].id;
 
-      const sessionId = '77777777-7777-7777-7777-777777777777';
-      await client.query(
-        `INSERT INTO workout_sessions (
-          id, user_id, routine_day_id, client_id, local_date, started_at, status
-        ) VALUES ($1, $2, $3, gen_random_uuid(), current_date, now(), 'in_progress')`,
-        [sessionId, profileId, routineDayId],
-      );
-
-      const exerciseId = '88888888-8888-8888-8888-888888888888';
-      await client.query(
-        'INSERT INTO exercises (id, slug, name, muscle_groups) VALUES ($1, $2, $3, $4)',
-        [exerciseId, 'test2', 'Test2', ['test']],
-      );
-
+      // Test: reps too high should fail
       try {
-        await client.query(
-          `INSERT INTO session_sets (
-            id, user_id, session_id, exercise_id, set_index,
-            reps, client_ts, updated_at
-          ) VALUES (gen_random_uuid(), $1, $2, $3, 1, 2000, now(), now())`,
-          [profileId, sessionId, exerciseId],
-        );
-        throw new Error('Should have rejected reps = 2000');
+        await client.query(`
+          INSERT INTO session_sets 
+          (user_id, session_id, exercise_id, set_index, reps, client_ts)
+          VALUES 
+          ('00000000-0000-0000-0000-000000000001'::uuid, 
+           $1, $2, 0, 2000, NOW())
+        `, [sessionId, exerciseId]);
+        
+        throw new Error('Should have failed with check constraint violation');
       } catch (err) {
-        if ((err as any)?.message?.includes('Should have rejected')) {
-          throw err;
-        }
-        expect((err as any)?.code).toBe('23514');
+        expect((err as any)?.code).toBe('23514'); // check_violation
+        expect((err as any)?.message).toContain('reps_sane');
       }
 
-      await client.query('DELETE FROM workout_sessions WHERE id = $1', [
-        sessionId,
-      ]);
-      await client.query('DELETE FROM routine_days WHERE id = $1', [
-        routineDayId,
-      ]);
-      await client.query('DELETE FROM profiles WHERE id = $1', [profileId]);
+      // Test: negative reps should fail
+      try {
+        await client.query(`
+          INSERT INTO session_sets 
+          (user_id, session_id, exercise_id, set_index, reps, client_ts)
+          VALUES 
+          ('00000000-0000-0000-0000-000000000001'::uuid, 
+           $1, $2, 1, -10, NOW())
+        `, [sessionId, exerciseId]);
+        
+        throw new Error('Should have failed with check constraint violation');
+      } catch (err) {
+        expect((err as any)?.code).toBe('23514'); // check_violation
+        expect((err as any)?.message).toContain('reps_sane');
+      }
+
+      // Cleanup
+      await client.query('DELETE FROM session_sets WHERE session_id = $1', [sessionId]);
+      await client.query('DELETE FROM workout_sessions WHERE id = $1', [sessionId]);
+      await client.query('DELETE FROM exercises WHERE id = $1', [exerciseId]);
     });
   });
 
   describe('Scenario 3: Concurrency guard with partial unique index', () => {
     it('should prevent duplicate in_progress sessions per user/routine_day/date', async () => {
-      const profileId = '99999999-9999-9999-9999-999999999999';
-      await client.query(
-        'INSERT INTO profiles (id, email) VALUES ($1, $2)',
-        [profileId, 'test3@example.com'],
-      );
+      const userId = '00000000-0000-0000-0000-000000000001';
+      const routineDayId = '00000000-0000-0000-0000-000000000002'; 
+      const localDate = '2024-01-15';
 
-      const routineDayId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
-      await client.query(
-        'INSERT INTO routine_days (id, slug, name) VALUES ($1, $2, $3)',
-        [routineDayId, 'test3', 'Test3'],
-      );
+      // First session should succeed
+      const firstSession = await client.query(`
+        INSERT INTO workout_sessions 
+        (user_id, routine_day_id, client_id, status, local_date, started_at)
+        VALUES ($1::uuid, $2::uuid, $3::uuid, 'in_progress', $4, NOW())
+        RETURNING id
+      `, [userId, routineDayId, '00000000-0000-0000-0000-000000000005', localDate]);
 
-      const session1Id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
-      await client.query(
-        `INSERT INTO workout_sessions (
-          id, user_id, routine_day_id, client_id, local_date, started_at, status
-        ) VALUES ($1, $2, $3, gen_random_uuid(), current_date, now(), 'in_progress')`,
-        [session1Id, profileId, routineDayId],
-      );
-
+      // Second session with same user/routine_day/date should fail due to unique constraint
       try {
-        await client.query(
-          `INSERT INTO workout_sessions (
-            id, user_id, routine_day_id, client_id, local_date, started_at, status
-          ) VALUES (gen_random_uuid(), $1, $2, gen_random_uuid(), current_date, now(), 'in_progress')`,
-          [profileId, routineDayId],
-        );
-        throw new Error(
-          'Should have rejected duplicate in_progress session',
-        );
+        await client.query(`
+          INSERT INTO workout_sessions 
+          (user_id, routine_day_id, client_id, status, local_date, started_at)
+          VALUES ($1::uuid, $2::uuid, $3::uuid, 'in_progress', $4, NOW())
+        `, [userId, routineDayId, '00000000-0000-0000-0000-000000000006', localDate]);
+        
+        throw new Error('Should have failed with unique constraint violation');
       } catch (err) {
-        if ((err as any)?.message?.includes('Should have rejected')) {
-          throw err;
-        }
-        expect((err as any)?.code).toBe('23505');
+        expect((err as any)?.code).toBe('23505'); // unique_violation
+        expect((err as any)?.message).toContain('one_active_session_per_day');
       }
 
-      await client.query('DELETE FROM workout_sessions WHERE id = $1', [
-        session1Id,
+      // But a completed session should be allowed (partial index only on 'in_progress')
+      const completedSession = await client.query(`
+        INSERT INTO workout_sessions 
+        (user_id, routine_day_id, client_id, status, local_date, started_at, completed_at)
+        VALUES ($1::uuid, $2::uuid, $3::uuid, 'completed', $4, NOW(), NOW())
+        RETURNING id
+      `, [userId, routineDayId, '00000000-0000-0000-0000-000000000007', localDate]);
+
+      expect(completedSession.rows).toHaveLength(1);
+
+      // Cleanup
+      await client.query('DELETE FROM workout_sessions WHERE id = ANY($1)', [
+        [firstSession.rows[0].id, completedSession.rows[0].id]
       ]);
-      await client.query('DELETE FROM routine_days WHERE id = $1', [
-        routineDayId,
-      ]);
-      await client.query('DELETE FROM profiles WHERE id = $1', [profileId]);
     });
   });
 
   describe('Scenario 4: Natural key enables idempotent upserts', () => {
     it('should allow ON CONFLICT on natural key for session_sets', async () => {
-      const profileId = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
-      await client.query(
-        'INSERT INTO profiles (id, email) VALUES ($1, $2)',
-        [profileId, 'test4@example.com'],
-      );
+      // Setup session and exercise
+      const sessionResult = await client.query(`
+        INSERT INTO workout_sessions 
+        (user_id, routine_day_id, client_id, local_date, started_at) 
+        VALUES 
+        ('00000000-0000-0000-0000-000000000001'::uuid, 
+         '00000000-0000-0000-0000-000000000002'::uuid,
+         '00000000-0000-0000-0000-000000000008'::uuid,
+         '2024-01-01', 
+         NOW())
+        RETURNING id
+      `);
+      const sessionId = sessionResult.rows[0].id;
 
-      const routineDayId = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
-      await client.query(
-        'INSERT INTO routine_days (id, slug, name) VALUES ($1, $2, $3)',
-        [routineDayId, 'test4', 'Test4'],
-      );
+      const exerciseResult = await client.query(`
+        INSERT INTO exercises (slug, name, muscle_groups)
+        VALUES ('test-deadlift', 'Test Deadlift', '{"back"}')
+        RETURNING id
+      `);
+      const exerciseId = exerciseResult.rows[0].id;
 
-      const sessionId = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
-      await client.query(
-        `INSERT INTO workout_sessions (
-          id, user_id, routine_day_id, client_id, local_date, started_at, status
-        ) VALUES ($1, $2, $3, gen_random_uuid(), current_date, now(), 'in_progress')`,
-        [sessionId, profileId, routineDayId],
-      );
+      // First insert
+      await client.query(`
+        INSERT INTO session_sets 
+        (user_id, session_id, exercise_id, set_index, weight_kg, reps, client_ts)
+        VALUES 
+        ('00000000-0000-0000-0000-000000000001'::uuid, 
+         $1, $2, 0, 100.5, 5, NOW())
+      `, [sessionId, exerciseId]);
 
-      const exerciseId = 'ffffffff-ffff-ffff-ffff-ffffffffffff';
-      await client.query(
-        'INSERT INTO exercises (id, slug, name, muscle_groups) VALUES ($1, $2, $3, $4)',
-        [exerciseId, 'test4', 'Test4', ['test']],
-      );
-
-      const setId1 = await client.query(
-        `INSERT INTO session_sets (
-          id, user_id, session_id, exercise_id, set_index,
-          is_completed, weight_kg, reps, client_ts, updated_at
-        ) VALUES (gen_random_uuid(), $1, $2, $3, 1, false, 100, 10, now(), now())
-        RETURNING id`,
-        [profileId, sessionId, exerciseId],
-      );
-
-      const setId2 = await client.query(
-        `INSERT INTO session_sets (
-          id, user_id, session_id, exercise_id, set_index,
-          is_completed, weight_kg, reps, client_ts, updated_at
-        ) VALUES (gen_random_uuid(), $1, $2, $3, 1, true, 105, 11, now() + interval '1 second', now())
-        ON CONFLICT (session_id, exercise_id, set_index) DO UPDATE SET
-          is_completed = EXCLUDED.is_completed,
+      // Second insert with same natural key (session_id, exercise_id, set_index)
+      // should be possible with ON CONFLICT DO UPDATE
+      const result = await client.query(`
+        INSERT INTO session_sets 
+        (user_id, session_id, exercise_id, set_index, weight_kg, reps, client_ts)
+        VALUES 
+        ('00000000-0000-0000-0000-000000000001'::uuid, 
+         $1, $2, 0, 110.0, 6, NOW())
+        ON CONFLICT (session_id, exercise_id, set_index) 
+        DO UPDATE SET 
           weight_kg = EXCLUDED.weight_kg,
           reps = EXCLUDED.reps,
-          client_ts = EXCLUDED.client_ts,
-          updated_at = EXCLUDED.updated_at
-        RETURNING id`,
-        [profileId, sessionId, exerciseId],
+          updated_at = NOW()
+        RETURNING weight_kg, reps
+      `, [sessionId, exerciseId]);
+
+      expect(result.rows).toHaveLength(1);
+      expect(Number(result.rows[0].weight_kg)).toBe(110.0);
+      expect(result.rows[0].reps).toBe(6);
+
+      // Verify only one row exists
+      const countResult = await client.query(
+        'SELECT COUNT(*) FROM session_sets WHERE session_id = $1 AND exercise_id = $2 AND set_index = 0',
+        [sessionId, exerciseId]
       );
+      expect(Number(countResult.rows[0].count)).toBe(1);
 
-      expect(setId1.rows[0].id).toBe(setId2.rows[0].id);
-
-      const updated = await client.query(
-        `SELECT is_completed, weight_kg, reps FROM session_sets WHERE id = $1`,
-        [setId1.rows[0].id],
-      );
-      expect(updated.rows[0].is_completed).toBe(true);
-      expect(updated.rows[0].weight_kg).toBe('105.00');
-      expect(updated.rows[0].reps).toBe(11);
-
-      await client.query('DELETE FROM session_sets WHERE id = $1', [
-        setId1.rows[0].id,
-      ]);
-      await client.query('DELETE FROM workout_sessions WHERE id = $1', [
-        sessionId,
-      ]);
+      // Cleanup
+      await client.query('DELETE FROM session_sets WHERE session_id = $1', [sessionId]);
+      await client.query('DELETE FROM workout_sessions WHERE id = $1', [sessionId]);
       await client.query('DELETE FROM exercises WHERE id = $1', [exerciseId]);
-      await client.query('DELETE FROM routine_days WHERE id = $1', [
-        routineDayId,
-      ]);
-      await client.query('DELETE FROM profiles WHERE id = $1', [profileId]);
     });
   });
 });

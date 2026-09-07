@@ -5,7 +5,7 @@
 - **Source Spike**: `docs/spikes/2026-09-08-drizzle-rls-enforcement.md` (M0, complete, gate lifted)
 - **Milestone**: M1 — Contracts & Seams (RED phase of TDD Red-Green-Refactor; M2 turns these green)
 - **Generated**: 2026-09-08
-- **Status**: Ready for issue creation — none filed yet, awaiting confirmation
+- **Status**: **Filed 2026-09-08** as issues [#3–#18](https://github.com/lowqualityloey/ppl-fitness-tracker/milestone/1) under milestone `M1: Contracts & Seams`. This document stays the local source of truth per `pk:tasks` Phase 4 — it survives context compaction and works offline, where the GitHub board does not.
 
 ## Why these 16, in this order
 
@@ -17,23 +17,23 @@ safer than re-deriving them, and skipping that step would silently regress
 findings A1.1–A1.5.
 
 ```text
-M1-01 (scaffold)
-  └─ M1-02 (Supabase project + env split)
-       ├─ M1-03 (Drizzle schema, all tables)
-       │    ├─ M1-04 (app_authenticated role + handle_new_user)
-       │    │    ├─ M1-05 (RLS: content tables)
-       │    │    ├─ M1-06 (RLS: user-data tables)
-       │    │    │    └─ M1-07 (drift test, ported + widened)
-       │    │    │         └─ M1-08 (tenancy gate, ported + widened)
-       │    │    └─ M1-11 (withUserHardened, canonical)
-       │    ├─ M1-09 (seed: 18 exercises)
-       │    ├─ M1-10 (seed: 13 unique stretches, dual-day association)
-       │    └─ M1-15 (Zod contracts) ── independent of RLS track, can run in parallel
-       │         └─ M1-16 (failing route-handler tests, RED)
-       └─ M1-12 (SSR middleware + requireUser())
-            ├─ M1-13 (magic-link sign-in + /auth/confirm)
-            │    └─ M1-14 (custom SMTP + synthetic monitor)
-            └─ (M1-16 also depends on M1-12 for auth-required assertions)
+#3  M1-01 (scaffold)
+ └─ #4  M1-02 (Supabase project + env split)
+     ├─ #5  M1-03 (Drizzle schema, all tables)
+     │   ├─ #6  M1-04 (app_authenticated role + handle_new_user)
+     │   │   ├─ #7  M1-05 (RLS: content tables)
+     │   │   ├─ #8  M1-06 (RLS: user-data tables)
+     │   │   │   └─ #9  M1-07 (drift test, ported + widened)
+     │   │   │       └─ #10 M1-08 (tenancy gate, ported + widened)
+     │   │   └─ #13 M1-11 (withUser, two-GUC hardened)
+     │   ├─ #11 M1-09 (seed: 18 exercises)
+     │   ├─ #12 M1-10 (seed: 13 unique stretches, dual-day association)
+     │   └─ #17 M1-15 (Zod contracts) ── independent of RLS track, runs in parallel
+     │       └─ #18 M1-16 (failing route-handler tests, RED)
+     └─ #14 M1-12 (SSR middleware + requireUser())
+         ├─ #15 M1-13 (magic-link sign-in + /auth/confirm)
+         │   └─ #16 M1-14 (custom SMTP + synthetic monitor)
+         └─ (#18 also depends on #14 for auth-required assertions)
 ```
 
 `M1-09` and `M1-10` only need the schema (`M1-03`), not RLS — they can run any
@@ -42,24 +42,24 @@ note that legacy extraction is "spike-independent, parallelisable now."
 
 ## Task Table
 
-| ID | Title | Priority | Area | Depends on | Est. |
-| :-- | :-- | :-- | :-- | :-- | :-- |
-| [M1-01](m1/m1-01-nextjs-scaffold.md) | Next.js 16 + React 19 + TS strict scaffold | p0 | infra | — | 2h |
-| [M1-02](m1/m1-02-supabase-project-env-split.md) | Supabase local project + `DATABASE_URL`/`MIGRATION_DATABASE_URL` split | p0 | infra | M1-01 | 2h |
-| [M1-03](m1/m1-03-drizzle-schema-all-tables.md) | Drizzle schema for all 9 tables + initial migration | p0 | data | M1-02 | 4h |
-| [M1-04](m1/m1-04-app-authenticated-role-trigger.md) | `app_authenticated` role + `handle_new_user` trigger | p0 | auth | M1-03 | 3h |
-| [M1-05](m1/m1-05-rls-content-tables.md) | RLS: content tables (`exercises`, `routine_days`, `routine_exercises`) | p0 | data | M1-04 | 2h |
-| [M1-06](m1/m1-06-rls-user-data-tables.md) | RLS: user-data tables, 4 policies each, never `FOR ALL` | p0 | data | M1-04 | 4h |
-| [M1-07](m1/m1-07-drift-test-ported.md) | Schema-drift test, ported from spike and widened | p0 | data | M1-05, M1-06 | 2h |
-| [M1-08](m1/m1-08-tenancy-gate-ported.md) | Tenancy integration gate, ported from spike and widened | p0 | backend | M1-07 | 3h |
-| [M1-09](m1/m1-09-seed-exercises.md) | Seed script: 18 exercises extracted from legacy app | p1 | data | M1-03 | 3h |
-| [M1-10](m1/m1-10-seed-stretches.md) | Seed script: 13 unique stretches, dual-day association resolved | p2 | data | M1-03 | 2h |
-| [M1-11](m1/m1-11-with-user-hardened-helper.md) | `withUserHardened()` repository helper, canonical | p0 | backend | M1-04 | 2h |
-| [M1-12](m1/m1-12-ssr-middleware-require-user.md) | Supabase SSR middleware + `requireUser()` | p0 | auth | M1-02 | 3h |
-| [M1-13](m1/m1-13-magic-link-signin-confirm.md) | Magic-link sign-in + `/auth/confirm` with redirect allowlist | p0 | auth | M1-12 | 3h |
-| [M1-14](m1/m1-14-custom-smtp-synthetic-monitor.md) | Custom SMTP provider + hourly synthetic monitor | p0 | auth | M1-13 | 3h |
-| [M1-15](m1/m1-15-zod-contracts.md) | Zod contracts for every route + shared `AppError` envelope | p1 | backend | M1-03 | 3h |
-| [M1-16](m1/m1-16-failing-route-handler-tests.md) | Failing route-handler tests (RED) for all 9 endpoints | p1 | backend | M1-15, M1-12 | 4h |
+| ID | Issue | Title | Priority | Area | Depends on | Est. |
+| :-- | :-- | :-- | :-- | :-- | :-- | :-- |
+| [M1-01](m1/m1-01-nextjs-scaffold.md) | [#3](https://github.com/lowqualityloey/ppl-fitness-tracker/issues/3) | Next.js 16 + React 19 + TS strict scaffold | p0 | infra | — | 2h |
+| [M1-02](m1/m1-02-supabase-project-env-split.md) | [#4](https://github.com/lowqualityloey/ppl-fitness-tracker/issues/4) | Supabase local project + `DATABASE_URL`/`MIGRATION_DATABASE_URL` split | p0 | infra | #3 | 2h |
+| [M1-03](m1/m1-03-drizzle-schema-all-tables.md) | [#5](https://github.com/lowqualityloey/ppl-fitness-tracker/issues/5) | Drizzle schema for all 9 tables + initial migration | p0 | data | #4 | 4h |
+| [M1-04](m1/m1-04-app-authenticated-role-trigger.md) | [#6](https://github.com/lowqualityloey/ppl-fitness-tracker/issues/6) | `app_authenticated` role + `handle_new_user` trigger | p0 | auth | #5 | 3h |
+| [M1-05](m1/m1-05-rls-content-tables.md) | [#7](https://github.com/lowqualityloey/ppl-fitness-tracker/issues/7) | RLS: content tables (`exercises`, `routine_days`, `routine_exercises`) | p0 | data | #6 | 2h |
+| [M1-06](m1/m1-06-rls-user-data-tables.md) | [#8](https://github.com/lowqualityloey/ppl-fitness-tracker/issues/8) | RLS: user-data tables, 4 policies each, never `FOR ALL` | p0 | data | #6 | 4h |
+| [M1-07](m1/m1-07-drift-test-ported.md) | [#9](https://github.com/lowqualityloey/ppl-fitness-tracker/issues/9) | Schema-drift test, ported from spike and widened | p0 | data | #7, #8 | 2h |
+| [M1-08](m1/m1-08-tenancy-gate-ported.md) | [#10](https://github.com/lowqualityloey/ppl-fitness-tracker/issues/10) | Tenancy integration gate, ported from spike and widened | p0 | backend | #9 | 3h |
+| [M1-09](m1/m1-09-seed-exercises.md) | [#11](https://github.com/lowqualityloey/ppl-fitness-tracker/issues/11) | Seed script: 18 exercises extracted from legacy app | p1 | data | #5 | 3h |
+| [M1-10](m1/m1-10-seed-stretches.md) | [#12](https://github.com/lowqualityloey/ppl-fitness-tracker/issues/12) | Seed script: 13 unique stretches, dual-day association resolved | p2 | data | #5 | 2h |
+| [M1-11](m1/m1-11-with-user-hardened-helper.md) | [#13](https://github.com/lowqualityloey/ppl-fitness-tracker/issues/13) | `withUser()` repository helper, two-GUC hardened | p0 | backend | #6 | 2h |
+| [M1-12](m1/m1-12-ssr-middleware-require-user.md) | [#14](https://github.com/lowqualityloey/ppl-fitness-tracker/issues/14) | Supabase SSR middleware + `requireUser()` | p0 | auth | #4 | 3h |
+| [M1-13](m1/m1-13-magic-link-signin-confirm.md) | [#15](https://github.com/lowqualityloey/ppl-fitness-tracker/issues/15) | Magic-link sign-in + `/auth/confirm` with redirect allowlist | p0 | auth | #14 | 3h |
+| [M1-14](m1/m1-14-custom-smtp-synthetic-monitor.md) | [#16](https://github.com/lowqualityloey/ppl-fitness-tracker/issues/16) | Custom SMTP provider + hourly synthetic monitor | p0 | auth | #15 | 3h |
+| [M1-15](m1/m1-15-zod-contracts.md) | [#17](https://github.com/lowqualityloey/ppl-fitness-tracker/issues/17) | Zod contracts for every route + shared `AppError` envelope | p1 | backend | #5 | 3h |
+| [M1-16](m1/m1-16-failing-route-handler-tests.md) | [#18](https://github.com/lowqualityloey/ppl-fitness-tracker/issues/18) | Failing route-handler tests (RED) for all 9 endpoints | p1 | backend | #17, #14 | 4h |
 
 **Total: ~45 hours across 16 issues.** `M1-14` (custom SMTP) is p0 despite being
 late in the dependency chain — spec §5 and `STATE.md` both call it a launch

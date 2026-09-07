@@ -52,7 +52,7 @@ Filed 2026-09-08 as GitHub issues #3–#18 under milestone `M1: Contracts & Seam
 Full specs with Gherkin acceptance criteria: `docs/tasks/2026-09-08-m1-contracts-seams-tasks.md`
 and the 16 files in `docs/tasks/m1/`. Nothing started yet. ~45h estimated.
 
-- [ ] `#3` `M1-01`: Next.js 16 + React 19 + TS strict scaffold (`#priority/p0`) — **no dependencies, start here**
+- [/] `#3` `M1-01`: Next.js 16 + React 19 + TS strict scaffold (`#priority/p0`) — **implemented, PR [#22](https://github.com/lowqualityloey/ppl-fitness-tracker/pull/22) open, not yet merged**
 - [ ] `#4` `M1-02`: Supabase project + `DATABASE_URL`/`MIGRATION_DATABASE_URL` split (`#priority/p0`)
 - [ ] `#5` `M1-03`: Drizzle schema, all 9 tables + initial migration (`#priority/p0`) — largest surface of new design; spec §4.1 left 5 tables abbreviated
 - [ ] `#6` `M1-04`: `app_authenticated` role + `handle_new_user` trigger (`#priority/p0`) — ports spike SQL, carries A1.2/A1.4
@@ -72,6 +72,21 @@ and the 16 files in `docs/tasks/m1/`. Nothing started yet. ~45h estimated.
 **M1 exit criteria**: schema and RLS applied with the drift and tenancy gates green
 in CI, auth working end to end including real email delivery, contracts written, and
 a recorded RED baseline of failing route-handler tests for M2 to turn green.
+
+**Implementation notes from `#3` worth carrying into later M1 tasks:**
+- Target stack runs on **port 3001** (`npm run next:dev`/`next:build`/`next:start`),
+  not 3000 — the legacy Vite server keeps 3000. Both coexist; verified running
+  simultaneously with no collision.
+- `npm run typecheck` runs `next typegen` before `tsc --noEmit`. A bare `tsc`
+  invocation fails on a fresh checkout (`Cannot find name 'LayoutProps'`) because
+  that type is generated into `.next/types` and doesn't exist until Next.js has
+  run once. Anyone scripting CI around this repo needs the wrapped command, not
+  the bare one.
+- `create-next-app`'s own dependency set carried 3 `npm audit` findings (moderate
+  esbuild dev-server exposure, high Rollup path-traversal, critical Vitest
+  UI-server RCE) — none runtime-reachable, but `vite` was bumped to `^7` and
+  `vitest` to `^5` to close them outright rather than leave a critical advisory
+  sitting in a fresh scaffold.
 
 ### Open decisions inside M1, deliberately left to the implementer
 
@@ -179,7 +194,7 @@ Actions taken: `nvm install --lts` → v24.20.0, set as nvm default (additive; `
 
 ## 7. Next Immediate Actions (Queued)
 
-1. **Start `#3` / `M1-01`** (Next.js 16 scaffold). Only task with zero dependencies; unblocks everything else. Note its Scenario 2 regression check: the legacy `npm run dev` must still work after the scaffold lands.
+1. **Merge [PR #22](https://github.com/lowqualityloey/ppl-fitness-tracker/pull/22)** (`#3`/`M1-01`, Next.js scaffold). Fully verified locally — see the PR body — but not yet reviewed/merged. Once merged, `#4` (`M1-02`, Supabase project + env split) is the next unblocked task.
 2. **Review `#5`, `#7`, `#12` before implementing them.** These three contain design decisions made during `pk:tasks` that are not in the spec or any ADR — the five abbreviated table definitions, the content-table policy shape, and the 13-vs-15 stretch dedup. Cheaper to change now than after code exists.
 3. **Parallel track, no dependency on the RLS/auth chain**: `#11`/`#12` (seed extraction) need only `#5`'s schema.
 4. **Decide the package manager** for the target app at `#3`'s scaffold step, and record it in `PROMPTKIT.md` §3.
@@ -201,3 +216,4 @@ Actions taken: `nvm install --lts` → v24.20.0, set as nvm default (additive; `
 | 2026-09-08 | Owner + Kiro | `pk:spike` (M0) | Built `spikes/m0-drizzle-rls/` against the local Supabase stack. **32 assertions green; ADR-0003 confirmed, M1 unblocked.** Five things the spec had wrong or missing, all now folded back: `auth.uid()` checks the legacy singular GUC *first*, so `withUser` as specified could be silently overridden into reading another user's row; `GRANT USAGE ON SCHEMA auth` as `postgres` returns success and does nothing; the app role needs no `auth` access at all, so least privilege is stricter than assumed; `FORCE ROW LEVEL SECURITY` does not stop `postgres` because `BYPASSRLS` wins; role attributes cannot be re-`ALTER`ed by an idempotent migration. Also: Postgres is 17.6, not 16. Added a mutation check after realising a green suite proves nothing — it immediately caught that the idempotent DDL was healing every mutation before assertions ran. Measured the ADR-0003 cost (+1.29 ms p50 direct, +1.98 ms pooled), closing an open risk. ADR-0003 amended (A1), spec §4.2/§6/§8 updated. |
 | 2026-09-08 | Owner + Kiro | `pk:tasks` (M1) | Decomposed M1 into 16 atomic 1–4h issues across scaffold/infra, schema/RLS/data, auth, and contracts tracks, ~45h total. Dispatched a context-gatherer to pin down the legacy exercise/stretch data precisely (file:line for all 18 exercises across the three legacy sources) rather than estimate — found the stretch count is not simply additive: 15 raw entries across push/legs/pull but only 13 unique concepts, since "Child's Pose" and "Cat-Cow Stretch" are each duplicated verbatim across push-day and pull-day. Split seeding into two issues (`M1-09` exercises, `M1-10` stretches) specifically so that dedup decision gets its own review rather than being buried. Every issue's AC traces back to a spec section, ADR, or a named M0 spike finding — `M1-04`/`M1-11` exist specifically to port the spike's verified `app_authenticated`/`withUser` patterns rather than re-derive them from the spec's original (incomplete) sketch, and `M1-07`/`M1-08` port the drift test and tenancy gate with their negative controls intact. Full breakdown at `docs/tasks/2026-09-08-m1-contracts-seams-tasks.md` plus 16 files under `docs/tasks/m1/`. |
 | 2026-09-08 | Owner + Kiro | Merge + issue filing | PRs #2, #19, #20 merged to `main`. The spec, ADRs, M0 spike and M1 task specs went onto the default branch **before** issues were filed, so the repository paths their bodies cite resolve on GitHub rather than 404ing for anyone reading the issue. Created 11 `area:*`/`priority/*` labels (none existed — the repo had only GitHub's defaults), milestone `M1: Contracts & Seams`, and filed all 16 M1 issues as **#3–#18**. Issue numbers written back into the task doc's dependency graph and §2 here, so the local specs and the board cannot drift apart silently. Learned the hard way that recording `main`'s SHA in §1 is self-invalidating — the merge that lands the fix moves the branch. §1 now describes state instead, with a note saying why. |
+| 2026-09-08 | Owner + Kiro | `M1-01` implementation | Scaffolded Next.js 16 + React 19 + TS strict at the repo root (issue #3), coexisting with the legacy Vite app rather than replacing it — target stack on port 3001, legacy stays on 3000, verified both running at once with no collision. Used `create-next-app` into a scratch directory rather than the repo root, since its own conflict scanner refuses to run against a directory containing the legacy files, then merged the generated config in by hand. Found and closed 3 `npm audit` findings (moderate/high/critical) in `create-next-app`'s own dependency set by bumping `vite` to `^7` and `vitest` to `^5`. Found that `npx tsc --noEmit` fails on a fresh checkout with a misleading error because `LayoutProps` is generated into `.next/types` by Next.js itself — fixed by running `next typegen` first in the `typecheck` script, documented in `PROMPTKIT.md` so it isn't rediscovered. Verified strict mode actually rejects an implicit `any` (not just declared), verified the legacy build's zero-JS defect is untouched, verified lint/typecheck/build/test all pass from a clean install. Opened PR #22, not yet merged. |

@@ -1,0 +1,30 @@
+{
+  "name": "m0-drizzle-rls",
+  "version": "0.0.0",
+  "private": true,
+  "description": "M0 de-risk spike: does Postgres RLS actually enforce through Drizzle? Gates M1.",
+  "type": "module",
+  "scripts": {
+    "db:up": "supabase start -x realtime,storage-api,imgproxy,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector",
+    "db:down": "supabase stop",
+    "db:setup": "tsx scripts/setup.ts",
+    "inspect": "tsx scripts/inspect.ts",
+    "test": "vitest --run",
+    "mutate": "tsx scripts/mutation-check.ts",
+    "bench": "tsx scripts/bench.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "license": "ISC",
+  "devDependencies": {
+    "@types/pg": "8.23.1",
+    "drizzle-orm": "0.45.2",
+    "pg": "8.23.0",
+    "supabase": "2.117.0",
+    "tsx": "4.23.13",
+    "typescript": "7.0.2",
+    "vitest": "5.0.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
+  }
+}

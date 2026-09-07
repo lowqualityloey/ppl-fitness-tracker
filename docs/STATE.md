@@ -52,7 +52,7 @@ Filed 2026-09-08 as GitHub issues #3–#18 under milestone `M1: Contracts & Seam
 Full specs with Gherkin acceptance criteria: `docs/tasks/2026-09-08-m1-contracts-seams-tasks.md`
 and the 16 files in `docs/tasks/m1/`. Nothing started yet. ~45h estimated.
 
-- [/] `#3` `M1-01`: Next.js 16 + React 19 + TS strict scaffold (`#priority/p0`) — **implemented, PR [#22](https://github.com/lowqualityloey/ppl-fitness-tracker/pull/22) open, not yet merged**
+- [x] `#3` `M1-01`: Next.js 16 + React 19 + TS strict scaffold (`#priority/p0`) — **done**, PR [#22](https://github.com/lowqualityloey/ppl-fitness-tracker/pull/22) merged, issue closed. Re-verified on `main` with `npm ci` — typecheck, lint, build, test, legacy regression, audit all clean.
 - [ ] `#4` `M1-02`: Supabase project + `DATABASE_URL`/`MIGRATION_DATABASE_URL` split (`#priority/p0`)
 - [ ] `#5` `M1-03`: Drizzle schema, all 9 tables + initial migration (`#priority/p0`) — largest surface of new design; spec §4.1 left 5 tables abbreviated
 - [ ] `#6` `M1-04`: `app_authenticated` role + `handle_new_user` trigger (`#priority/p0`) — ports spike SQL, carries A1.2/A1.4
@@ -194,9 +194,9 @@ Actions taken: `nvm install --lts` → v24.20.0, set as nvm default (additive; `
 
 ## 7. Next Immediate Actions (Queued)
 
-1. **Merge [PR #22](https://github.com/lowqualityloey/ppl-fitness-tracker/pull/22)** (`#3`/`M1-01`, Next.js scaffold). Fully verified locally — see the PR body — but not yet reviewed/merged. Once merged, `#4` (`M1-02`, Supabase project + env split) is the next unblocked task.
+1. **Start `#4` / `M1-02`** (Supabase project + `DATABASE_URL`/`MIGRATION_DATABASE_URL` split). `#3` is merged; this is the new front door. Provision the local stack the same way the M0 spike did (`supabase init`, pooler enabled in `config.toml`) but for the real app, not the throwaway sandbox — see the M0-spike-parity note in `#4`'s own acceptance criteria.
 2. **Review `#5`, `#7`, `#12` before implementing them.** These three contain design decisions made during `pk:tasks` that are not in the spec or any ADR — the five abbreviated table definitions, the content-table policy shape, and the 13-vs-15 stretch dedup. Cheaper to change now than after code exists.
-3. **Parallel track, no dependency on the RLS/auth chain**: `#11`/`#12` (seed extraction) need only `#5`'s schema.
+3. **Parallel track, no dependency on the RLS/auth chain**: `#11`/`#12` (seed extraction) need only `#5`'s schema, which itself needs only `#4`.
 4. **Decide the package manager** for the target app at `#3`'s scaffold step, and record it in `PROMPTKIT.md` §3.
 5. **Optional**: no GitHub Projects board is designated for this repo. `gh project list --owner lowqualityloey` shows three unrelated boards. Create one and link #3–#18 if board tracking is wanted; the milestone alone is sufficient otherwise.
 6. **`pk:grill`** is now better value than it was: there is measured evidence to defend. Remaining priority targets are the LWW justification and outbox behaviour across a multi-day offline gap — the connection-pool question has narrowed to sustained-load exhaustion, which is an M4 load test rather than an architecture argument.

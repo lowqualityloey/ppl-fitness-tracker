@@ -196,12 +196,23 @@ describe('M1-08: Tenancy integration gate (THE MERGE GATE)', () => {
     }
 
     // Seed workout sessions and sets as owner (BYPASSRLS) so rows exist regardless of policy state
+    // First get or create a routine_day to satisfy the FK constraint
+    const rdResult = await ownerClient.query<{ id: string }>(
+      `INSERT INTO public.routine_days (name, slug)
+       VALUES ('Push', 'push'), ('Pull', 'pull')
+       ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name
+       RETURNING id`
+    );
+    const rdIds = rdResult.rows.map((r) => r.id);
+    const rdPushId = rdIds[0]!;
+    const rdPullId = rdIds[1] ?? rdPushId;
+
     const sessionInserted = await ownerClient.query<{ id: string; user_id: string }>(
-      `INSERT INTO public.workout_sessions (user_id, routine_day_slug, session_date, status, phase)
-       VALUES ($1, 'push', '2024-01-01', 'completed', 'rest'),
-              ($2, 'pull', '2024-01-01', 'completed', 'rest')
+      `INSERT INTO public.workout_sessions (user_id, routine_day_id, client_id, local_date, started_at)
+       VALUES ($1, $3, gen_random_uuid(), '2024-01-01', NOW()),
+              ($2, $4, gen_random_uuid(), '2024-01-01', NOW())
        RETURNING id, user_id`,
-      [a.id, b.id]
+      [a.id, b.id, rdPushId, rdPullId]
     );
 
     const getSessionFor = (uid: string) => {
@@ -214,9 +225,9 @@ describe('M1-08: Tenancy integration gate (THE MERGE GATE)', () => {
     const bSessionId = getSessionFor(b.id);
 
     const setInserted = await ownerClient.query<{ id: string; user_id: string }>(
-      `INSERT INTO public.session_sets (user_id, session_id, exercise_id, set_index, weight_kg, reps)
-       VALUES ($1, $3, (SELECT id FROM exercises LIMIT 1), 1, 60.00, 8),
-              ($2, $4, (SELECT id FROM exercises LIMIT 1), 1, 80.00, 5)
+      `INSERT INTO public.session_sets (user_id, session_id, exercise_id, set_index, weight_kg, reps, client_ts)
+       VALUES ($1, $3, (SELECT id FROM exercises LIMIT 1), 1, 60.00, 8, NOW()),
+              ($2, $4, (SELECT id FROM exercises LIMIT 1), 1, 80.00, 5, NOW())
        RETURNING id, user_id`,
       [a.id, b.id, aSessionId, bSessionId]
     );

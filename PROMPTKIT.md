@@ -100,6 +100,16 @@ each serving correctly, zero collision.
   directories and `spikes/` are explicitly ignored, not linted)
 - **DB migrations**: `npx drizzle-kit generate` / `migrate` (owner role,
   `MIGRATION_DATABASE_URL`) — not yet scaffolded, lands in `M1-03`/#5
+- **Local Supabase stack** (scaffolded 2026-09-08 by `M1-02`/#4): `npm run db:up`
+  / `npm run db:down` / `npm run db:status`. `supabase` CLI is a devDependency
+  (`2.117.0`, matching the M0 spike) rather than a global install, so
+  `npx supabase ...` also works without a version mismatch. Requires Docker.
+  Pooler enabled on port 54329 — `DATABASE_URL` connects through it, matching
+  how the app connects in production; `MIGRATION_DATABASE_URL` connects
+  directly to 54322 as the owner role. Copy `.env.example` to `.env.local` to
+  get real local values (already done in this checkout).
+  **`app_authenticated` does not exist until `M1-04`** — `DATABASE_URL` will
+  fail authentication until then. That's expected, not a setup bug.
 
 Node version note: `next build`'s Turbopack warns that it ignored
 `package-lock.json` because `/home/heyloey` (this machine's home directory) sits

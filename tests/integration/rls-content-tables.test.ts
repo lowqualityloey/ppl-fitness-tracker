@@ -32,8 +32,8 @@ describe('M1-05: RLS on content tables', () => {
     await cleanupTestData();
 
     // Create test users via GoTrue Admin API
-    userA = await createTestUser(TEST_EMAILS[0]);
-    userB = await createTestUser(TEST_EMAILS[1]);
+    userA = await createTestUser(TEST_EMAILS[0]!);
+    userB = await createTestUser(TEST_EMAILS[1]!);
   });
 
   afterAll(async () => {
@@ -400,7 +400,7 @@ describe('M1-05: RLS on content tables', () => {
         `SELECT slug FROM exercises WHERE slug LIKE '%-grant-check' ORDER BY slug`
       );
       expect(userAResult.rows).toHaveLength(2);
-      expect(userAResult.rows.map(r => r.slug)).toEqual([
+      expect(userAResult.rows.map((r: { slug: string }) => r.slug)).toEqual([
         'test-system-grant-check',
         'test-user-a-grant-check'
       ]);

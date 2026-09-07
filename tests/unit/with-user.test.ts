@@ -1,9 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Client, Pool } from 'pg';
-import { drizzle } from 'drizzle-orm/node-postgres';
+import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { sql } from 'drizzle-orm';
 import { withUser, type JwtClaims } from '../../lib/db/with-user.js';
 import * as schema from '../../db/schema/index.js';
+
+type AppDb = NodePgDatabase<typeof schema> & { $client: Pool };
 
 /**
  * M1-11: withUser() helper regression tests
@@ -38,14 +40,14 @@ const userBClaims: JwtClaims = {
 describe('M1-11: withUser() helper GUC hazard protection', () => {
   let ownerClient: Client;
   let appPool: Pool;
-  let appDb: ReturnType<typeof drizzle>;
+  let appDb: AppDb;
 
   beforeAll(async () => {
     ownerClient = new Client({ connectionString: OWNER_URL });
     await ownerClient.connect();
 
     appPool = new Pool({ connectionString: APP_DIRECT_URL, max: 1 });
-    appDb = drizzle(appPool, { schema });
+    appDb = drizzle(appPool, { schema }) as AppDb;
 
     // Create test profiles for both users
     await ownerClient.query(`

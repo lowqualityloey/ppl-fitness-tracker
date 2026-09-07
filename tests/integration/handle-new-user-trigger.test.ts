@@ -71,7 +71,7 @@ describe('M1-04: handle_new_user trigger functionality', () => {
 
   describe('Scenario 1: Trigger creates profile automatically', () => {
     it('should create a profile when a new auth user is created', async () => {
-      const email = TEST_EMAILS[0];
+      const email = TEST_EMAILS[0]!;
       const { id: userId } = await createUserViaGoTrue(email);
 
       // Verify the user was created in auth.users
@@ -93,7 +93,7 @@ describe('M1-04: handle_new_user trigger functionality', () => {
     });
 
     it('should handle duplicate auth.users INSERTs gracefully', async () => {
-      const email = TEST_EMAILS[1];
+      const email = TEST_EMAILS[1]!;
       const { id: userId } = await createUserViaGoTrue(email);
 
       // First insert should work normally

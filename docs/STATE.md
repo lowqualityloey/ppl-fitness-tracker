@@ -6,7 +6,7 @@
 - **Current Milestone / Epic**: **M0 complete — M1 unblocked, not started**
 - **Overall Status**: ACTIVE <!-- Options: ACTIVE | PAUSED | STABILIZING | RELEASE_CANDIDATE -->
 - **Target Release**: v1.0.0, no date committed
-- **Current Working Branch**: `main` (last commit `6986dcc` — "Improve confidence panel layout and scroll behavior")
+- **Current Working Branch**: `docs/m0-spike-and-m1-planning`, pushed, 5 commits ahead of `origin/main`. No PR opened yet. (`main` is still at `6986dcc` — "Improve confidence panel layout and scroll behavior", the last legacy-app commit.)
 - **Last Updated**: 2026-09-08
 
 **Where things actually stand.** The legacy vanilla-JS app is still the only thing that runs. A full-stack rebuild is specced, all six architectural decisions are recorded as ADR-0001…0005, and **the M0 spike is done and green** — RLS enforcement is demonstrated through Drizzle against Postgres 17.6, with every control shown to fail loudly when removed. ADR-0003 survives, amended (A1).
@@ -145,7 +145,7 @@ Actions taken: `nvm install --lts` → v24.20.0, set as nvm default (additive; `
 ## 7. Next Immediate Actions (Queued)
 
 1. **File the 16 M1 issues on GitHub** (`pk:tasks` output ready, not yet executed). Labels `area:*`/`priority/p0-p3` don't exist yet in the repo (only the default `bug`/`enhancement`/etc. set), no milestone exists, no project board is designated for this repo. Commands for all three, plus the 16 `gh issue create` calls, are in `docs/tasks/2026-09-08-m1-contracts-seams-tasks.md`.
-2. **Commit the M0 + M1-planning work.** `docs/`, `spikes/`, `AGENTS.md`, `DESIGN.md`, `PROMPTKIT.md` are all untracked. Nothing is on a branch yet.
+2. **Open a PR for `docs/m0-spike-and-m1-planning`** (5 commits: submodule, profiles, spec+ADRs, M0 spike, M1 tasks). Committed and pushed 2026-09-08; merge before starting `M1-01` so the paths cited by the GitHub issues resolve on `main`.
 3. **Start execution on `M1-01`** (Next.js scaffold) once issues are filed — it has no dependencies and unblocks everything else.
 4. **Parallel track, no dependency on the RLS/auth chain**: `M1-09`/`M1-10` (seed extraction) need only `M1-03`'s schema.
 5. **Decide the package manager** for the target app at `M1-01`'s scaffold step, and record it in `PROMPTKIT.md` §3.

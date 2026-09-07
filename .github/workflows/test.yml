@@ -10,20 +10,6 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
-    services:
-      postgres:
-        image: supabase/postgres:15.1.1.78
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: postgres
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -39,15 +25,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Supabase CLI
-        run: |
-          curl -fsSL https://supabase.com/install.sh | sh
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-
       - name: Start Supabase
-        run: supabase start
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: npx supabase start
 
       - name: Run type check
         run: npm run typecheck
@@ -63,5 +42,5 @@ jobs:
           MIGRATION_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54329/postgres
 
       - name: Stop Supabase
-        run: supabase stop
+        run: npx supabase stop
         if: always()

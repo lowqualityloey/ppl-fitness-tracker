@@ -5,6 +5,33 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
+  {
+    rules: {
+      // M1-11: Ban direct set_config calls outside withUser helper
+      // Prevents GUC hazards by forcing all JWT claims through withUser()
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "TemplateLiteral:matches([quasis.0.value.raw*='set_config'])",
+          message: "Direct set_config calls are banned. Use withUser() helper from lib/db/with-user.ts to safely set JWT claims and prevent GUC hazards."
+        }
+      ],
+      "no-restricted-globals": [
+        "error",
+        {
+          name: "set_config",
+          message: "Direct set_config calls are banned. Use withUser() helper from lib/db/with-user.ts."
+        }
+      ]
+    }
+  },
+  {
+    files: ["lib/db/with-user.ts", "tests/**/*.ts", "tests/**/*.js"],
+    rules: {
+      // Allow set_config in withUser implementation and tests
+      "no-restricted-syntax": "off"
+    }
+  },
   globalIgnores([
     // Default ignores of eslint-config-next:
     ".next/**",

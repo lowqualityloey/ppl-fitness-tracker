@@ -6,7 +6,7 @@
 - **Current Milestone / Epic**: **M0 complete — M1 unblocked, not started**
 - **Overall Status**: ACTIVE <!-- Options: ACTIVE | PAUSED | STABILIZING | RELEASE_CANDIDATE -->
 - **Target Release**: v1.0.0, no date committed
-- **Current Working Branch**: `docs/m0-spike-and-m1-planning`, pushed, 5 commits ahead of `origin/main`. No PR opened yet. (`main` is still at `6986dcc` — "Improve confidence panel layout and scroll behavior", the last legacy-app commit.)
+- **Current Working Branch**: `main` at `0a6ee48` — PR #2 (`docs/m0-spike-and-m1-planning`) merged 2026-09-08, bringing the spec, ADRs, M0 spike, and M1 task specs onto `main`. The last legacy-app commit was `6986dcc`.
 - **Last Updated**: 2026-09-08
 
 **Where things actually stand.** The legacy vanilla-JS app is still the only thing that runs. A full-stack rebuild is specced, all six architectural decisions are recorded as ADR-0001…0005, and **the M0 spike is done and green** — RLS enforcement is demonstrated through Drizzle against Postgres 17.6, with every control shown to fail loudly when removed. ADR-0003 survives, amended (A1).
@@ -21,7 +21,7 @@
 
 - [x] **Planning**: Spec written, six decisions resolved, ADRs recorded (Complete — 2026-09-08)
 - [x] **M0**: De-risk spike — RLS enforcement proven through Drizzle (Complete — 2026-09-08, **gate lifted**)
-- [ ] **M1**: Contracts & Seams — schema, RLS, auth, Zod contracts, failing tests (**Decomposed into 16 issues, not yet filed**, no longer blocked — see `docs/tasks/2026-09-08-m1-contracts-seams-tasks.md`)
+- [ ] **M1**: Contracts & Seams — schema, RLS, auth, Zod contracts, failing tests (**In progress — 16 issues filed as #3–#18**, milestone `M1: Contracts & Seams`, nothing started yet)
 - [ ] **M2**: Core Domain Engine — SessionEngine, SyncEngine, LegacyImporter (Queued)
 - [ ] **M3**: Presentation — shadcn + tokens, session runner, offline outbox, WCAG audit (Queued)
 - [ ] **M4**: Hardening, telemetry, decommission the legacy static app (Queued)
@@ -44,13 +44,46 @@
 mutations, ADR-0003 confirmed rather than reopened. Amendment A1 records the five
 corrections; none of them changed the decision.
 
+### Active Milestone Task Breakdown (M1)
+
+Filed 2026-09-08 as GitHub issues #3–#18 under milestone `M1: Contracts & Seams`.
+Full specs with Gherkin acceptance criteria: `docs/tasks/2026-09-08-m1-contracts-seams-tasks.md`
+and the 16 files in `docs/tasks/m1/`. Nothing started yet. ~45h estimated.
+
+- [ ] `#3` `M1-01`: Next.js 16 + React 19 + TS strict scaffold (`#priority/p0`) — **no dependencies, start here**
+- [ ] `#4` `M1-02`: Supabase project + `DATABASE_URL`/`MIGRATION_DATABASE_URL` split (`#priority/p0`)
+- [ ] `#5` `M1-03`: Drizzle schema, all 9 tables + initial migration (`#priority/p0`) — largest surface of new design; spec §4.1 left 5 tables abbreviated
+- [ ] `#6` `M1-04`: `app_authenticated` role + `handle_new_user` trigger (`#priority/p0`) — ports spike SQL, carries A1.2/A1.4
+- [ ] `#7` `M1-05`: RLS on content tables (`#priority/p0`) — policy shape is new design, not from any ADR
+- [ ] `#8` `M1-06`: RLS on user-data tables, 4 policies each (`#priority/p0`)
+- [ ] `#9` `M1-07`: schema-drift merge gate, ported + widened (`#priority/p0`)
+- [ ] `#10` `M1-08`: tenancy integration gate, ported + widened (`#priority/p0`) — the gate spec §4.2 names by name
+- [ ] `#11` `M1-09`: seed 18 exercises from legacy app (`#priority/p1`) — parallel track, needs only `#5`
+- [ ] `#12` `M1-10`: seed 13 unique stretches, dual-day association (`#priority/p2`) — parallel track
+- [ ] `#13` `M1-11`: `withUser()` helper, two-GUC hardened (`#priority/p0`) — A1.1
+- [ ] `#14` `M1-12`: Supabase SSR middleware + `requireUser()` (`#priority/p0`)
+- [ ] `#15` `M1-13`: magic-link sign-in + `/auth/confirm` redirect allowlist (`#priority/p0`)
+- [ ] `#16` `M1-14`: custom SMTP + hourly synthetic monitor (`#priority/p0`) — needs an external provider account and DNS, cannot be picked up cold
+- [ ] `#17` `M1-15`: Zod contracts + `AppError` envelope (`#priority/p1`)
+- [ ] `#18` `M1-16`: failing route-handler tests, RED, all 9 endpoints (`#priority/p1`) — the artifact M2 is measured against
+
+**M1 exit criteria**: schema and RLS applied with the drift and tenancy gates green
+in CI, auth working end to end including real email delivery, contracts written, and
+a recorded RED baseline of failing route-handler tests for M2 to turn green.
+
+### Open decisions inside M1, deliberately left to the implementer
+
+- **`#11`** — legacy push/legs give rest as a range (`"60-90s"`), pull-day as an integer (`90`). Whether the schema stores a text range or a point estimate is a real choice, called out in the issue rather than guessed.
+- **`#7`** — whether `routine_days` needs owner-scoped policies at all, given v1 has no user-created routine days.
+- **`#5`** — `session_tasks`, `personal_records`, `import_batches`, `routine_days`, `routine_exercises` are specified in the issue, not the spec. Review that design before building on it.
+
 ---
 
 ## 3. Active Working Set
 
 - **Target Workspace / Package**: N/A (standalone repo)
 - **Active RFC / Spec**: `docs/specs/2026-09-08-spec-fullstack-migration.md`
-- **Active Task Spec**: `docs/tasks/2026-09-08-m1-contracts-seams-tasks.md` — M1 decomposed into 16 atomic issues (`M1-01`…`M1-16`), ~45h total. **Not yet filed on GitHub** — `gh` CLI is authenticated against `lowqualityloey/ppl-fitness-tracker` (private) and the create commands are ready in the task doc, awaiting explicit confirmation to run them.
+- **Active Task Spec**: `docs/tasks/2026-09-08-m1-contracts-seams-tasks.md` — M1 decomposed into 16 atomic issues, filed as [#3–#18](https://github.com/lowqualityloey/ppl-fitness-tracker/milestone/1), ~45h total. This document remains the local source of truth; it survives context compaction and works offline, where the GitHub board does not.
 - **Key Source Files in Flight**: none. No target-stack code exists.
 - **Spike sandbox — throwaway, delete once M1's integration suite covers the same ground**:
   - `spikes/m0-drizzle-rls/sql/001-setup.sql` — role, tables, 8 policies, `handle_new_user`. Comments record the measured surprises. **Creates `unprotected_future_table` on purpose**; do not copy it.
@@ -144,11 +177,11 @@ Actions taken: `nvm install --lts` → v24.20.0, set as nvm default (additive; `
 
 ## 7. Next Immediate Actions (Queued)
 
-1. **File the 16 M1 issues on GitHub** (`pk:tasks` output ready, not yet executed). Labels `area:*`/`priority/p0-p3` don't exist yet in the repo (only the default `bug`/`enhancement`/etc. set), no milestone exists, no project board is designated for this repo. Commands for all three, plus the 16 `gh issue create` calls, are in `docs/tasks/2026-09-08-m1-contracts-seams-tasks.md`.
-2. **Open a PR for `docs/m0-spike-and-m1-planning`** (5 commits: submodule, profiles, spec+ADRs, M0 spike, M1 tasks). Committed and pushed 2026-09-08; merge before starting `M1-01` so the paths cited by the GitHub issues resolve on `main`.
-3. **Start execution on `M1-01`** (Next.js scaffold) once issues are filed — it has no dependencies and unblocks everything else.
-4. **Parallel track, no dependency on the RLS/auth chain**: `M1-09`/`M1-10` (seed extraction) need only `M1-03`'s schema.
-5. **Decide the package manager** for the target app at `M1-01`'s scaffold step, and record it in `PROMPTKIT.md` §3.
+1. **Start `#3` / `M1-01`** (Next.js 16 scaffold). Only task with zero dependencies; unblocks everything else. Note its Scenario 2 regression check: the legacy `npm run dev` must still work after the scaffold lands.
+2. **Review `#5`, `#7`, `#12` before implementing them.** These three contain design decisions made during `pk:tasks` that are not in the spec or any ADR — the five abbreviated table definitions, the content-table policy shape, and the 13-vs-15 stretch dedup. Cheaper to change now than after code exists.
+3. **Parallel track, no dependency on the RLS/auth chain**: `#11`/`#12` (seed extraction) need only `#5`'s schema.
+4. **Decide the package manager** for the target app at `#3`'s scaffold step, and record it in `PROMPTKIT.md` §3.
+5. **Optional**: no GitHub Projects board is designated for this repo. `gh project list --owner lowqualityloey` shows three unrelated boards. Create one and link #3–#18 if board tracking is wanted; the milestone alone is sufficient otherwise.
 6. **`pk:grill`** is now better value than it was: there is measured evidence to defend. Remaining priority targets are the LWW justification and outbox behaviour across a multi-day offline gap — the connection-pool question has narrowed to sustained-load exhaustion, which is an M4 load test rather than an architecture argument.
 7. **Before M3**: agree the `--accent-legs` hue and add it to `DESIGN.md`.
 
@@ -164,4 +197,5 @@ Actions taken: `nvm install --lts` → v24.20.0, set as nvm default (additive; `
 | 2026-09-08 | Owner + Kiro | Context sync | Filled `PROMPTKIT.md` and this file — both were still PromptKit placeholder templates asserting an "Acme Dashboard" monorepo, `pnpm`, and a blocked Milestone 2. |
 | 2026-09-08 | Owner + Kiro | Node runtime | Filed a Node-version blocker, then found it was overstated: interactive shells were already on Node 24 via the `.zshrc` nvm PATH prepend; only non-interactive shells resolve `/usr/bin/node` v18. Installed v24.20.0 LTS as nvm default and documented the explicit-source command form in `PROMPTKIT.md` §3. No dotfiles modified. |
 | 2026-09-08 | Owner + Kiro | `pk:spike` (M0) | Built `spikes/m0-drizzle-rls/` against the local Supabase stack. **32 assertions green; ADR-0003 confirmed, M1 unblocked.** Five things the spec had wrong or missing, all now folded back: `auth.uid()` checks the legacy singular GUC *first*, so `withUser` as specified could be silently overridden into reading another user's row; `GRANT USAGE ON SCHEMA auth` as `postgres` returns success and does nothing; the app role needs no `auth` access at all, so least privilege is stricter than assumed; `FORCE ROW LEVEL SECURITY` does not stop `postgres` because `BYPASSRLS` wins; role attributes cannot be re-`ALTER`ed by an idempotent migration. Also: Postgres is 17.6, not 16. Added a mutation check after realising a green suite proves nothing — it immediately caught that the idempotent DDL was healing every mutation before assertions ran. Measured the ADR-0003 cost (+1.29 ms p50 direct, +1.98 ms pooled), closing an open risk. ADR-0003 amended (A1), spec §4.2/§6/§8 updated. |
+| 2026-09-08 | Owner + Kiro | Merge + issue filing | PR #2 merged to `main` (`0a6ee48`), putting the spec, ADRs, M0 spike and M1 task specs on the default branch — done before filing issues so the paths their bodies cite actually resolve on GitHub. Then created 11 `area:*`/`priority/*` labels, milestone `M1: Contracts & Seams`, and filed all 16 M1 issues as **#3–#18**. Wrote the issue numbers back into the task doc's dependency graph and `STATE.md` §2 so the local artifacts and the board agree. |
 | 2026-09-08 | Owner + Kiro | `pk:tasks` (M1) | Decomposed M1 into 16 atomic 1–4h issues across scaffold/infra, schema/RLS/data, auth, and contracts tracks, ~45h total. Dispatched a context-gatherer to pin down the legacy exercise/stretch data precisely (file:line for all 18 exercises across the three legacy sources) rather than estimate — found the stretch count is not simply additive: 15 raw entries across push/legs/pull but only 13 unique concepts, since "Child's Pose" and "Cat-Cow Stretch" are each duplicated verbatim across push-day and pull-day. Split seeding into two issues (`M1-09` exercises, `M1-10` stretches) specifically so that dedup decision gets its own review rather than being buried. Every issue's AC traces back to a spec section, ADR, or a named M0 spike finding — `M1-04`/`M1-11` exist specifically to port the spike's verified `app_authenticated`/`withUserHardened` patterns rather than re-derive them from the spec's original (incomplete) sketch, and `M1-07`/`M1-08` port the drift test and tenancy gate with their negative controls intact. Checked GitHub state first: repo is private, `gh` authenticated, zero existing issues/milestones, only default labels. Full breakdown at `docs/tasks/2026-09-08-m1-contracts-seams-tasks.md` plus 16 files under `docs/tasks/m1/`. **Not yet filed** — awaiting confirmation before running the label/milestone/issue-create commands against the real repo. |

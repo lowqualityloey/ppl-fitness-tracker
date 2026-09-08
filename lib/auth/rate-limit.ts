@@ -1,0 +1,55 @@
+export interface RateLimitResult {
+  allowed: boolean;
+  retryAfterSeconds: number;
+}
+
+interface RateLimitEntry {
+  requests: number[];
+}
+
+/**
+ * Process-local sliding-window limiter for public sign-in initiation.
+ *
+ * This deliberately hides storage behind one module so a shared atomic store
+ * can replace it before the application runs on multiple instances. Do not
+ * treat process memory as a horizontally-scaled production control.
+ */
+export class AuthRateLimiter {
+  private readonly entries = new Map<string, RateLimitEntry>();
+
+  constructor(
+    private readonly maxRequests = 5,
+    private readonly windowMs = 10 * 60 * 1000,
+    private readonly now: () => number = Date.now,
+  ) {}
+
+  check(ip: string): RateLimitResult {
+    const now = this.now();
+    const cutoff = now - this.windowMs;
+    const previous = this.entries.get(ip)?.requests ?? [];
+    const requests = previous.filter((timestamp) => timestamp > cutoff);
+
+    if (requests.length >= this.maxRequests) {
+      this.entries.set(ip, { requests });
+      return {
+        allowed: false,
+        retryAfterSeconds: Math.max(1, Math.ceil((requests[0]! + this.windowMs - now) / 1000)),
+      };
+    }
+
+    requests.push(now);
+    this.entries.set(ip, { requests });
+    return { allowed: true, retryAfterSeconds: 0 };
+  }
+}
+
+export const signInRateLimiter = new AuthRateLimiter();
+
+/**
+ * Only accept ingress-provided metadata. Never use X-Forwarded-For directly:
+ * a caller can choose it and evade throttling. Vercel strips/spoofs neither
+ * this platform-specific header. Non-Vercel/local requests share `unknown`.
+ */
+export function clientIp(platformForwardedFor: string | null): string {
+  return platformForwardedFor?.trim() || 'unknown';
+}

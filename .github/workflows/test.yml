@@ -1,0 +1,50 @@
+name: Test Suite
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Start Supabase
+        run: npx supabase start
+
+      - name: Run type check
+        run: npm run typecheck
+
+      - name: Security check - Ban direct set_config calls
+        run: ./scripts/check-set-config.sh
+
+      - name: Run test suite (includes schema drift detection)
+        run: npm test
+        env:
+          # Supabase local development URLs (ADR-0003):
+          #   DATABASE_URL routes through the pooler (54329), matching production.
+          #   MIGRATION_DATABASE_URL connects directly as owner (54322) — the
+          #   pooler requires a tenant identifier that a bare owner connection
+          #   does not carry, so migrations/seeds must bypass it.
+          DATABASE_URL: postgresql://app_authenticated:Wd7EmwRWWqY9s7jMVD3kVqnt+OaW5PowxNIxCY5Ful0=@127.0.0.1:54329/postgres
+          MIGRATION_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+
+      - name: Stop Supabase
+        run: npx supabase stop
+        if: always()

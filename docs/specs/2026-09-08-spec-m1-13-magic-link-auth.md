@@ -1,7 +1,7 @@
 # Technical Design: M1-13 Magic-Link Authentication
 
 - **Author**: Owner + Kiro
-- **Status**: Implementing
+- **Status**: Implemented
 - **Created**: 2026-09-08
 - **Target Release**: M1: Contracts & Seams
 - **Issue**: [#15](https://github.com/lowqualityloey/ppl-fitness-tracker/issues/15)

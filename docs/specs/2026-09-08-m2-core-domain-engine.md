@@ -216,4 +216,4 @@ M2-03 and M2-05 may be developed in parallel only after M2-02 freezes the sessio
 - [x] SMTP issue #16 explicitly kept out of M2 critical path.
 - [x] Atomic tasks and Gherkin acceptance criteria prepared under `docs/tasks/m2/`.
 - [x] GitHub issue numbers recorded: #36–#42 under milestone `M2: Core Domain Engine`.
-- [ ] M2-00 reviewed and committed with `pk:commit`.
+- [x] M2-00 reviewed and committed as `223e2b8` with `pk:commit`.

@@ -7,7 +7,7 @@
 - **Milestone**: `M2: Core Domain Engine`
 - **Priority**: `#priority/p0`
 - **Labels**: `area:backend`, `area:auth`, `type:refactor`
-- **Kanban Status**: `In Review`
+- **Kanban Status**: `Done`
 
 ## User Story & Context
 

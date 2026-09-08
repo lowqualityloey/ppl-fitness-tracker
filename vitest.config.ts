@@ -11,5 +11,13 @@ export default defineConfig({
     // Without this, an empty suite exits 1 and would break CI before
     // there's anything to fail on purpose.
     passWithNoTests: true,
+    // Integration tests share one local Postgres instance and several
+    // fixture rows (e.g. routine_days slugs 'test-push'/'test-pull',
+    // named test users). Running test files in parallel workers lets one
+    // file's cleanup/insert race against another's read, producing
+    // intermittent FK-violation and row-count failures that have nothing
+    // to do with the code under test. Serialize file execution so the
+    // shared database is only ever touched by one file at a time.
+    fileParallelism: false,
   },
 });

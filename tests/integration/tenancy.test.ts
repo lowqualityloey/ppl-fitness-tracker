@@ -207,10 +207,20 @@ describe('M1-08: Tenancy integration gate (THE MERGE GATE)', () => {
     const rdPushId = rdIds[0]!;
     const rdPullId = rdIds[1] ?? rdPushId;
 
+    // Ensure at least one exercise exists to satisfy session_sets' FK —
+    // the exercises table may be empty on a fresh database (M1-09 seed not applied)
+    const exerciseResult = await ownerClient.query<{ id: string }>(
+      `INSERT INTO public.exercises (name, slug, muscle_groups)
+       VALUES ('Tenancy Test Exercise', 'tenancy-test-exercise', ARRAY['chest'])
+       ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name
+       RETURNING id`
+    );
+    const exerciseId = exerciseResult.rows[0]!.id;
+
     const sessionInserted = await ownerClient.query<{ id: string; user_id: string }>(
-      `INSERT INTO public.workout_sessions (user_id, routine_day_id, client_id, local_date, started_at)
-       VALUES ($1, $3, gen_random_uuid(), '2024-01-01', NOW()),
-              ($2, $4, gen_random_uuid(), '2024-01-01', NOW())
+      `INSERT INTO public.workout_sessions (user_id, routine_day_id, client_id, local_date, started_at, status)
+       VALUES ($1, $3, gen_random_uuid(), '2024-01-01', NOW(), 'completed'),
+              ($2, $4, gen_random_uuid(), '2024-01-01', NOW(), 'completed')
        RETURNING id, user_id`,
       [a.id, b.id, rdPushId, rdPullId]
     );
@@ -226,10 +236,10 @@ describe('M1-08: Tenancy integration gate (THE MERGE GATE)', () => {
 
     const setInserted = await ownerClient.query<{ id: string; user_id: string }>(
       `INSERT INTO public.session_sets (user_id, session_id, exercise_id, set_index, weight_kg, reps, client_ts)
-       VALUES ($1, $3, (SELECT id FROM exercises LIMIT 1), 1, 60.00, 8, NOW()),
-              ($2, $4, (SELECT id FROM exercises LIMIT 1), 1, 80.00, 5, NOW())
+       VALUES ($1, $3, $5, 1, 60.00, 8, NOW()),
+              ($2, $4, $5, 1, 80.00, 5, NOW())
        RETURNING id, user_id`,
-      [a.id, b.id, aSessionId, bSessionId]
+      [a.id, b.id, aSessionId, bSessionId, exerciseId]
     );
 
     const getSetFor = (uid: string) => {
@@ -313,7 +323,7 @@ describe('M1-08: Tenancy integration gate (THE MERGE GATE)', () => {
       // Least privilege - policies resolve auth.uid() but app cannot call it directly
       await expect(
         withUser(appDirect.db, userA.claims, (tx) => tx.execute(sql`SELECT auth.uid()`)),
-      ).rejects.toMatchObject({ cause: { code: '42501' } });
+      ).rejects.toMatchObject({ code: '42501' });
     });
   });
 
@@ -441,7 +451,7 @@ describe('M1-08: Tenancy integration gate (THE MERGE GATE)', () => {
             phase: 'pre_workout',
           }),
         ),
-      ).rejects.toMatchObject({ cause: { code: '42501' } });
+      ).rejects.toMatchObject({ code: '42501' });
     });
 
     it('should reject inserting session set attributed to B (42501, not silent drop)', async () => {
@@ -457,7 +467,7 @@ describe('M1-08: Tenancy integration gate (THE MERGE GATE)', () => {
             clientTs: new Date(),
           }),
         ),
-      ).rejects.toMatchObject({ cause: { code: '42501' } });
+      ).rejects.toMatchObject({ code: '42501' });
     });
 
     it('should verify B data survived all attempts intact', async () => {
@@ -490,7 +500,7 @@ describe('M1-08: Tenancy integration gate (THE MERGE GATE)', () => {
         withUser(appDirect.db, { sub: 'not-a-uuid', role: 'authenticated' }, (tx) =>
           tx.select().from(schema.sessionSets),
         ),
-      ).rejects.toMatchObject({ cause: { code: '22P02' } });
+      ).rejects.toMatchObject({ code: '22P02' });
     });
   });
 

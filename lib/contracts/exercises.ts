@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { createAppEnvelopeSchema } from './envelope.js';
-import { UuidSchema } from './common.js';
+import { createAppEnvelopeSchema } from './envelope';
+import { UuidSchema } from './common';
 
 export const ExerciseSchema = z.object({
   id: UuidSchema,

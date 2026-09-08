@@ -5,7 +5,7 @@ export {
   signInRequestSchema,
   confirmQuerySchema,
   signoutRequestSchema,
-} from '../contracts/auth.js';
+} from '../contracts/auth';
 
 export function appUrl(): URL {
   const rawUrl = process.env.NEXT_PUBLIC_APP_URL;

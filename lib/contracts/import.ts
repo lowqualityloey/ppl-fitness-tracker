@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createAppEnvelopeSchema } from './envelope.js';
+import { createAppEnvelopeSchema } from './envelope';
 
 const BooleanMapSchema = z.record(z.string().min(1), z.boolean());
 const LooseStateSchema = z.record(z.string().min(1), z.unknown());

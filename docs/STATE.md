@@ -3,15 +3,15 @@
 ## 1. Executive Summary & Current Position
 
 - **Project Name**: PPL Fitness Tracker
-- **Current Milestone / Epic**: **M1: Contracts & Seams — in progress, 11 of 16 issues closed**
+- **Current Milestone / Epic**: **M2: Core Domain Engine — M2-00 foundation committed; M2-01 sessions API is next**
 - **Overall Status**: ACTIVE <!-- Options: ACTIVE | PAUSED | STABILIZING | RELEASE_CANDIDATE -->
 - **Target Release**: v1.0.0, no date committed
-- **Current Working Branch**: `test/m1-16-route-handler-red`, with the M1-16 RED integration tests and baseline in flight. PR #32 (M1-15) is merged; the target stack now has the M1-12 SSR auth seam, email-only magic-link initiation/confirmation, and canonical M1-15 contracts.
+- **Current Working Branch**: `feat/m2-core-domain-engine`, with the M2-00 repository/runtime foundation committed in `223e2b8`; M2-01 route work is not yet implemented.
 
 > **Do not pin the current `main` SHA in this field.** It was tried three times and went stale three times, because the merge commit that lands the correction advances `main` past the value being recorded. Describe the state, not the hash. Run `git log --oneline -1` if you need the exact commit.
 - **Last Updated**: 2026-09-08
 
-**Where things actually stand.** Target-stack code now exists and is growing: Next.js scaffold, Drizzle schema for all 9 tables, `app_authenticated` role + trigger, RLS on content and user-data tables, the schema-drift and tenancy merge gates, the hardened `withUser()` helper, and the SSR auth seam are all on `main` with passing CI. The legacy vanilla-JS app still runs unchanged alongside it.
+**Where things actually stand.** M1 schema, RLS, auth, contracts, exercise/stretch seeds, and the M1-16 RED route baseline are on `main`. M2-00 now adds a runtime app-role Drizzle client, verified auth-to-RLS context, session domain mappers, and a user-scoped `WorkoutRepository` on the feature branch. The legacy vanilla-JS app still runs unchanged alongside the target stack. Production email delivery remains intentionally deferred behind issue #16's provider and DNS decisions.
 
 ---
 
@@ -21,8 +21,8 @@
 
 - [x] **Planning**: Spec written, six decisions resolved, ADRs recorded (Complete — 2026-09-08)
 - [x] **M0**: De-risk spike — RLS enforcement proven through Drizzle (Complete — 2026-09-08, **gate lifted**)
-- [/] **M1**: Contracts & Seams — schema, RLS, auth, Zod contracts, failing tests (**In progress — 11 of 16 issues closed**, milestone `M1: Contracts & Seams`)
-- [ ] **M2**: Core Domain Engine — SessionEngine, SyncEngine, LegacyImporter (Queued)
+- [/] **M1**: Contracts & Seams — code, contracts, seeds, RLS, auth, and RED baseline complete; production SMTP/delivery remains deferred under issue #16
+- [/] **M2**: Core Domain Engine — formal plan and GitHub issues #36–#42 filed; M2-00 foundation committed in `223e2b8`, with session routes and remaining domain engines queued
 - [ ] **M3**: Presentation — shadcn + tokens, session runner, offline outbox, WCAG audit (Queued)
 - [ ] **M4**: Hardening, telemetry, decommission the legacy static app (Queued)
 
@@ -59,18 +59,28 @@ estimated at ~20h plus external SMTP setup.
 - [x] `#8` `M1-06`: RLS on user-data tables, 4 policies each (`#priority/p0`) — **done**, PR [#30](https://github.com/lowqualityloey/ppl-fitness-tracker/pull/30) merged, issue closed. `tests/integration/rls-user-data-tables.test.ts` now uses real GoTrue password-grant users and the non-owner `app_authenticated` role with hardened transaction-local claims. It verifies RLS/FORCE, four app-role DML policies and grants for all seven user-data tables; owner CRUD; cross-user read/update/delete filtering; rejected cross-user insert/reparent/rekey attempts; and rejected owner-to-other-user reassignment (`WITH CHECK`) while proving the original rows remain intact. CI green (87 tests).
 - [x] `#9` `M1-07`: schema-drift merge gate, ported + widened (`#priority/p0`) — **done**. Landed as part of #28's stacked branch chain rather than its own PR (branches were built on top of each other, not off `main`). Verified by `tests/integration/schema-drift.test.ts` on `main`, 6/6 passing. Issue closed retroactively.
 - [x] `#10` `M1-08`: tenancy integration gate, ported + widened (`#priority/p0`) — **done**. Same stacked-branch situation as `#9`. Verified by `tests/integration/tenancy.test.ts` on `main`, 34/34 passing. Issue closed retroactively.
-- [ ] `#11` `M1-09`: seed 18 exercises from legacy app (`#priority/p1`) — parallel track, needs only `#5` (now unblocked)
-- [ ] `#12` `M1-10`: seed 13 unique stretches, dual-day association (`#priority/p2`) — parallel track, needs only `#5` (now unblocked)
+- [x] `#11` `M1-09`: seed 18 exercises from legacy app (`#priority/p1`) — **done**, PR [#34](https://github.com/lowqualityloey/ppl-fitness-tracker/pull/34) merged; idempotent system seed and focused regression coverage are on `main`.
+- [x] `#12` `M1-10`: seed 13 unique stretches, dual-day association (`#priority/p2`) — **done**, PR [#35](https://github.com/lowqualityloey/ppl-fitness-tracker/pull/35) merged; 15 placements, shared Child's Pose/Cat-Cow IDs, phase-aware ordering, and combined-seed coverage are on `main`.
 - [x] `#13` `M1-11`: `withUser()` helper, two-GUC hardened (`#priority/p0`) — **done**, PR [#28](https://github.com/lowqualityloey/ppl-fitness-tracker/pull/28) merged, issue closed. `lib/db/with-user.ts` + `tests/unit/with-user.test.ts` (6 assertions, GUC-only, no table grants needed) on `main`. Also fixed along the way: CI Supabase-CLI install, a pooler-vs-direct port mismatch in `MIGRATION_DATABASE_URL`, and a genuine test-isolation race (`vitest.config.ts` now sets `fileParallelism: false` — integration tests share fixture rows across files and were flaking under parallel workers).
 - [x] `#14` `M1-12`: Supabase SSR middleware + `requireUser()` (`#priority/p0`) — **done**, PR [#29](https://github.com/lowqualityloey/ppl-fitness-tracker/pull/29) merged, issue closed. Added pinned `@supabase/ssr`/`@supabase/supabase-js`, `lib/supabase/server.ts`, `src/middleware.ts`, and `lib/auth/require-user.ts`; `requireUser()` resolves identity only via verified `auth.getUser()` and returns a typed 401 error without a session. `tests/integration/require-user.test.ts` verifies real GoTrue sign-in/cookie round-trip, no-session 401, and spoofed-body identity is ignored. CI Node bumped from 20 to 24 because Supabase JS's bundled realtime client needs native `WebSocket` even when unused; all checks green.
 - [x] `#15` `M1-13`: magic-link sign-in + `/auth/confirm` redirect allowlist (`#priority/p0`) — **done**, PR [#31](https://github.com/lowqualityloey/ppl-fitness-tracker/pull/31) merged, issue closed. Added an email-only `/sign-in` form, `POST /auth/signin`, and `GET /auth/confirm`. The callback validates `token_hash`/`type=email` with Zod, delegates session-cookie persistence to the M1-12 Supabase SSR client, and normalizes `next` through a fixed internal allowlist (currently `/` only). Sign-in responses are generic to avoid account enumeration; a process-local sliding-window limiter returns typed 429 responses, with shared storage required before horizontal production scale. Local GoTrue now targets the Next app on port 3001 and uses the per-request redirect target in its magic-link template. Added real GoTrue token-hash → SSR-cookie → `requireUser()` integration coverage plus redirect/limiter tests. CI green; local final run 11 files / 91 tests and `next build` passed.
 - [ ] `#16` `M1-14`: custom SMTP + hourly synthetic monitor (`#priority/p0`) — needs an external provider account and DNS, cannot be picked up cold
 - [x] `#17` `M1-15`: Zod contracts + `AppError` envelope (`#priority/p1`) — **done**, PR [#32](https://github.com/lowqualityloey/ppl-fitness-tracker/pull/32) merged, issue closed. Added the canonical envelope and route contracts for auth, sync, sessions, exercises, progress, and legacy import; retained M1-13 compatibility exports and verified targeted contracts/typecheck before merge.
-- [/] `#18` `M1-16`: failing route-handler tests, RED, all 9 endpoints (`#priority/p1`) — **RED baseline recorded**, branch `test/m1-16-route-handler-red` is ready for its PR; M2 owns the missing handlers.
+- [x] `#18` `M1-16`: failing route-handler tests, RED, all 9 endpoints (`#priority/p1`) — **baseline complete and merged**, PR [#33](https://github.com/lowqualityloey/ppl-fitness-tracker/pull/33); 22 expected missing-handler failures plus the existing `/auth/confirm` pass are recorded in `docs/tasks/m1-red-baseline.txt`. M2 owns turning the route tests green.
 
-**M1 exit criteria**: schema and RLS applied with the drift and tenancy gates green
-in CI, auth working end to end including real email delivery, contracts written, and
-a recorded RED baseline of failing route-handler tests for M2 to turn green.
+**M1 exit criteria:** code/schema/RLS/auth/contracts and the route RED baseline are complete and merged. The production-release portion remains blocked by issue #16: custom SMTP, verified domain, SPF/DKIM, and real delivery monitoring.
+
+### M2 Checkpoint — M2-00 Repository & Runtime Foundation
+
+Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with atomic task files under `docs/tasks/m2/`. Filed under GitHub milestone `M2: Core Domain Engine` as issues **#36–#42**; these are the canonical tracking numbers:
+
+- [x] `#36` `M2-00`: runtime `DATABASE_URL` Drizzle client, shared DB/transaction types, verified auth-to-RLS context, session domain types/mappers, and user-scoped `WorkoutRepository` — implemented and committed in [223e2b8](https://github.com/lowqualityloey/ppl-fitness-tracker/commit/223e2b8); repository race/cursor/DSN review gates passed.
+- [ ] `#37` `M2-01`: deterministic API fixtures and `/api/sessions` route handlers wired to the repository.
+- [ ] `#38` `M2-02`: `SessionEngine` lifecycle, phase gates, set/task mutations, and session completion.
+- [ ] `#41` `M2-03`: `ProgressionEngine` e1RM calculations and personal-record materialization.
+- [ ] `#39` `M2-04`: server-side sync transaction, mutation idempotency, sequence design, LWW/device metadata, and conflict handling.
+- [ ] `#40` `M2-05`: `LegacyImporter` parsing, fingerprint idempotency, archive flow, and import report.
+- [ ] `#42` `M2-06`: all M1 route-handler tests green, performance/security gates, and M2 integration hardening.
 
 **Process note, so this stops recurring**: issues `#6`, `#7`, `#9`, `#10` were done on `main` well before they were closed, because the branches that shipped them were stacked on each other instead of on `main`, and none of the PR bodies said "Closes #N". Going forward: branch from `main`, not from a feature branch, unless there's a real dependency; and every PR body must name the issue it closes.
 
@@ -111,8 +121,8 @@ a recorded RED baseline of failing route-handler tests for M2 to turn green.
 
 - **Target Workspace / Package**: N/A (standalone repo)
 - **Active RFC / Spec**: `docs/specs/2026-09-08-spec-fullstack-migration.md`
-- **Active Task Spec**: `docs/tasks/2026-09-08-m1-contracts-seams-tasks.md` — M1 decomposed into 16 atomic issues, filed as [#3–#18](https://github.com/lowqualityloey/ppl-fitness-tracker/milestone/1), ~45h total. This document remains the local source of truth; it survives context compaction and works offline, where the GitHub board does not.
-- **Key Source Files in Flight**: `lib/contracts/` (canonical envelope, auth, sync, session, exercise, progress, and import schemas), `lib/auth/magic-link.ts` (M1-13 compatibility exports), and `tests/unit/contracts.test.ts`.
+- **Active Task Spec**: `docs/specs/2026-09-08-m2-core-domain-engine.md`, with atomic task files in `docs/tasks/m2/` and GitHub issues #36–#42. The formal plan and issue breakdown are complete; M2-00 review/commit is the next gate before route implementation.
+- **Key Source Files in Flight**: M2-00 runtime/auth/domain/repository files are committed in `223e2b8`. M2-01 will add `src/app/api/sessions/`, deterministic API fixtures, and route integration coverage without bypassing those seams.
 - **Spike sandbox — throwaway, delete once M1's integration suite covers the same ground**:
   - `spikes/m0-drizzle-rls/sql/001-setup.sql` — role, tables, 8 policies, `handle_new_user`. Comments record the measured surprises. **Creates `unprotected_future_table` on purpose**; do not copy it.
   - `spikes/m0-drizzle-rls/src/db.ts` — `withUserHardened()` is the version M1 must adopt. `withUserLeaky()` is a negative control, never to be imported.
@@ -126,9 +136,9 @@ a recorded RED baseline of failing route-handler tests for M2 to turn green.
 - **Verification Commands** (all must run inside WSL):
   - Legacy dev: `npm run dev`
   - Target dev: `npm run next:dev` (port 3001)
-  - Target tests: `npm run db:up` → `npm run typecheck` → `npm test` (95 tests across 8 files, `fileParallelism: false` since integration tests share fixture rows) → `npm run db:down`. CI runs this on every PR via `.github/workflows/test.yml`.
+  - Target tests: `npm run db:up` → `npm run typecheck` → `npm test` (18 non-RED files / 119 tests; `fileParallelism: false` because integration tests share fixture rows) → `npm run db:down`. The API RED suites remain intentionally excluded from `npm test` until M2 route handlers land. Repository integration tests require a tenant-qualified local Supavisor URL when using port 54329; direct app-role port 54322 also passes the full suite.
   - Spike, from `spikes/m0-drizzle-rls/`: `npm run db:up` → `npm run db:setup` → `npm test` (32 pass) → `npm run mutate` → `npm run db:down`. Needs Docker. Superseded by the real M1 suite above but kept for reference.
-- **Known-broken, not yet in CI**: `tests/integration/rls-user-data-tables.test.ts` exists on disk, untracked. References column names from a stale schema draft. Needs a rewrite against `db/schema/index.ts` before `#8`/M1-06 can close.
+- **Known-broken, not yet in CI**: none from the former M1-06 RLS verifier; it was repaired and merged in PR #30. The M1 route-handler suites under `tests/integration/api/` are intentionally RED until M2 implements the missing handlers.
 
 ---
 
@@ -158,6 +168,9 @@ Added by the M0 spike (ADR-0003 Amendment A1):
 15. **`FORCE ROW LEVEL SECURITY` does not stop the owner.** It removes the ownership exemption, not the `BYPASSRLS` attribute, and Supabase's `postgres` has that attribute. The `current_user` assertion in the tenancy gate is the only thing preventing a vacuous pass. (A1.3)
 16. **Every security control ships with an exercised failure mode.** Not just a test that passes — a negative control that fails when the mitigation is removed. The `is_local` invariant sat unexercised through planning; M0 added the leaky variant to prove the mitigation does something.
 17. **Assert the result of any `GRANT` against a Supabase-managed schema.** `GRANT USAGE ON SCHEMA auth` as `postgres` returns success and changes nothing. Exit codes are not evidence there. (A1.2)
+18. **Runtime request-path database code uses `DATABASE_URL` only.** `MIGRATION_DATABASE_URL` is owner-only for migrations, seeds, metadata, and bounded test fixture setup; it must never be imported by runtime repositories or route handlers.
+19. **Verified auth context binds claims to the explicit repository user.** `requireUserContext()` derives claims from Supabase `auth.getUser()`, and repository methods assert `claims.sub === userId` before entering `withUser()`.
+20. **M2 repository methods keep `userId` first and map rows at the domain boundary.** Route handlers must not expose raw Drizzle rows or bypass `WorkoutRepository` for user data.
 
 ---
 
@@ -165,7 +178,7 @@ Added by the M0 spike (ADR-0003 Amendment A1):
 
 ### Blockers
 
-**None currently.**
+**No immediate coding blocker.** M2-00 is implemented, reviewed, validated, and committed in `223e2b8`. M2-01 session route handlers and deterministic API fixtures are the next active slice.
 
 *Resolved 2026-09-08 — `M0-00`, Node runtime.* Initially filed as "WSL Node is 18.19.1, too old for Next.js 16." That was overstated. `~/.nvm/versions/node/` already contained v22.19.0 and v24.18.0, and the `PATH` prepend at `~/.zshrc:119-122` selects the highest, so the **interactive** shell was already on Node 24 and Next.js 16 would have run fine.
 
@@ -183,9 +196,13 @@ Actions taken: `nvm install --lts` → v24.20.0, set as nvm default (additive; `
 
 ### Technical Debt & Risks
 
-- **Custom SMTP is a launch blocker, not polish.** Supabase's default sender allows 2 emails/hour from a shared generic address. On a magic-link-only app that is the entire front door. Moved into M1 with an hourly synthetic monitor.
+- **Custom SMTP remains a launch blocker, not polish, and is intentionally deferred as issue #16.** Supabase's default sender allows 2 emails/hour from a shared generic address. On a magic-link-only app that is the entire front door. Do not claim production email delivery until an external provider, verified sending domain, SPF/DKIM, DNS, and the hourly synthetic monitor are in place.
 - **Legacy `npm run build` emits zero JavaScript** and exits 0 while doing so. Verified 2026-09-08. Cause: classic `<script>` tags Vite won't process. Not being fixed — the legacy app is decommissioned in M4 — but do not mistake a green build for a working one.
 - **Pull-day legacy set data is unrecoverable.** `saveProgress()` keyed checkbox state by `checkbox.id`, and the generated set checkboxes never had one, so all 17 collapsed into a single `"undefined"` key. Only aggregate counts survive the import. Accepted and documented in spec §4.5.
+- **Drizzle migration metadata is incomplete.** `supabase/migrations/meta/_journal.json` currently omits SQL migrations `0004` and `0005`; reconcile the journal/snapshot before relying on future generated migrations or drift checks.
+- **Auth/profile deletion is not physically cascaded.** `profiles.id` has no foreign key to `auth.users.id`, so Auth-user deletion does not automatically remove the profile row. Keep explicit cleanup in fixtures/import flows and evaluate a migration before production hardening.
+- **Sync conflict metadata is not modeled yet.** Session delta/change-log sequencing, persisted `deviceId`, and deterministic LWW tie-breaking are absent from the current schema. True `since` deltas and device-aware conflict resolution remain deferred until that model is designed and tested.
+- **`server_seq` remains a schema decision.** The current sequence representation has not been revisited for high-volume/bigint behavior; settle it as part of the formal M2 sync design rather than encoding assumptions in the route layer.
 - ~~**Per-request transaction cost of ADR-0003 is unmeasured.**~~ **Measured 2026-09-08.** `withUser()` costs **+1.29 ms p50 / +1.87 ms p95** over an app-scoped autocommit `SELECT` on a direct connection, **+1.98 ms p50 / +2.35 ms p95** through supavisor in transaction mode. Four round trips instead of one, so it scales with RTT and will be worse from a region distant from the database. Affordable against the spec §2 SLA. *What remains open is narrower: pool exhaustion under sustained load. The spike reached 40 interleaved concurrent transactions on one container, which is not a load test. Still an M4 item.*
 - **M0 findings are from the local stack, not a hosted project.** Roles and `auth.uid()` came from the stock Supabase image so behaviour should match, but two findings (the silently-discarded `GRANT` on `auth`, and the refusal to `ALTER` role attributes) are mediated by `supautils` and could differ on a hosted plan. Re-assert both during M1 against a real project.
 - **The magic-link flow is still unproven.** M0 used the password grant to obtain real JWTs cheaply. The `sub` claim is identical either way, so the RLS conclusion is unaffected, but no part of the actual sign-in path has been exercised.
@@ -207,14 +224,11 @@ Actions taken: `nvm install --lts` → v24.20.0, set as nvm default (additive; `
 
 ## 7. Next Immediate Actions (Queued)
 
-1. **`#17`/M1-15: canonical contracts are merged.** PR #32 is on `main`; the contract layer preserves the M1-13 auth imports, provides all four sync mutation variants, validates legacy payloads per key, and uses the shared AppError envelope.
-2. **`#16`/M1-14: custom SMTP + hourly synthetic monitor** remains a P0 launch blocker requiring an external provider account, verified sending domain, SPF/DKIM, and DNS. Do not claim end-to-end production email delivery from local Mailpit/GoTrue tests.
-3. **Parallel track**: `#11`/`#12` (seed extraction) need only `#5`'s schema and can be picked up any time.
-4. **M1-16/#18 RED artifact is complete and pending PR/merge.** `docs/tasks/m1-red-baseline.txt` records 22 missing-handler failures and one passing existing M1-13 callback check across the six API test files. M2 owns making the missing routes green.
-5. **Locked auth handoff**: never store Supabase tokens in local/session storage; use `@supabase/ssr` cookie `getAll()`/`setAll()` only; derive identity from verified `auth.getUser()`; never trust request identity fields; never reflect `next` into an external redirect; never trust arbitrary `X-Forwarded-For` for rate limiting.
-6. **Branch hygiene**: branch from `main` unless there is a real dependency, name the issue a PR closes, and merge/sync the tracker immediately after the user merges.
-7. **Optional**: no GitHub Projects board is designated for this repo. `gh project list --owner lowqualityloey` shows three unrelated boards. The milestone alone is sufficient unless board tracking is wanted.
-8. **Before M3**: agree the `--accent-legs` hue and add it to `DESIGN.md`.
+1. **Implement `#37`/M2-01.** Add deterministic owner/cross-user fixtures and wire `GET/POST /api/sessions` plus `GET /api/sessions/:id` through `requireUserContext()` and `WorkoutRepository`; make the sessions RED suite green without claiming true `since` deltas.
+2. **Continue the dependency sequence `#38` → `#41` → `#39` → `#40` → `#42`.** Freeze SessionEngine write semantics before progression/sync/import and close each task's acceptance criteria before consuming its interface downstream.
+3. **Keep schema-risk work explicit.** Reconcile the Drizzle migration journal mismatch before generated migrations; use Expand-Contract for any sync/device/change-log schema; retain the missing Auth/profile FK as a tracked hardening risk.
+4. **Keep issue #16 deferred.** Custom SMTP/provider/DNS remains the separate M1 production-release blocker and must not block M2 coding or be described as complete.
+5. **Preserve the M3 boundary.** Do not delete legacy source folders or begin UI/design-system implementation until M2-06 closes the backend/API hardening gate.
 
 ---
 
@@ -239,3 +253,5 @@ Actions taken: `nvm install --lts` → v24.20.0, set as nvm default (additive; `
 | 2026-09-08 | Owner + Kiro | `M1-13` magic-link auth checkpoint | Implemented and merged PR #31 (`5548d57`), closing issue #15. Added exact-pinned `zod@4.5.4`, email-only `/sign-in`, `POST /auth/signin`, and `GET /auth/confirm`. The callback validates `token_hash` and `type=email`, calls Supabase `verifyOtp` through the existing SSR server client so session cookies remain HttpOnly/SameSite-managed, and permits only the current internal `/` destination. Sign-in initiation returns a generic response to avoid account enumeration and applies a per-process sliding-window limiter keyed by a platform-provided address header rather than arbitrary `X-Forwarded-For`; shared atomic storage is still required before horizontal production scale. Local GoTrue was corrected to the Next origin on port 3001, and its magic-link template consumes the per-request redirect target. Real local GoTrue token-hash → SSR-cookie → `requireUser()` coverage, redirect/limiter tests, typecheck, targeted lint, `check-set-config`, full suite (11 files / 91 tests), and `next build` passed. Remaining auth risks are external SMTP/domain delivery (#16) and canonical contract consolidation (#17); no production email-delivery claim is made from local capture tests. |
 | 2026-09-08 | Owner + Kiro | `M1-15` canonical contracts | Added `lib/contracts/` modules for the shared AppError/envelope, auth, sync, sessions, exercises, progress, and legacy import boundaries; retained M1-13 lower-camel auth schema exports through compatibility re-exports. Sync covers all four discriminated mutations, 0–1000 nullable weight/reps with `numeric(6,2)` precision, a 200-mutation cap, and non-negative server sequence. Legacy import accepts raw localStorage values per key, tolerates malformed siblings for partial reporting, accepts the documented optional push timestamp and ignored `userStats` key, and has focused unit coverage. Targeted tests (13), typecheck, targeted lint, and diff checks pass. Full `npm test` remains blocked by missing local Supabase environment credentials; repository-wide lint retains unrelated pre-existing `any` errors.
 | 2026-09-08 | Owner + Kiro | `M1-16` RED route-handler tests | Created the HTTP integration harness and suites for all 9 endpoints. Real SSR-cookie Supabase fixtures are used without request-provided identities or token storage. Fixed test-server process-group cleanup, the local anon-key fallback, and the M1-15 contract graph's Next/Turbopack-incompatible relative `.js` imports. Validation is clean (`npm run typecheck`, targeted ESLint, diagnostics); the RED baseline is 22 missing-handler 404 failures plus the existing M1-13 callback validation pass across 23 tests. Artifact: `docs/tasks/m1-red-baseline.txt`. |
+| 2026-09-08 | Owner + Kiro | `pk:checkpoint` — M2 handoff | Synced the tracker to `feat/m2-core-domain-engine` and the completed-but-uncommitted M2-00 foundation: runtime `DATABASE_URL` Drizzle client, shared DB/transaction types, verified auth-to-RLS context, session domain mappers, and user-scoped `WorkoutRepository`. Recorded the deferred migration-journal, auth-profile-FK, session-delta, `deviceId`, and `server_seq` risks; replaced stale M1 next actions with the required retroactive M2 `pk:plan` → `docs/tasks/m2/` → GitHub issue sequence; retained SMTP issue #16 as deferred. Validation evidence and zero-loss handoff are in the session response; no commit, push, discard, or stash was performed.
+| 2026-09-08 | Owner + Kiro | M2 planning + `pk:commit` | Formalized M2 in `docs/specs/2026-09-08-m2-core-domain-engine.md`; created atomic task artifacts under `docs/tasks/m2/`; created milestone `M2: Core Domain Engine`; filed #36–#42; fixed and tested cursor validation, duplicate-start race recovery, two-user repository isolation, concurrent starts, pagination, and runtime DSN selection. Committed planning as `10da008` and M2-00 foundation as `223e2b8` (`Closes #36`). M2-01 sessions routes/fixtures are next; issue #16 remains deferred.

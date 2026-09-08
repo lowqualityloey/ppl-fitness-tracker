@@ -1,7 +1,9 @@
 import { sql } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/node-postgres';
-import type { Pool } from 'pg';
-import * as schema from '../../db/schema/index.js';
+import type { Db, Tx } from './types.js';
+import type { JwtClaims } from './auth-context.js';
+
+export type { Db, Tx } from './types.js';
+export type { JwtClaims } from './auth-context.js';
 
 /**
  * withUser() - The hardened user context helper for RLS operations.
@@ -22,19 +24,6 @@ import * as schema from '../../db/schema/index.js';
  * );
  * ```
  */
-
-type Db = ReturnType<typeof drizzle<typeof schema>>;
-type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
-
-/** Claim shape GoTrue actually issues. Only `sub` is load-bearing for auth.uid(). */
-export interface JwtClaims {
-  sub: string;
-  role: string;
-  aud?: string;
-  email?: string;
-  exp?: number;
-  [k: string]: unknown;
-}
 
 /**
  * Execute database operations within authenticated user context.
@@ -69,8 +58,3 @@ export function withUser<T>(
     return fn(tx);
   });
 }
-
-/**
- * Type helpers for database operations
- */
-export type { Db, Tx };

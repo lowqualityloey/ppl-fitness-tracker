@@ -46,7 +46,7 @@ jobs:
           #   MIGRATION_DATABASE_URL connects directly as owner (54322) — the
           #   pooler requires a tenant identifier that a bare owner connection
           #   does not carry, so migrations/seeds must bypass it.
-          DATABASE_URL: postgresql://app_authenticated:Wd7EmwRWWqY9s7jMVD3kVqnt+OaW5PowxNIxCY5Ful0=@127.0.0.1:54329/postgres
+          DATABASE_URL: postgresql://app_authenticated.pooler-dev:Wd7EmwRWWqY9s7jMVD3kVqnt+OaW5PowxNIxCY5Ful0=@127.0.0.1:54329/postgres
           MIGRATION_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
           # Well-known Supabase local-dev defaults (public by design, safe to
           # commit — see .env.example). Needed by tests/integration/require-user.test.ts.

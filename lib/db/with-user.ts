@@ -1,9 +1,9 @@
 import { sql } from 'drizzle-orm';
-import type { Db, Tx } from './types.js';
-import type { JwtClaims } from './auth-context.js';
+import type { Db, Tx } from './types';
+import type { JwtClaims } from './auth-context';
 
-export type { Db, Tx } from './types.js';
-export type { JwtClaims } from './auth-context.js';
+export type { Db, Tx } from './types';
+export type { JwtClaims } from './auth-context';
 
 /**
  * withUser() - The hardened user context helper for RLS operations.

@@ -1,7 +1,7 @@
 import { Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
-import * as schema from '../../db/schema/index.js';
-import type { Db } from './types.js';
+import * as schema from '../../db/schema/index';
+import type { Db } from './types';
 
 export interface DbHandle {
   db: Db;

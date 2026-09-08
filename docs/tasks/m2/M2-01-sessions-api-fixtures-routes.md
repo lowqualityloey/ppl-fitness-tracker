@@ -7,7 +7,7 @@
 - **Milestone**: `M2: Core Domain Engine`
 - **Priority**: `#priority/p1`
 - **Labels**: `area:backend`, `area:auth`, `type:feature`, `type:test`
-- **Kanban Status**: `To Do`
+- **Kanban Status**: `Done — 2026-09-08`
 
 ## User Story & Context
 
@@ -37,19 +37,24 @@
 
 ## Implementation Tasks
 
-- [ ] Add deterministic owner/cross-user Auth and database fixture setup/cleanup without reading `.env.local`.
-- [ ] Implement shared route error translation for AppErrorException, Zod, not-found, conflict, and generic errors.
-- [ ] Implement GET list with cursor validation and mapped page response.
-- [ ] Implement POST start with UTC fallback local date documented as an interim boundary until a timezone contract exists.
-- [ ] Implement GET detail with UUID/`since` validation and cross-user 404 behavior.
-- [ ] Add invalid-input, duplicate, conflict, and isolation assertions alongside the existing RED cases.
+- [x] Add deterministic owner/cross-user Auth and database fixture setup/cleanup without reading `.env.local`.
+- [x] Implement shared route error translation for AppErrorException, Zod, not-found, conflict, and generic errors.
+- [x] Implement GET list with cursor validation and mapped page response.
+- [x] Implement POST start with UTC fallback local date documented as an interim boundary until a timezone contract exists.
+- [x] Implement GET detail with UUID/`since` validation and cross-user 404 behavior.
+- [x] Add invalid-input, duplicate, and isolation assertions alongside the existing RED cases; conflict translation is covered at the shared route-error seam while route-level unresolved-conflict synthesis remains deferred.
 
 ## Acceptance Criteria
 
 ### Scenario 1: Paginated history
 - **Given** a seeded authenticated user with deterministic sessions
-- **When** `GET /api/sessions?cursor=opaque-cursor` is sent with only the SSR cookie
+- **When** `GET /api/sessions` is sent with only the SSR cookie
 - **Then** the handler returns HTTP 200 and a strict `SessionsListResponseSchema` envelope with mapped summaries and nullable `nextCursor`.
+
+### Scenario 1a: Cursor validation
+- **Given** an authenticated user
+- **When** `GET /api/sessions?cursor=opaque-cursor` is sent
+- **Then** the handler returns HTTP 400 `VALIDATION_ERROR` because cursors are validated before repository pagination.
 
 ### Scenario 2: Idempotent start
 - **Given** a valid seeded routine day and UUID client id
@@ -71,10 +76,11 @@
 - **When** the first user requests that session id
 - **Then** the response is indistinguishable from missing: HTTP 404 with `NOT_FOUND`, with no leaked state.
 
-### Scenario 6: Active-day conflict
-- **Given** an unresolved conflicting active-day start
-- **When** the handler receives the start request
+### Scenario 6: Active-day conflict translation
+- **Given** an unresolved `SessionStartConflictError` reaches the route error seam
+- **When** the start handler translates that error
 - **Then** it returns HTTP 409 `CONFLICT` and does not expose database constraint text.
+- **Current boundary:** the M2-00 repository resolves ordinary duplicate-client and active-day races to an existing session; a route-level unresolved-conflict fixture remains deferred until a later engine/schema path can produce one.
 
 ## Automated Verification
 

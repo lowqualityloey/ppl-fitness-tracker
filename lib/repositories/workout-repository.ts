@@ -1,21 +1,21 @@
 import { and, asc, desc, eq, lt, or } from 'drizzle-orm';
-import * as schema from '../../db/schema/index.js';
-import { assertUserContext } from '../db/auth-context.js';
-import { withUser } from '../db/with-user.js';
-import type { Db, Tx, JwtClaims } from '../db/with-user.js';
+import * as schema from '../../db/schema/index';
+import { assertUserContext } from '../db/auth-context';
+import { withUser } from '../db/with-user';
+import type { Db, Tx, JwtClaims } from '../db/with-user';
 import {
   mapRoutineExercisePlan,
   mapSessionSet,
   mapSessionState,
   mapSessionSummary,
   mapSessionTask,
-} from '../domain/sessions/mappers.js';
+} from '../domain/sessions/mappers';
 import type {
   RoutineExercisePlan,
   SessionPage,
   SessionState,
-} from '../domain/sessions/types.js';
-import { InvalidSessionCursorError, SessionStartConflictError } from '../domain/sessions/types.js';
+} from '../domain/sessions/types';
+import { InvalidSessionCursorError, SessionStartConflictError } from '../domain/sessions/types';
 
 const {
   exercises,

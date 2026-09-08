@@ -1,0 +1,31 @@
+M1-16 RED baseline
+===================
+
+Date: 2026-09-08
+Branch: test/m1-16-route-handler-red
+Base: merged M1-15 main at 1f8a5762d2a8c4feb9db01bd9176410cbac64e7e
+
+Command:
+  npx vitest run tests/integration/api/ --reporter=dot
+
+Result: expected RED (exit code 1)
+  Test Files  6 failed (6)
+  Tests       22 failed | 1 passed (23)
+  Duration    45.68s
+
+Failure classification:
+- 5 sync tests: POST /api/sync is not implemented and returns HTTP 404.
+- 6 session tests: /api/sessions and /api/sessions/:id are not implemented and return HTTP 404.
+- 1 exercise test: GET /api/exercises is not implemented and returns HTTP 404.
+- 3 progress tests: GET /api/progress/:exerciseSlug is not implemented and returns HTTP 404.
+- 5 legacy-import tests: POST /api/import/legacy is not implemented and returns HTTP 404.
+- 2 signout tests: POST /auth/signout is not implemented and returns HTTP 404.
+- 1 existing M1-13 malformed /auth/confirm validation test passes; that handler already exists and is not part of M2's missing-handler work.
+
+The failing assertions are at the HTTP status or canonical JSON-envelope boundary: the missing routes return Next's 404 response instead of the expected success/error envelope. No test failed because of TypeScript, Zod contract imports, Supabase fixture setup, server startup, timeout, or leaked test-server processes.
+
+Pre-baseline validation:
+- npm run typecheck: passed
+- npx eslint lib/auth/magic-link.ts lib/contracts tests/integration/api: passed
+- Language diagnostics for changed TypeScript files: none
+- Local Supabase core services available; authenticated fixtures created and cleaned up successfully

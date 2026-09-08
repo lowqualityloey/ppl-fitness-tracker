@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createAppEnvelopeSchema } from './envelope.js';
+import { createAppEnvelopeSchema } from './envelope';
 import {
   IsoDateTimeSchema,
   LocalDateSchema,
@@ -8,7 +8,7 @@ import {
   SessionSourceSchema,
   SessionStatusSchema,
   UuidSchema,
-} from './common.js';
+} from './common';
 
 const CursorSchema = z.string().trim().min(1).max(512);
 const QuerySequenceSchema = z.union([

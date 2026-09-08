@@ -1,13 +1,13 @@
 import { z } from 'zod';
-import { createAppEnvelopeSchema } from './envelope.js';
+import { createAppEnvelopeSchema } from './envelope';
 import {
   IsoDateTimeSchema,
   NonNegativeIntegerSchema,
   SessionPhaseSchema,
   TaskKeySchema,
   UuidSchema,
-} from './common.js';
-import { SessionStateSchema } from './sessions.js';
+} from './common';
+import { SessionStateSchema } from './sessions';
 
 const MutationIdentityShape = {
   mutationId: UuidSchema,

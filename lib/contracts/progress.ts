@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { createAppEnvelopeSchema } from './envelope.js';
-import { IsoDateTimeSchema, LocalDateSchema, UuidSchema } from './common.js';
+import { createAppEnvelopeSchema } from './envelope';
+import { IsoDateTimeSchema, LocalDateSchema, UuidSchema } from './common';
 
 export const ExerciseProgressParamsSchema = z.object({
   exerciseSlug: z.string().trim().min(1).max(128).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Invalid exercise slug.'),

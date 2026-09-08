@@ -22,14 +22,16 @@ This is the task that makes M1 earn the "RED" in its own title. Everything else 
 
 ### Files & Endpoints Touched
 - **Services / Handlers**: `tests/integration/api/sync.test.ts`, `tests/integration/api/sessions.test.ts`, `tests/integration/api/exercises.test.ts`, `tests/integration/api/progress.test.ts`, `tests/integration/api/import-legacy.test.ts` — one file per route group, covering all 9 endpoints from spec §4.3's table
+- **Auth coverage**: `tests/integration/api/auth.test.ts` covers `POST /auth/signout`; existing M1-13 tests cover the already-implemented `GET /auth/confirm` callback validation and session exchange
+- **Test infrastructure**: `tests/integration/api/test-server.ts` provides a disposable Next HTTP server; `tests/integration/api/fixtures.ts` provides real Supabase cookie-backed sessions without request-provided user IDs or client-side token storage
 - No handler implementations — that's M2's job. These tests must fail with "route not found" / 404, not compile errors, proving the contracts (M1-15) are independently valid even though nothing serves them yet
 
 ### Non-Negotiable Invariants
-- [ ] Every test imports and validates against the M1-15 contracts — no test hand-rolls its own expected shape
-- [ ] Every mutating route's test includes an unauthenticated case (expect 401 via `requireUser()`, M1-12) and, where applicable, a cross-user case (expect the response to reflect only the authenticated user's data — this is a *behavioral* assertion for M2 to satisfy, correctly failing for now since no handler exists)
-- [ ] `POST /api/sync`'s test covers all four mutation `op` variants from M1-15, plus the 200-item batch cap and the idempotent-replay case (same `mutationId` twice → `applied` without re-executing, per spec §4.4)
-- [ ] `POST /api/import/legacy`'s test covers all three legacy key shapes from spec §4.5 (`pushWorkoutProgress`, `legsWorkoutProgress`, `pullDayProgress`) including the documented pull-day data-loss case (aggregate-only recovery)
-- [ ] Rate-limit assertions included where spec §4.3 specifies one (`/api/sync` 120/min/user, `/api/import/legacy` 5/hour/user) — as failing tests for now, real enforcement is M2
+- [x] Every test imports and validates against the M1-15 contracts — no test hand-rolls its own expected shape
+- [x] Every mutating route's test includes an unauthenticated case (expect 401 via `requireUser()`, M1-12) and, where applicable, a cross-user/foreign-resource case (expect the response to reflect only the authenticated user's data — this is a behavioral assertion for M2 to satisfy, correctly failing for now since no handler exists)
+- [x] `POST /api/sync`'s test covers all four mutation `op` variants from M1-15, plus the 200-item batch cap and the idempotent-replay case (same `mutationId` twice → `applied` without re-executing, per spec §4.4)
+- [x] `POST /api/import/legacy`'s test covers all three legacy key shapes from spec §4.5 (`pushWorkoutProgress`, `legsWorkoutProgress`, `pullDayProgress`) including the documented pull-day data-loss case (aggregate-only recovery)
+- [x] Rate-limit assertions included where spec §4.3 specifies one (`/api/sync` 120/min/user, `/api/import/legacy` 5/hour/user) — as failing tests for now, real enforcement is M2
 
 ### Out of Scope
 - Any handler implementation (M2)
@@ -39,13 +41,13 @@ This is the task that makes M1 earn the "RED" in its own title. Everything else 
 ---
 
 ## Implementation Tasks
-- [ ] 1. Write `tests/integration/api/sync.test.ts`: all 4 `op` variants, batch cap, idempotent replay, unauthenticated case, rate limit
-- [ ] 2. Write `tests/integration/api/sessions.test.ts`: `GET /api/sessions` pagination, `POST /api/sessions` idempotent-on-`clientId` (returns existing active session), `GET /api/sessions/:id` with `?since=`
-- [ ] 3. Write `tests/integration/api/exercises.test.ts`: `GET /api/exercises` cacheable response (`s-maxage=3600` header expectation), returns seeded data once M1-09 lands
-- [ ] 4. Write `tests/integration/api/progress.test.ts`: `GET /api/progress/:exerciseSlug` shape
-- [ ] 5. Write `tests/integration/api/import-legacy.test.ts`: all three legacy key shapes, idempotency on `source_fingerprint`, partial-failure tolerance
-- [ ] 6. Run the full suite and confirm every test fails with "route not found," not a contract/type error — a contract error would mean M1-15 has a bug that needs fixing *now*, not deferred to M2
-- [ ] 7. Record the RED baseline (e.g., `npx vitest run tests/integration/api/ 2>&1 | tee docs/tasks/m1-red-baseline.txt`) so M2's "all M1 tests go green" claim is checkable against a concrete artifact
+- [x] 1. Write `tests/integration/api/sync.test.ts`: all 4 `op` variants, batch cap, idempotent replay, unauthenticated case, rate limit
+- [x] 2. Write `tests/integration/api/sessions.test.ts`: `GET /api/sessions` pagination, `POST /api/sessions` idempotent-on-`clientId` (returns existing active session), `GET /api/sessions/:id` with `?since=`
+- [x] 3. Write `tests/integration/api/exercises.test.ts`: `GET /api/exercises` cacheable response (`s-maxage=3600` header expectation), returns seeded data once M1-09 lands
+- [x] 4. Write `tests/integration/api/progress.test.ts`: `GET /api/progress/:exerciseSlug` shape and traversal validation
+- [x] 5. Write `tests/integration/api/import-legacy.test.ts`: all three legacy key shapes, idempotency on `source_fingerprint`, partial-failure tolerance
+- [x] 6. Run the API integration suite and confirm the missing-handler assertions fail with 404/not-found responses, not a contract/type error — a contract error would mean M1-15 has a bug that needs fixing now, not deferred to M2
+- [x] 7. Record the RED baseline in `docs/tasks/m1-red-baseline.txt` so M2's "all M1 tests go green" claim is checkable against a concrete artifact
 
 ---
 
@@ -73,7 +75,19 @@ This is the task that makes M1 earn the "RED" in its own title. Everything else 
 
 ---
 
+## Completion Notes (2026-09-08)
+
+- Branch: `test/m1-16-route-handler-red`.
+- Added the HTTP harness, real SSR-cookie Supabase fixtures, and endpoint suites for sync, sessions, exercises, progress, legacy import, and signout. No API route handlers were added.
+- The existing `/auth/confirm` handler's malformed-input check passes through the new HTTP harness; the two signout tests fail at the missing-handler boundary. The deeper M1-13 callback coverage remains in `tests/integration/auth-confirm.test.ts`.
+- Fixed a merged M1-15 Next/Turbopack compatibility issue by using extensionless relative imports in `lib/auth/magic-link.ts` and the `lib/contracts/` graph. This was required to ensure the existing callback route did not fail with a module-resolution error before the RED assertions ran.
+- Fixed the test server's process-group cleanup and extended the sync rate-limit test timeout so the baseline contains no leaked-server, port-collision, or default-timeout failures. The Supabase anon-key fallback matches the well-known local CI key.
+- Baseline: `docs/tasks/m1-red-baseline.txt` records `22 failed | 1 passed (23)` across 6 files. All 22 failures are HTTP 404 responses from missing M2 routes; the one passing test targets the already-existing M1-13 callback handler.
+- Validation passed: `npm run typecheck`; `npx eslint lib/auth/magic-link.ts lib/contracts tests/integration/api`; language diagnostics for changed TypeScript files were empty.
+
+---
+
 ## Automated Verification Command
 ```bash
-npx vitest run tests/integration/api/  # expect: all fail with 404/not-found, zero contract errors
+npx vitest run tests/integration/api/  # expect missing M2 handlers to fail at 404/not-found, zero contract errors
 ```

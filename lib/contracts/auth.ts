@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createAppEnvelopeSchema } from './envelope.js';
+import { createAppEnvelopeSchema } from './envelope';
 
 /** Public email-only sign-in request. */
 export const SignInRequestSchema = z.object({

@@ -355,9 +355,9 @@ export async function seedExercises(connectionString = process.env.MIGRATION_DAT
       const result = await client.query<{ id: string }>(
         `INSERT INTO exercises (
            slug, name, muscle_groups, equipment, form_tips, beginner_notes,
-           video_url, alternatives, owner_user_id
+           video_url, alternatives, kind, duration_seconds, owner_user_id
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NULL)
          ON CONFLICT (slug) DO UPDATE
            SET name = EXCLUDED.name,
                muscle_groups = EXCLUDED.muscle_groups,
@@ -365,7 +365,9 @@ export async function seedExercises(connectionString = process.env.MIGRATION_DAT
                form_tips = EXCLUDED.form_tips,
                beginner_notes = EXCLUDED.beginner_notes,
                video_url = EXCLUDED.video_url,
-               alternatives = EXCLUDED.alternatives
+               alternatives = EXCLUDED.alternatives,
+               kind = EXCLUDED.kind,
+               duration_seconds = EXCLUDED.duration_seconds
            WHERE exercises.owner_user_id IS NULL
          RETURNING id`,
         [
@@ -377,6 +379,8 @@ export async function seedExercises(connectionString = process.env.MIGRATION_DAT
           exercise.beginnerNotes,
           exercise.videoUrl,
           exercise.alternatives,
+          'strength',
+          null,
         ],
       );
 
@@ -392,7 +396,7 @@ export async function seedExercises(connectionString = process.env.MIGRATION_DAT
     // such as the dual-day stretches planned for M1-10.
     const expectedPlacementByExerciseId = new Map<
       string,
-      { routineDayId: string; orderIndex: number }
+      { routineDayId: string; phase: 'main_workout'; orderIndex: number }
     >();
     for (const exercise of exerciseSeedRows) {
       const routineDayId = routineIds.get(exercise.routineSlug);
@@ -402,6 +406,7 @@ export async function seedExercises(connectionString = process.env.MIGRATION_DAT
       }
       expectedPlacementByExerciseId.set(exerciseId, {
         routineDayId,
+        phase: 'main_workout',
         orderIndex: exercise.orderIndex,
       });
     }
@@ -410,9 +415,10 @@ export async function seedExercises(connectionString = process.env.MIGRATION_DAT
       id: string;
       exercise_id: string;
       routine_day_id: string;
+      phase: 'main_workout' | 'stretch';
       order_index: number;
     }>(
-      `SELECT id, exercise_id, routine_day_id, order_index
+      `SELECT id, exercise_id, routine_day_id, phase, order_index
        FROM routine_exercises
        WHERE exercise_id = ANY($1::uuid[])`,
       [[...expectedPlacementByExerciseId.keys()]],
@@ -422,6 +428,7 @@ export async function seedExercises(connectionString = process.env.MIGRATION_DAT
         const expected = expectedPlacementByExerciseId.get(association.exercise_id);
         return expected !== undefined && (
           association.routine_day_id !== expected.routineDayId ||
+          association.phase !== expected.phase ||
           association.order_index !== expected.orderIndex
         );
       })
@@ -441,18 +448,20 @@ export async function seedExercises(connectionString = process.env.MIGRATION_DAT
         throw new Error(`Missing seed key for ${exercise.routineSlug}/${exercise.slug}`);
       }
 
-      await client.query(
+      const associationResult = await client.query<{ id: string }>(
         `INSERT INTO routine_exercises (
-           routine_day_id, exercise_id, order_index, target_sets, target_reps,
+           routine_day_id, exercise_id, phase, order_index, target_sets, target_reps,
            target_reps_range, rest_time
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
-         ON CONFLICT (routine_day_id, order_index) DO UPDATE
+         VALUES ($1, $2, 'main_workout', $3, $4, $5, $6, $7)
+         ON CONFLICT (routine_day_id, phase, order_index) DO UPDATE
            SET exercise_id = EXCLUDED.exercise_id,
                target_sets = EXCLUDED.target_sets,
                target_reps = EXCLUDED.target_reps,
                target_reps_range = EXCLUDED.target_reps_range,
-               rest_time = EXCLUDED.rest_time`,
+               rest_time = EXCLUDED.rest_time
+           WHERE routine_exercises.exercise_id = EXCLUDED.exercise_id
+         RETURNING id`,
         [
           routineDayId,
           exerciseId,
@@ -463,6 +472,9 @@ export async function seedExercises(connectionString = process.env.MIGRATION_DAT
           exercise.restTime,
         ],
       );
+      if (associationResult.rows.length !== 1) {
+        throw new Error(`Cannot seed strength placement ${exercise.slug}: slot is occupied by other system content`);
+      }
     }
 
     await client.query('COMMIT');

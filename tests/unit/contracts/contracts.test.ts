@@ -133,6 +133,17 @@ describe('sync contracts', () => {
     expect(SyncMutationSchema.safeParse({ ...setMutation, op: 'unknown' }).success).toBe(false);
   });
 
+  it('rejects mixed-session batches before they reach the repository', () => {
+    expect(SyncRequestSchema.safeParse({
+      deviceId: ids.device,
+      sinceSeq: 0,
+      mutations: [
+        setMutation,
+        { ...setMutation, mutationId: ids.device, sessionId: ids.device },
+      ],
+    }).success).toBe(false);
+  });
+
   it('caps sync batches at 200 mutations and uses the response envelope', () => {
     const request = { deviceId: ids.device, sinceSeq: 0, mutations: Array.from({ length: 201 }, () => setMutation) };
     expect(SyncRequestSchema.safeParse(request).success).toBe(false);

@@ -60,7 +60,16 @@ export const SyncRequestSchema = z.object({
   deviceId: UuidSchema,
   sinceSeq: NonNegativeIntegerSchema,
   mutations: z.array(SyncMutationSchema).max(200),
-}).strict();
+}).strict().superRefine((request, context) => {
+  const sessionIds = new Set(request.mutations.map((mutation) => mutation.sessionId));
+  if (sessionIds.size > 1) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['mutations'],
+      message: 'All mutations must target one session.',
+    });
+  }
+});
 
 export const SyncRejectionSchema = z.object({
   mutationId: UuidSchema,

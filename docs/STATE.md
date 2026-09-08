@@ -3,15 +3,15 @@
 ## 1. Executive Summary & Current Position
 
 - **Project Name**: PPL Fitness Tracker
-- **Current Milestone / Epic**: **M2: Core Domain Engine — M2-00 foundation, M2-01 sessions API, M2-02 SessionEngine, and M2-03 ProgressionEngine implemented; M2-04 next**
+- **Current Milestone / Epic**: **M2: Core Domain Engine — M2-00 foundation, M2-01 sessions API, M2-02 SessionEngine, M2-03 ProgressionEngine, and M2-04 transactional sync implemented; M2-05 importer next**
 - **Overall Status**: ACTIVE <!-- Options: ACTIVE | PAUSED | STABILIZING | RELEASE_CANDIDATE -->
 - **Target Release**: v1.0.0, no date committed
-- **Current Working Branch**: `feat/m2-03-progression-engine`, with M2-00 through M2-02 merged to `main` and M2-03 e1RM/PR materialization implemented and validated locally.
+- **Current Working Branch**: `feat/m2-04-sync-conflict-model`, with M2-00 through M2-03 merged to `main` and M2-04 sync transaction/conflict implementation complete, undergoing final validation before its issue-scoped PR.
 
 > **Do not pin the current `main` SHA in this field.** It was tried three times and went stale three times, because the merge commit that lands the correction advances `main` past the value being recorded. Describe the state, not the hash. Run `git log --oneline -1` if you need the exact commit.
 - **Last Updated**: 2026-09-08
 
-**Where things actually stand.** M1 schema, RLS, auth, contracts, exercise/stretch seeds, and the M1-16 RED route baseline are on `main`. M2-00 adds the runtime app-role Drizzle client, verified auth-to-RLS context, session domain mappers, and user-scoped repository; M2-01 adds the sessions API; M2-02 adds the pure lifecycle transition table, transaction-scoped set/task/phase/finish mutations, and rollback coverage; M2-03 adds pure Epley e1RM calculation and transaction-scoped personal-record recomputation with app-role ownership/rollback coverage. The legacy vanilla-JS app still runs unchanged alongside the target stack. Production email delivery remains intentionally deferred behind issue #16's provider and DNS decisions.
+**Where things actually stand.** M1 schema, RLS, auth, contracts, exercise/stretch seeds, and the M1-16 RED route baseline are on `main`. M2-00 adds the runtime app-role Drizzle client, verified auth-to-RLS context, session domain mappers, and user-scoped repository; M2-01 adds the sessions API; M2-02 adds the pure lifecycle transition table, transaction-scoped set/task/phase/finish mutations, and rollback coverage; M2-03 adds pure Epley e1RM calculation and transaction-scoped personal-record recomputation with app-role ownership/rollback coverage; M2-04 adds bounded transactional sync, replay-safe mutation metadata, per-session sequencing/change rows, deterministic clock/device conflict resolution, and the authenticated `/api/sync` adapter. The legacy vanilla-JS app still runs unchanged alongside the target stack. Production email delivery remains intentionally deferred behind issue #16's provider and DNS decisions.
 
 ---
 
@@ -22,7 +22,7 @@
 - [x] **Planning**: Spec written, six decisions resolved, ADRs recorded (Complete — 2026-09-08)
 - [x] **M0**: De-risk spike — RLS enforcement proven through Drizzle (Complete — 2026-09-08, **gate lifted**)
 - [/] **M1**: Contracts & Seams — code, contracts, seeds, RLS, auth, and RED baseline complete; production SMTP/delivery remains deferred under issue #16
-- [/] **M2**: Core Domain Engine — formal plan and GitHub issues #36–#42 filed; M2-00 foundation, M2-01 sessions API/fixtures, M2-02 SessionEngine, and M2-03 ProgressionEngine implemented and validated, with sync/import/hardening queued
+- [/] **M2**: Core Domain Engine — formal plan and GitHub issues #36–#42 filed; M2-00 through M2-04 implemented and validated, with import and route hardening queued
 - [ ] **M3**: Presentation — shadcn + tokens, session runner, offline outbox, WCAG audit (Queued)
 - [ ] **M4**: Hardening, telemetry, decommission the legacy static app (Queued)
 
@@ -70,7 +70,7 @@ estimated at ~20h plus external SMTP setup.
 
 **M1 exit criteria:** code/schema/RLS/auth/contracts and the route RED baseline are complete and merged. The production-release portion remains blocked by issue #16: custom SMTP, verified domain, SPF/DKIM, and real delivery monitoring.
 
-### M2 Checkpoint — M2-00 Foundation, M2-01 Sessions API, M2-02 SessionEngine & M2-03 ProgressionEngine
+### M2 Checkpoint — M2-00 Foundation, M2-01 Sessions API, M2-02 SessionEngine, M2-03 ProgressionEngine & M2-04 Sync
 
 Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with atomic task files under `docs/tasks/m2/`. Filed under GitHub milestone `M2: Core Domain Engine` as issues **#36–#42**; these are the canonical tracking numbers:
 
@@ -78,7 +78,7 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
 - [x] `#37` `M2-01`: deterministic API fixtures and `/api/sessions` route handlers wired to the repository — implemented and validated with 12 focused API integration tests plus five route-error unit assertions using owner-seeded data, tenant-qualified app-role RLS, authentication/validation errors, idempotent starts, pagination, mapped child state, and cross-user isolation.
 - [x] `#38` `M2-02`: `SessionEngine` lifecycle, phase gates, set/task mutations, terminal-state protection, and rollback-safe repository transactions — implemented and validated with pure transition tests plus app-role repository integration coverage; true sequence/device sync remains deferred to #39.
 - [x] `#41` `M2-03`: `ProgressionEngine` Epley e1RM calculations and personal-record materialization — implemented with nullable/zero policy, edit-down recomputation, deterministic ties, app-role isolation, natural-key race handling, and rollback coverage; no schema migration or progress route introduced.
-- [ ] `#39` `M2-04`: server-side sync transaction, mutation idempotency, sequence design, LWW/device metadata, and conflict handling.
+- [x] `#39` `M2-04`: server-side sync transaction, mutation idempotency, per-session sequence/change model, deterministic clock/device conflict handling, and authenticated `/api/sync` — implementation complete on `feat/m2-04-sync-conflict-model`; final validation and issue-scoped PR are next. Rate limiting remains explicitly deferred to #42 and true `since` deltas remain deferred until a later response contract.
 - [ ] `#40` `M2-05`: `LegacyImporter` parsing, fingerprint idempotency, archive flow, and import report.
 - [ ] `#42` `M2-06`: all M1 route-handler tests green, performance/security gates, and M2 integration hardening.
 
@@ -121,8 +121,8 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
 
 - **Target Workspace / Package**: N/A (standalone repo)
 - **Active RFC / Spec**: `docs/specs/2026-09-08-spec-fullstack-migration.md`
-- **Active Task Spec**: `docs/specs/2026-09-08-m2-core-domain-engine.md`, with atomic task files in `docs/tasks/m2/` and GitHub issues #36–#42. The formal plan, issue breakdown, M2-00 foundation, M2-01 sessions API, and M2-02 SessionEngine gate are complete; M2-03 is the next implementation gate.
-- **Key Source Files in Flight**: M2-00 runtime/auth/domain/repository files are merged to `main`. M2-01 provides `src/app/api/sessions/`, deterministic API fixtures, shared route error translation, and route integration coverage; M2-02 adds `lib/domain/sessions/session-engine.ts`, its pure transition table, and transaction-scoped repository mutations.
+- **Active Task Spec**: `docs/specs/2026-09-08-m2-core-domain-engine.md`, with atomic task files in `docs/tasks/m2/` and GitHub issues #36–#42. The formal plan, issue breakdown, M2-00 foundation, M2-01 sessions API, M2-02 SessionEngine, and M2-03 ProgressionEngine gates are complete; M2-04 is in final validation before its PR.
+- **Key Source Files in Flight**: M2-00 runtime/auth/domain/repository files are merged to `main`; M2-04 adds the sync reducer, additive migration, and `/api/sync` contract and is in final validation; M2-05 importer work follows the M2-04 merge.
 - **Spike sandbox — throwaway, delete once M1's integration suite covers the same ground**:
   - `spikes/m0-drizzle-rls/sql/001-setup.sql` — role, tables, 8 policies, `handle_new_user`. Comments record the measured surprises. **Creates `unprotected_future_table` on purpose**; do not copy it.
   - `spikes/m0-drizzle-rls/src/db.ts` — `withUserHardened()` is the version M1 must adopt. `withUserLeaky()` is a negative control, never to be imported.
@@ -201,8 +201,8 @@ Actions taken: `nvm install --lts` → v24.20.0, set as nvm default (additive; `
 - **Pull-day legacy set data is unrecoverable.** `saveProgress()` keyed checkbox state by `checkbox.id`, and the generated set checkboxes never had one, so all 17 collapsed into a single `"undefined"` key. Only aggregate counts survive the import. Accepted and documented in spec §4.5.
 - **Drizzle migration metadata is incomplete.** `supabase/migrations/meta/_journal.json` currently omits SQL migrations `0004` and `0005`; reconcile the journal/snapshot before relying on future generated migrations or drift checks.
 - **Auth/profile deletion is not physically cascaded.** `profiles.id` has no foreign key to `auth.users.id`, so Auth-user deletion does not automatically remove the profile row. Keep explicit cleanup in fixtures/import flows and evaluate a migration before production hardening.
-- **Sync conflict metadata is not modeled yet.** Session delta/change-log sequencing, persisted `deviceId`, and deterministic LWW tie-breaking are absent from the current schema. True `since` deltas and device-aware conflict resolution remain deferred until that model is designed and tested.
-- **`server_seq` remains a schema decision.** The current sequence representation has not been revisited for high-volume/bigint behavior; settle it as part of the formal M2 sync design rather than encoding assumptions in the route layer.
+- **Sync conflict metadata is implemented in M2-04.** The additive migration now persists per-session sequences, mutation hashes/status, entity versions, and change rows with relationship-aware RLS. Legacy set/task rows use their stored client timestamp and zero UUID baseline until they receive sync metadata; true deltas remain deferred by contract.
+- **`server_seq` is settled for M2-04.** It remains an integer per-session sequence, protected by the locked session row and unique change-log key; revisit width only with a future contract/volume requirement.
 - ~~**Per-request transaction cost of ADR-0003 is unmeasured.**~~ **Measured 2026-09-08.** `withUser()` costs **+1.29 ms p50 / +1.87 ms p95** over an app-scoped autocommit `SELECT` on a direct connection, **+1.98 ms p50 / +2.35 ms p95** through supavisor in transaction mode. Four round trips instead of one, so it scales with RTT and will be worse from a region distant from the database. Affordable against the spec §2 SLA. *What remains open is narrower: pool exhaustion under sustained load. The spike reached 40 interleaved concurrent transactions on one container, which is not a load test. Still an M4 item.*
 - **M0 findings are from the local stack, not a hosted project.** Roles and `auth.uid()` came from the stock Supabase image so behaviour should match, but two findings (the silently-discarded `GRANT` on `auth`, and the refusal to `ALTER` role attributes) are mediated by `supautils` and could differ on a hosted plan. Re-assert both during M1 against a real project.
 - **The magic-link flow is still unproven.** M0 used the password grant to obtain real JWTs cheaply. The `sub` claim is identical either way, so the RLS conclusion is unaffected, but no part of the actual sign-in path has been exercised.
@@ -224,9 +224,9 @@ Actions taken: `nvm install --lts` → v24.20.0, set as nvm default (additive; `
 
 ## 7. Next Immediate Actions (Queued)
 
-1. **Implement `#39`/M2-04.** Design and build the bounded server-side sync transaction, mutation idempotency, sequence model, device metadata, and deterministic conflict handling on the frozen SessionEngine/ProgressionEngine seams; keep route hardening in #42.
-2. **Continue the dependency sequence `#39` → `#40` → `#42`.** Preserve the frozen SessionEngine/ProgressionEngine write/archive interfaces and close each task's acceptance criteria before consuming its interface downstream.
-3. **Keep schema-risk work explicit.** Reconcile the Drizzle migration journal mismatch before generated migrations; use Expand-Contract for any sync/device/change-log schema; retain the missing Auth/profile FK as a tracked hardening risk.
+1. **Finish `#39`/M2-04 delivery.** Run the final non-API regression and review gates, create the atomic commit, push `feat/m2-04-sync-conflict-model`, and open the issue-scoped PR with `Closes #39`.
+2. **Wait for merge confirmation before `#40`/M2-05.** Preserve the finalized sync interfaces and do not begin importer work on this branch.
+3. **Keep schema-risk work explicit.** Reconcile the Drizzle migration journal mismatch before generated migrations; retain the missing Auth/profile FK as a tracked hardening risk.
 4. **Keep issue #16 deferred.** Custom SMTP/provider/DNS remains the separate M1 production-release blocker and must not block M2 coding or be described as complete.
 5. **Preserve the M3 boundary.** Do not delete legacy source folders or begin UI/design-system implementation until M2-06 closes the backend/API hardening gate.
 
@@ -258,3 +258,4 @@ Actions taken: `nvm install --lts` → v24.20.0, set as nvm default (additive; `
 | 2026-09-08 | Owner + Kiro | `M2-01` sessions API | Implemented `GET/POST /api/sessions` and `GET /api/sessions/:id` through verified Supabase auth, explicit user-scoped `WorkoutRepository`, `DATABASE_URL`, and RLS; added shared AppError/Zod/conflict/not-found translation; added deterministic owner/cross-user fixtures through `MIGRATION_DATABASE_URL`; and expanded the API suite to 12 passing tests plus five route-error unit assertions covering list isolation, cursor validation, idempotent starts, malformed input, unauthenticated reads, full-state `since` compatibility, and cross-user 404. True sync deltas remain deferred to M2-04; issue #16 remains deferred.
 | 2026-09-08 | Owner + Kiro | `M2-02` SessionEngine | Implemented the pure lifecycle transition table (`pre_workout → exercise ↔ rest → stretch → post_workout`), warm-up/main-set/stretch gates, typed lifecycle errors, user-scoped transaction mutation context, set/task upserts, phase advancement, completion, terminal protection, and forced rollback coverage. No schema, sync, device, PR, route, UI, SMTP, or legacy changes; true sequence/device semantics remain deferred to M2-04. |
 | 2026-09-08 | Owner + Kiro | `M2-03` ProgressionEngine | Implemented pure Epley e1RM calculation with two-decimal rounding, nullable/zero/incomplete policy, numeric storage bounds, transaction-scoped personal-record recomputation, deterministic ties, insert-if-absent race handling, edit-down recomputation, app-role ownership isolation, and set/PR rollback coverage. No schema, route, sync, device, UI, SMTP, or legacy changes; M2-04 remains next. |
+| 2026-09-08 | `M2-04` sync review + validation | Closed semantic-review gaps: terminal replay now locks readable terminal sessions, mixed-session batches fail at the Zod boundary, foreign mutation-ID collisions use a generic rejection, legacy set fallback is regression-tested, ordering uses explicit lowercase lexical comparison, and sync metadata RLS validates owned sessions and mutation rows. Targeted typecheck, lint, unit, repository, HTTP, RLS, and schema-drift gates are green; final non-API regression and PR delivery remain. |

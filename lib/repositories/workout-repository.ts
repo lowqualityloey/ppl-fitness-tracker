@@ -1,8 +1,19 @@
-import { and, asc, desc, eq, lt, or } from 'drizzle-orm';
+import { and, asc, desc, eq, lt, or, sql } from 'drizzle-orm';
 import * as schema from '../../db/schema/index';
 import { assertUserContext } from '../db/auth-context';
 import { withUser } from '../db/with-user';
 import type { Db, Tx, JwtClaims } from '../db/with-user';
+import type { SyncMutation, SyncRequest } from '../contracts/sync';
+import { SyncEngine, ZERO_UUID } from '../domain/sync/sync-engine';
+import type {
+  SyncEntityType,
+  SyncEntityVersion,
+  SyncMutationRecord,
+  SyncReservation,
+  SyncStore,
+  SyncApplyResult,
+} from '../domain/sync/types';
+import { SyncValidationError } from '../domain/sync/types';
 import { ProgressionEngine } from '../domain/progression/progression-engine';
 import type {
   PersonalRecordValue,
@@ -46,6 +57,9 @@ const {
   routineExercises,
   sessionSets,
   sessionTasks,
+  syncChanges,
+  syncEntityVersions,
+  syncMutations,
   workoutSessions,
 } = schema;
 
@@ -66,6 +80,31 @@ type PlanRow = {
   placement: typeof routineExercises.$inferSelect;
   exercise: typeof exercises.$inferSelect;
 };
+
+type MutableState = { current: SessionState };
+
+function asSyncMutationRecord(row: typeof syncMutations.$inferSelect): SyncMutationRecord {
+  const status = row.status === 'processing' || row.status === 'applied' || row.status === 'rejected'
+    ? row.status
+    : null;
+  return {
+    mutationId: row.mutationId,
+    payloadHash: row.payloadHash,
+    status,
+    serverSeq: row.serverSeq,
+    rejectionReason: row.rejectionReason,
+  };
+}
+
+function parseSetEntityKey(entityKey: string): { exerciseId: string; setIndex: number } | null {
+  const match = /^set:([^:]+):(\d+)$/.exec(entityKey);
+  if (!match) return null;
+  return { exerciseId: match[1]!, setIndex: Number(match[2]) };
+}
+
+function parseTaskEntityKey(entityKey: string): string | null {
+  return entityKey.startsWith('task:') ? entityKey.slice('task:'.length) : null;
+}
 
 function isValidLocalDate(value: string): boolean {
   const match = LOCAL_DATE_PATTERN.exec(value);
@@ -267,30 +306,15 @@ export class WorkoutRepository {
     });
   }
 
-  async mutateSession(
-    userId: string,
-    sessionId: string,
-    operation: SessionMutation,
-  ): Promise<SessionState> {
+  async applySync(userId: string, request: SyncRequest): Promise<SyncApplyResult> {
+    if (request.mutations.length === 0) {
+      throw new SyncValidationError('At least one mutation is required.');
+    }
     return this.forUser(userId, async (tx) => {
-      const [session] = await tx
-        .select()
-        .from(workoutSessions)
-        .where(and(
-          eq(workoutSessions.id, sessionId),
-          eq(workoutSessions.userId, userId),
-        ))
-        .for('update')
-        .limit(1);
-
-      if (!session) {
-        throw new SessionNotFoundError('Session not found.');
-      }
-      if (session.status !== 'in_progress') {
-        throw new SessionConflictError('Only in-progress sessions can be mutated.');
-      }
-
-      let currentState = await this.mapSessionInTx(tx, session);
+      // Replays must be readable after a session reaches a terminal state. New
+      // mutations still go through the lifecycle assertions in the context.
+      const session = await this.lockSession(tx, userId, request.mutations[0]?.sessionId);
+      const state: MutableState = { current: await this.mapSessionInTx(tx, session) };
       const refreshState = async (): Promise<void> => {
         const [updated] = await tx
           .select()
@@ -300,94 +324,396 @@ export class WorkoutRepository {
             eq(workoutSessions.userId, userId),
           ))
           .limit(1);
-        if (!updated) {
-          throw new SessionNotFoundError('Session disappeared during mutation.');
-        }
-        currentState = await this.mapSessionInTx(tx, updated);
+        if (!updated) throw new SessionNotFoundError('Session disappeared during sync.');
+        state.current = await this.mapSessionInTx(tx, updated);
       };
-      const progression = new ProgressionEngine(this.progressionStore(tx, session.userId));
+      const context = this.createMutationContext(tx, session, state, refreshState);
+      const receivedAt = new Date();
+      const store = this.syncStore(
+        tx,
+        userId,
+        session,
+        context,
+        state,
+        refreshState,
+        request.deviceId,
+        receivedAt,
+      );
+      return new SyncEngine(store).apply(request);
+    });
+  }
 
-      const context: SessionMutationContext = {
-        get state(): SessionState {
-          return currentState;
-        },
-        upsertSet: async (input: Omit<SessionSetMutation, 'sessionId'>): Promise<void> => {
-          assertSetMutationAllowed(currentState, { ...input, sessionId: session.id });
-          await tx
-            .insert(sessionSets)
-            .values({
-              userId: session.userId,
-              sessionId: session.id,
-              exerciseId: input.exerciseId,
-              setIndex: input.setIndex,
+  async mutateSession(
+    userId: string,
+    sessionId: string,
+    operation: SessionMutation,
+  ): Promise<SessionState> {
+    return this.forUser(userId, async (tx) => {
+      const session = await this.lockMutableSession(tx, userId, sessionId);
+      const state: MutableState = { current: await this.mapSessionInTx(tx, session) };
+      const refreshState = async (): Promise<void> => {
+        const [updated] = await tx
+          .select()
+          .from(workoutSessions)
+          .where(and(
+            eq(workoutSessions.id, session.id),
+            eq(workoutSessions.userId, userId),
+          ))
+          .limit(1);
+        if (!updated) throw new SessionNotFoundError('Session disappeared during mutation.');
+        state.current = await this.mapSessionInTx(tx, updated);
+      };
+
+      await operation(this.createMutationContext(tx, session, state, refreshState));
+      return state.current;
+    });
+  }
+
+  private async lockSession(
+    tx: Tx,
+    userId: string,
+    sessionId: string | undefined,
+  ): Promise<typeof workoutSessions.$inferSelect> {
+    if (!sessionId) throw new SessionNotFoundError('Session not found.');
+    const [session] = await tx
+      .select()
+      .from(workoutSessions)
+      .where(and(
+        eq(workoutSessions.id, sessionId),
+        eq(workoutSessions.userId, userId),
+      ))
+      .for('update')
+      .limit(1);
+
+    if (!session) throw new SessionNotFoundError('Session not found.');
+    return session;
+  }
+
+  private async lockMutableSession(
+    tx: Tx,
+    userId: string,
+    sessionId: string | undefined,
+  ): Promise<typeof workoutSessions.$inferSelect> {
+    const session = await this.lockSession(tx, userId, sessionId);
+    if (session.status !== 'in_progress') {
+      throw new SessionConflictError('Only in-progress sessions can be mutated.');
+    }
+    return session;
+  }
+
+  private createMutationContext(
+    tx: Tx,
+    session: typeof workoutSessions.$inferSelect,
+    state: MutableState,
+    refreshState: () => Promise<void>,
+  ): SessionMutationContext {
+    const progression = new ProgressionEngine(this.progressionStore(tx, session.userId));
+    return {
+      get state(): SessionState {
+        return state.current;
+      },
+      upsertSet: async (input: Omit<SessionSetMutation, 'sessionId'>): Promise<void> => {
+        assertSetMutationAllowed(state.current, { ...input, sessionId: session.id });
+        await tx
+          .insert(sessionSets)
+          .values({
+            userId: session.userId,
+            sessionId: session.id,
+            exerciseId: input.exerciseId,
+            setIndex: input.setIndex,
+            isCompleted: input.isCompleted,
+            weightKg: input.weightKg === null ? null : input.weightKg.toFixed(2),
+            reps: input.reps,
+            clientTs: input.clientTs,
+            updatedAt: new Date(),
+          })
+          .onConflictDoUpdate({
+            target: [sessionSets.sessionId, sessionSets.exerciseId, sessionSets.setIndex],
+            set: {
               isCompleted: input.isCompleted,
               weightKg: input.weightKg === null ? null : input.weightKg.toFixed(2),
               reps: input.reps,
               clientTs: input.clientTs,
               updatedAt: new Date(),
-            })
-            .onConflictDoUpdate({
-              target: [sessionSets.sessionId, sessionSets.exerciseId, sessionSets.setIndex],
-              set: {
-                isCompleted: input.isCompleted,
-                weightKg: input.weightKg === null ? null : input.weightKg.toFixed(2),
-                reps: input.reps,
-                clientTs: input.clientTs,
-                updatedAt: new Date(),
-              },
-            });
-          await progression.materializePersonalRecord(input.exerciseId);
-          await refreshState();
-        },
-        completeTask: async (input: Omit<SessionTaskMutation, 'sessionId'>): Promise<void> => {
-          assertTaskMutationAllowed(currentState, { ...input, sessionId: session.id });
-          await tx
-            .insert(sessionTasks)
-            .values({
-              sessionId: session.id,
-              taskKey: input.taskKey,
+            },
+          });
+        await progression.materializePersonalRecord(input.exerciseId);
+        await refreshState();
+      },
+      completeTask: async (input: Omit<SessionTaskMutation, 'sessionId'>): Promise<void> => {
+        assertTaskMutationAllowed(state.current, { ...input, sessionId: session.id });
+        await tx
+          .insert(sessionTasks)
+          .values({
+            sessionId: session.id,
+            taskKey: input.taskKey,
+            completedAt: input.completedAt,
+            clientTs: input.clientTs,
+            updatedAt: new Date(),
+          })
+          .onConflictDoUpdate({
+            target: [sessionTasks.sessionId, sessionTasks.taskKey],
+            set: {
               completedAt: input.completedAt,
               clientTs: input.clientTs,
               updatedAt: new Date(),
-            })
-            .onConflictDoUpdate({
-              target: [sessionTasks.sessionId, sessionTasks.taskKey],
-              set: {
-                completedAt: input.completedAt,
-                clientTs: input.clientTs,
-                updatedAt: new Date(),
-              },
-            });
-          await refreshState();
-        },
-        advancePhase: async (phase): Promise<void> => {
-          assertPhaseAdvance(currentState, phase);
-          await tx
-            .update(workoutSessions)
-            .set({ phase, updatedAt: new Date() })
-            .where(and(
-              eq(workoutSessions.id, session.id),
-              eq(workoutSessions.userId, session.userId),
-            ));
-          await refreshState();
-        },
-        finish: async (completedAt): Promise<void> => {
-          assertFinishAllowed(currentState);
-          assertCompletionTimestamp(completedAt);
-          await tx
-            .update(workoutSessions)
-            .set({ status: 'completed', completedAt, updatedAt: new Date() })
-            .where(and(
-              eq(workoutSessions.id, session.id),
-              eq(workoutSessions.userId, session.userId),
-            ));
-          await refreshState();
-        },
-      };
+            },
+          });
+        await refreshState();
+      },
+      advancePhase: async (phase): Promise<void> => {
+        assertPhaseAdvance(state.current, phase);
+        await tx
+          .update(workoutSessions)
+          .set({ phase, updatedAt: new Date() })
+          .where(and(
+            eq(workoutSessions.id, session.id),
+            eq(workoutSessions.userId, session.userId),
+          ));
+        await refreshState();
+      },
+      finish: async (completedAt): Promise<void> => {
+        assertFinishAllowed(state.current);
+        assertCompletionTimestamp(completedAt);
+        await tx
+          .update(workoutSessions)
+          .set({ status: 'completed', completedAt, updatedAt: new Date() })
+          .where(and(
+            eq(workoutSessions.id, session.id),
+            eq(workoutSessions.userId, session.userId),
+          ));
+        await refreshState();
+      },
+    };
+  }
 
-      await operation(context);
-      return currentState;
-    });
+  private syncStore(
+    tx: Tx,
+    userId: string,
+    session: typeof workoutSessions.$inferSelect,
+    context: SessionMutationContext,
+    state: MutableState,
+    refreshState: () => Promise<void>,
+    deviceId: string,
+    receivedAt: Date,
+  ): SyncStore {
+    return {
+      sessionId: session.id,
+      deviceId,
+      receivedAt,
+      getState: async (): Promise<SessionState> => {
+        await refreshState();
+        return state.current;
+      },
+      reserveMutation: async (mutation: SyncMutation, payloadHash: string): Promise<SyncReservation> => {
+        const [existing] = await tx
+          .select()
+          .from(syncMutations)
+          .where(and(
+            eq(syncMutations.mutationId, mutation.mutationId),
+            eq(syncMutations.userId, userId),
+          ))
+          .limit(1);
+        if (existing) return { kind: 'existing', record: asSyncMutationRecord(existing) };
+
+        const [inserted] = await tx
+          .insert(syncMutations)
+          .values({
+            mutationId: mutation.mutationId,
+            userId,
+            sessionId: session.id,
+            deviceId,
+            operation: mutation.op,
+            payloadHash,
+            status: 'processing',
+            appliedAt: receivedAt,
+          })
+          .onConflictDoNothing()
+          .returning({ mutationId: syncMutations.mutationId });
+        if (inserted) return { kind: 'new' };
+
+        const [afterConflict] = await tx
+          .select()
+          .from(syncMutations)
+          .where(and(
+            eq(syncMutations.mutationId, mutation.mutationId),
+            eq(syncMutations.userId, userId),
+          ))
+          .limit(1);
+        return afterConflict
+          ? { kind: 'existing', record: asSyncMutationRecord(afterConflict) }
+          : { kind: 'foreign' };
+      },
+      findEntityVersion: async (entityType: SyncEntityType, entityKey: string): Promise<SyncEntityVersion | null> => {
+        const [version] = await tx
+          .select()
+          .from(syncEntityVersions)
+          .where(and(
+            eq(syncEntityVersions.userId, userId),
+            eq(syncEntityVersions.sessionId, session.id),
+            eq(syncEntityVersions.entityType, entityType),
+            eq(syncEntityVersions.entityKey, entityKey),
+          ))
+          .limit(1);
+        if (version) {
+          return {
+            entityType: version.entityType as SyncEntityType,
+            entityKey: version.entityKey,
+            clientTs: version.clientTs,
+            effectiveTs: version.effectiveTs,
+            deviceId: version.deviceId,
+            mutationId: version.mutationId,
+            serverSeq: version.serverSeq,
+          };
+        }
+
+        if (entityType === 'set') {
+          const parsed = parseSetEntityKey(entityKey);
+          if (!parsed) return null;
+          const [current] = await tx
+            .select()
+            .from(sessionSets)
+            .where(and(
+              eq(sessionSets.userId, userId),
+              eq(sessionSets.sessionId, session.id),
+              eq(sessionSets.exerciseId, parsed.exerciseId),
+              eq(sessionSets.setIndex, parsed.setIndex),
+            ))
+            .limit(1);
+          return current ? {
+            entityType,
+            entityKey,
+            clientTs: current.clientTs,
+            effectiveTs: current.clientTs,
+            deviceId: ZERO_UUID,
+            mutationId: ZERO_UUID,
+            serverSeq: 0,
+          } : null;
+        }
+
+        if (entityType === 'task') {
+          const taskKey = parseTaskEntityKey(entityKey);
+          if (!taskKey) return null;
+          const [current] = await tx
+            .select()
+            .from(sessionTasks)
+            .where(and(eq(sessionTasks.sessionId, session.id), eq(sessionTasks.taskKey, taskKey as 'warm_up' | 'main_workout' | 'stretch')))
+            .limit(1);
+          return current ? {
+            entityType,
+            entityKey,
+            clientTs: current.clientTs,
+            effectiveTs: current.clientTs,
+            deviceId: ZERO_UUID,
+            mutationId: ZERO_UUID,
+            serverSeq: 0,
+          } : null;
+        }
+
+        return {
+          entityType,
+          entityKey,
+          clientTs: new Date(0),
+          effectiveTs: new Date(0),
+          deviceId: ZERO_UUID,
+          mutationId: ZERO_UUID,
+          serverSeq: 0,
+        };
+      },
+      applyMutation: async (mutation: SyncMutation): Promise<void> => {
+        switch (mutation.op) {
+          case 'set.upsert':
+            await context.upsertSet({
+              exerciseId: mutation.exerciseId,
+              setIndex: mutation.setIndex,
+              isCompleted: mutation.isCompleted,
+              weightKg: mutation.weightKg,
+              reps: mutation.reps,
+              clientTs: new Date(mutation.clientTs),
+            });
+            return;
+          case 'task.complete':
+            await context.completeTask({
+              taskKey: mutation.taskKey,
+              completedAt: mutation.completedAt === null ? null : new Date(mutation.completedAt),
+              clientTs: new Date(mutation.clientTs),
+            });
+            return;
+          case 'phase.advance':
+            await context.advancePhase(mutation.phase);
+            return;
+          case 'session.finish':
+            await context.finish(mutation.completedAt ? new Date(mutation.completedAt) : receivedAt);
+            return;
+        }
+      },
+      allocateSequence: async (): Promise<number> => {
+        const [updated] = await tx
+          .update(workoutSessions)
+          .set({ serverSeq: sql`${workoutSessions.serverSeq} + 1`, updatedAt: new Date() })
+          .where(and(
+            eq(workoutSessions.id, session.id),
+            eq(workoutSessions.userId, userId),
+          ))
+          .returning({ serverSeq: workoutSessions.serverSeq });
+        if (!updated) throw new SessionNotFoundError('Session disappeared during sync.');
+        return updated.serverSeq;
+      },
+      upsertEntityVersion: async (version: SyncEntityVersion): Promise<void> => {
+        await tx
+          .insert(syncEntityVersions)
+          .values({
+            userId,
+            sessionId: session.id,
+            entityType: version.entityType,
+            entityKey: version.entityKey,
+            clientTs: version.clientTs,
+            effectiveTs: version.effectiveTs,
+            deviceId: version.deviceId,
+            mutationId: version.mutationId,
+            serverSeq: version.serverSeq,
+          })
+          .onConflictDoUpdate({
+            target: [syncEntityVersions.sessionId, syncEntityVersions.entityType, syncEntityVersions.entityKey],
+            set: {
+              clientTs: version.clientTs,
+              effectiveTs: version.effectiveTs,
+              deviceId: version.deviceId,
+              mutationId: version.mutationId,
+              serverSeq: version.serverSeq,
+            },
+          });
+      },
+      appendChange: async (input): Promise<void> => {
+        await tx.insert(syncChanges).values({
+          userId,
+          sessionId: session.id,
+          serverSeq: input.serverSeq,
+          mutationId: input.mutationId,
+          entityType: input.entityType,
+          entityKey: input.entityKey,
+          operation: input.operation,
+        });
+      },
+      markApplied: async (mutationId: string, serverSeq: number): Promise<void> => {
+        await tx
+          .update(syncMutations)
+          .set({ status: 'applied', serverSeq, rejectionReason: null })
+          .where(and(
+            eq(syncMutations.mutationId, mutationId),
+            eq(syncMutations.userId, userId),
+          ));
+      },
+      markRejected: async (mutationId: string, reason: string): Promise<void> => {
+        await tx
+          .update(syncMutations)
+          .set({ status: 'rejected', serverSeq: null, rejectionReason: reason })
+          .where(and(
+            eq(syncMutations.mutationId, mutationId),
+            eq(syncMutations.userId, userId),
+          ));
+      },
+    };
   }
 
   private progressionStore(tx: Tx, userId: string): ProgressionStore {

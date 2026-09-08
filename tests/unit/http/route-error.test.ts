@@ -7,8 +7,12 @@ import {
 } from '../../../lib/contracts/envelope.js';
 import {
   InvalidSessionCursorError,
+  SessionConflictError,
   SessionStartConflictError,
+  SessionValidationError,
+  type SessionState,
 } from '../../../lib/domain/sessions/types.js';
+import { assertPhaseAdvance } from '../../../lib/domain/sessions/transition-table.js';
 import { routeErrorResponse } from '../../../lib/http/route-error.js';
 
 async function expectTranslatedError(
@@ -28,6 +32,15 @@ async function expectTranslatedError(
   return body;
 }
 
+function captureError(action: () => void): unknown {
+  try {
+    action();
+  } catch (error) {
+    return error;
+  }
+  throw new Error('Expected action to throw.');
+}
+
 describe('route error translation', () => {
   it('maps AppErrorException to its canonical envelope', async () => {
     await expectTranslatedError(new AppErrorException(forbiddenError()), 403, 'FORBIDDEN');
@@ -36,6 +49,30 @@ describe('route error translation', () => {
   it('maps Zod errors and invalid cursors to validation envelopes', async () => {
     await expectTranslatedError(new z.ZodError([]), 400, 'VALIDATION_ERROR');
     await expectTranslatedError(new InvalidSessionCursorError('invalid cursor'), 400, 'VALIDATION_ERROR');
+    await expectTranslatedError(new SessionValidationError('invalid lifecycle input'), 400, 'VALIDATION_ERROR');
+  });
+
+  it('maps concrete illegal edges to 400 and incomplete gates to 409', async () => {
+    const state = {
+      status: 'in_progress',
+      phase: 'pre_workout',
+      tasks: [],
+    } as unknown as SessionState;
+
+    await expectTranslatedError(
+      captureError(() => assertPhaseAdvance(state, 'stretch')),
+      400,
+      'VALIDATION_ERROR',
+    );
+    await expectTranslatedError(
+      captureError(() => assertPhaseAdvance(state, 'exercise')),
+      409,
+      'CONFLICT',
+    );
+  });
+
+  it('maps generic lifecycle conflicts to the canonical conflict envelope', async () => {
+    await expectTranslatedError(new SessionConflictError('phase gate'), 409, 'CONFLICT');
   });
 
   it('maps unresolved session start conflicts without exposing database details', async () => {

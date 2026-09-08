@@ -12,7 +12,10 @@ import {
 } from '../contracts/envelope';
 import {
   InvalidSessionCursorError,
+  SessionConflictError,
+  SessionNotFoundError,
   SessionStartConflictError,
+  SessionValidationError,
 } from '../domain/sessions/types';
 
 export function appErrorResponse(error: AppError): NextResponse<AppEnvelope<never>> {
@@ -24,15 +27,19 @@ export function routeErrorResponse(error: unknown): NextResponse<AppEnvelope<nev
     return appErrorResponse(error.appError);
   }
 
-  if (error instanceof ZodError || error instanceof InvalidSessionCursorError) {
+  if (
+    error instanceof ZodError ||
+    error instanceof InvalidSessionCursorError ||
+    error instanceof SessionValidationError
+  ) {
     return appErrorResponse(validationError());
   }
 
-  if (error instanceof SessionStartConflictError) {
+  if (error instanceof SessionStartConflictError || error instanceof SessionConflictError) {
     return appErrorResponse(conflictError());
   }
 
-  if (error instanceof Error && error.name === 'SessionNotFoundError') {
+  if (error instanceof SessionNotFoundError || (error instanceof Error && error.name === 'SessionNotFoundError')) {
     return appErrorResponse(notFoundError());
   }
 

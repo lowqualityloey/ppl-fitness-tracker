@@ -3,7 +3,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Client } from 'pg';
 import { createDb, type DbHandle } from '../../../lib/db/client.js';
 import type { JwtClaims } from '../../../lib/db/with-user.js';
-import { InvalidSessionCursorError } from '../../../lib/domain/sessions/types.js';
+import { InvalidSessionCursorError, SessionConflictError, SessionNotFoundError, SessionValidationError } from '../../../lib/domain/sessions/types.js';
+import { SessionEngine } from '../../../lib/domain/sessions/session-engine.js';
 import { WorkoutRepository } from '../../../lib/repositories/workout-repository.js';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'http://127.0.0.1:54321';
@@ -77,6 +78,7 @@ describe('WorkoutRepository', () => {
   let secondEmail: string;
   let repository: WorkoutRepository;
   let secondRepository: WorkoutRepository;
+  let engine: SessionEngine;
 
   beforeAll(async () => {
     if (!OWNER_URL || !APP_URL) {
@@ -122,6 +124,7 @@ describe('WorkoutRepository', () => {
 
     repository = new WorkoutRepository(app.db, claims);
     secondRepository = new WorkoutRepository(app.db, secondClaims);
+    engine = new SessionEngine(repository);
   });
 
   afterAll(async () => {
@@ -237,5 +240,208 @@ describe('WorkoutRepository', () => {
       .toString('base64url');
     await expect(repository.listSessions(userId, malformedCursor))
       .rejects.toBeInstanceOf(InvalidSessionCursorError);
+  });
+
+  it('runs a legal lifecycle atomically through completion', async () => {
+    const clientTs = new Date('2028-02-01T12:00:00.000Z');
+    const session = await engine.start(userId, routineDayId, randomUUID(), '2028-02-01');
+
+    await engine.completeTask(userId, {
+      sessionId: session.id,
+      taskKey: 'warm_up',
+      completedAt: clientTs,
+      clientTs,
+    });
+    expect((await repository.findSession(userId, session.id))?.phase).toBe('pre_workout');
+
+    await engine.advancePhase(userId, { sessionId: session.id, phase: 'exercise' });
+    for (const setIndex of [0, 1, 2]) {
+      await engine.completeSet(userId, {
+        sessionId: session.id,
+        exerciseId,
+        setIndex,
+        isCompleted: true,
+        weightKg: 60.5,
+        reps: 8,
+        clientTs,
+      });
+    }
+    await engine.completeTask(userId, {
+      sessionId: session.id,
+      taskKey: 'main_workout',
+      completedAt: clientTs,
+      clientTs,
+    });
+    await engine.advancePhase(userId, { sessionId: session.id, phase: 'stretch' });
+    await engine.completeTask(userId, {
+      sessionId: session.id,
+      taskKey: 'stretch',
+      completedAt: clientTs,
+      clientTs,
+    });
+    await engine.advancePhase(userId, { sessionId: session.id, phase: 'post_workout' });
+
+    const completed = await engine.finish(userId, {
+      sessionId: session.id,
+      completedAt: new Date('2028-02-01T13:00:00.000Z'),
+    });
+
+    expect(completed).toMatchObject({
+      id: session.id,
+      status: 'completed',
+      phase: 'post_workout',
+      completedAt: new Date('2028-02-01T13:00:00.000Z'),
+      sets: [
+        { exerciseId, setIndex: 0, isCompleted: true, weightKg: 60.5, reps: 8 },
+        { exerciseId, setIndex: 1, isCompleted: true, weightKg: 60.5, reps: 8 },
+        { exerciseId, setIndex: 2, isCompleted: true, weightKg: 60.5, reps: 8 },
+      ],
+      tasks: [
+        { taskKey: 'warm_up', completedAt: clientTs },
+        { taskKey: 'main_workout', completedAt: clientTs },
+        { taskKey: 'stretch', completedAt: clientTs },
+      ],
+    });
+  });
+
+  it('rejects gated and every terminal mutation without changing session state', async () => {
+    const gated = await engine.start(userId, routineDayId, randomUUID(), '2028-02-02');
+    await expect(engine.advancePhase(userId, { sessionId: gated.id, phase: 'exercise' }))
+      .rejects.toBeInstanceOf(SessionConflictError);
+    expect(await repository.findSession(userId, gated.id)).toMatchObject({
+      phase: 'pre_workout',
+      status: 'in_progress',
+      sets: [],
+      tasks: [],
+    });
+
+    const terminalMutations = [
+      (sessionId: string) => engine.completeSet(userId, {
+        sessionId,
+        exerciseId,
+        setIndex: 0,
+        isCompleted: true,
+        weightKg: 60,
+        reps: 8,
+      }),
+      (sessionId: string) => engine.completeTask(userId, {
+        sessionId,
+        taskKey: 'warm_up',
+        completedAt: new Date('2028-02-03T12:00:00.000Z'),
+      }),
+      (sessionId: string) => engine.advancePhase(userId, { sessionId, phase: 'exercise' }),
+      (sessionId: string) => engine.finish(userId, {
+        sessionId,
+        completedAt: new Date('2028-02-03T13:00:00.000Z'),
+      }),
+    ];
+
+    let dateIndex = 3;
+    for (const status of ['completed', 'archived'] as const) {
+      for (const mutate of terminalMutations) {
+        const localDate = `2028-02-${String(dateIndex).padStart(2, '0')}`;
+        dateIndex += 1;
+        const terminal = await engine.start(userId, routineDayId, randomUUID(), localDate);
+        await owner.query(
+          `UPDATE workout_sessions
+           SET status = $2, completed_at = $3
+           WHERE id = $1`,
+          [terminal.id, status, new Date(`${localDate}T13:00:00.000Z`)],
+        );
+
+        await expect(mutate(terminal.id)).rejects.toBeInstanceOf(SessionConflictError);
+        expect(await repository.findSession(userId, terminal.id)).toMatchObject({
+          status,
+          phase: 'pre_workout',
+          sets: [],
+          tasks: [],
+        });
+      }
+    }
+  });
+
+  it('rejects foreign sessions and invalid exercise/set values without writes', async () => {
+    const foreign = await secondRepository.startSession(
+      secondUserId,
+      routineDayId,
+      randomUUID(),
+      '2028-02-04',
+    );
+    await expect(engine.completeSet(userId, {
+      sessionId: foreign.id,
+      exerciseId,
+      setIndex: 0,
+      isCompleted: true,
+      weightKg: 60,
+      reps: 8,
+    })).rejects.toBeInstanceOf(SessionNotFoundError);
+
+    const active = await engine.start(userId, routineDayId, randomUUID(), '2028-02-05');
+    await engine.completeTask(userId, {
+      sessionId: active.id,
+      taskKey: 'warm_up',
+      completedAt: new Date('2028-02-05T12:00:00.000Z'),
+    });
+    await engine.advancePhase(userId, { sessionId: active.id, phase: 'exercise' });
+    const base = {
+      sessionId: active.id,
+      exerciseId,
+      setIndex: 0,
+      isCompleted: true,
+      weightKg: 60,
+      reps: 8,
+    };
+    await expect(engine.completeSet(userId, { ...base, setIndex: 3 }))
+      .rejects.toBeInstanceOf(SessionValidationError);
+    await expect(engine.completeSet(userId, { ...base, weightKg: -1 }))
+      .rejects.toBeInstanceOf(SessionValidationError);
+    await expect(engine.completeSet(userId, { ...base, reps: 1001 }))
+      .rejects.toBeInstanceOf(SessionValidationError);
+    await expect(engine.completeSet(userId, { ...base, exerciseId: randomUUID() }))
+      .rejects.toBeInstanceOf(SessionNotFoundError);
+    expect((await repository.findSession(userId, active.id))?.sets).toEqual([]);
+  });
+
+  it('rolls back set and task writes when a later mutation fails', async () => {
+    const session = await engine.start(userId, routineDayId, randomUUID(), '2028-02-06');
+    const clientTs = new Date('2028-02-06T12:00:00.000Z');
+
+    await expect(repository.mutateSession(userId, session.id, async (mutation) => {
+      await mutation.completeTask({
+        taskKey: 'warm_up',
+        completedAt: clientTs,
+        clientTs,
+      });
+      expect(mutation.state.tasks).toMatchObject([
+        { taskKey: 'warm_up', completedAt: clientTs },
+      ]);
+
+      await mutation.advancePhase('exercise');
+      expect(mutation.state.phase).toBe('exercise');
+
+      await mutation.upsertSet({
+        exerciseId,
+        setIndex: 0,
+        isCompleted: true,
+        weightKg: 60,
+        reps: 8,
+        clientTs,
+      });
+      await mutation.completeTask({
+        taskKey: 'main_workout',
+        completedAt: clientTs,
+        clientTs,
+      });
+      await expect(mutation.advancePhase('post_workout'))
+        .rejects.toBeInstanceOf(SessionValidationError);
+      throw new Error('forced lifecycle failure');
+    })).rejects.toThrow('forced lifecycle failure');
+
+    expect(await repository.findSession(userId, session.id)).toMatchObject({
+      sets: [],
+      tasks: [],
+      status: 'in_progress',
+      phase: 'pre_workout',
+    });
   });
 });

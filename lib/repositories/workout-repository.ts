@@ -10,12 +10,28 @@ import {
   mapSessionSummary,
   mapSessionTask,
 } from '../domain/sessions/mappers';
+import {
+  assertCompletionTimestamp,
+  assertFinishAllowed,
+  assertPhaseAdvance,
+  assertSetMutationAllowed,
+  assertTaskMutationAllowed,
+} from '../domain/sessions/transition-table';
 import type {
   RoutineExercisePlan,
+  SessionMutation,
+  SessionMutationContext,
   SessionPage,
+  SessionSetMutation,
   SessionState,
+  SessionTaskMutation,
 } from '../domain/sessions/types';
-import { InvalidSessionCursorError, SessionStartConflictError } from '../domain/sessions/types';
+import {
+  InvalidSessionCursorError,
+  SessionConflictError,
+  SessionNotFoundError,
+  SessionStartConflictError,
+} from '../domain/sessions/types';
 
 const {
   exercises,
@@ -221,6 +237,127 @@ export class WorkoutRepository {
       }
 
       throw new SessionStartConflictError('Could not resolve the conflicting session start.');
+    });
+  }
+
+  async mutateSession(
+    userId: string,
+    sessionId: string,
+    operation: SessionMutation,
+  ): Promise<SessionState> {
+    return this.forUser(userId, async (tx) => {
+      const [session] = await tx
+        .select()
+        .from(workoutSessions)
+        .where(and(
+          eq(workoutSessions.id, sessionId),
+          eq(workoutSessions.userId, userId),
+        ))
+        .for('update')
+        .limit(1);
+
+      if (!session) {
+        throw new SessionNotFoundError('Session not found.');
+      }
+      if (session.status !== 'in_progress') {
+        throw new SessionConflictError('Only in-progress sessions can be mutated.');
+      }
+
+      let currentState = await this.mapSessionInTx(tx, session);
+      const refreshState = async (): Promise<void> => {
+        const [updated] = await tx
+          .select()
+          .from(workoutSessions)
+          .where(and(
+            eq(workoutSessions.id, session.id),
+            eq(workoutSessions.userId, userId),
+          ))
+          .limit(1);
+        if (!updated) {
+          throw new SessionNotFoundError('Session disappeared during mutation.');
+        }
+        currentState = await this.mapSessionInTx(tx, updated);
+      };
+
+      const context: SessionMutationContext = {
+        get state(): SessionState {
+          return currentState;
+        },
+        upsertSet: async (input: Omit<SessionSetMutation, 'sessionId'>): Promise<void> => {
+          assertSetMutationAllowed(currentState, { ...input, sessionId: session.id });
+          await tx
+            .insert(sessionSets)
+            .values({
+              userId: session.userId,
+              sessionId: session.id,
+              exerciseId: input.exerciseId,
+              setIndex: input.setIndex,
+              isCompleted: input.isCompleted,
+              weightKg: input.weightKg === null ? null : input.weightKg.toFixed(2),
+              reps: input.reps,
+              clientTs: input.clientTs,
+              updatedAt: new Date(),
+            })
+            .onConflictDoUpdate({
+              target: [sessionSets.sessionId, sessionSets.exerciseId, sessionSets.setIndex],
+              set: {
+                isCompleted: input.isCompleted,
+                weightKg: input.weightKg === null ? null : input.weightKg.toFixed(2),
+                reps: input.reps,
+                clientTs: input.clientTs,
+                updatedAt: new Date(),
+              },
+            });
+          await refreshState();
+        },
+        completeTask: async (input: Omit<SessionTaskMutation, 'sessionId'>): Promise<void> => {
+          assertTaskMutationAllowed(currentState, { ...input, sessionId: session.id });
+          await tx
+            .insert(sessionTasks)
+            .values({
+              sessionId: session.id,
+              taskKey: input.taskKey,
+              completedAt: input.completedAt,
+              clientTs: input.clientTs,
+              updatedAt: new Date(),
+            })
+            .onConflictDoUpdate({
+              target: [sessionTasks.sessionId, sessionTasks.taskKey],
+              set: {
+                completedAt: input.completedAt,
+                clientTs: input.clientTs,
+                updatedAt: new Date(),
+              },
+            });
+          await refreshState();
+        },
+        advancePhase: async (phase): Promise<void> => {
+          assertPhaseAdvance(currentState, phase);
+          await tx
+            .update(workoutSessions)
+            .set({ phase, updatedAt: new Date() })
+            .where(and(
+              eq(workoutSessions.id, session.id),
+              eq(workoutSessions.userId, session.userId),
+            ));
+          await refreshState();
+        },
+        finish: async (completedAt): Promise<void> => {
+          assertFinishAllowed(currentState);
+          assertCompletionTimestamp(completedAt);
+          await tx
+            .update(workoutSessions)
+            .set({ status: 'completed', completedAt, updatedAt: new Date() })
+            .where(and(
+              eq(workoutSessions.id, session.id),
+              eq(workoutSessions.userId, session.userId),
+            ));
+          await refreshState();
+        },
+      };
+
+      await operation(context);
+      return currentState;
     });
   }
 

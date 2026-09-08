@@ -4,6 +4,7 @@ import { Client } from 'pg';
 import { createDb, type DbHandle } from '../../../lib/db/client.js';
 import type { JwtClaims } from '../../../lib/db/with-user.js';
 import { InvalidSessionCursorError, SessionConflictError, SessionNotFoundError, SessionValidationError } from '../../../lib/domain/sessions/types.js';
+import { ProgressionValidationError } from '../../../lib/domain/progression/types.js';
 import { SessionEngine } from '../../../lib/domain/sessions/session-engine.js';
 import { WorkoutRepository } from '../../../lib/repositories/workout-repository.js';
 
@@ -127,7 +128,26 @@ describe('WorkoutRepository', () => {
     engine = new SessionEngine(repository);
   });
 
+  async function beginExerciseSession(localDate: string): Promise<{ id: string; clientTs: Date }> {
+    const session = await engine.start(userId, routineDayId, randomUUID(), localDate);
+    const clientTs = new Date(`${localDate}T12:00:00.000Z`);
+    await engine.completeTask(userId, {
+      sessionId: session.id,
+      taskKey: 'warm_up',
+      completedAt: clientTs,
+      clientTs,
+    });
+    await engine.advancePhase(userId, { sessionId: session.id, phase: 'exercise' });
+    return { id: session.id, clientTs };
+  }
+
   afterAll(async () => {
+    if (userId) {
+      await owner.query('DELETE FROM personal_records WHERE user_id = $1', [userId]);
+    }
+    if (secondUserId) {
+      await owner.query('DELETE FROM personal_records WHERE user_id = $1', [secondUserId]);
+    }
     if (routineDayId) {
       await owner.query('DELETE FROM workout_sessions WHERE routine_day_id = $1', [routineDayId]);
     }
@@ -196,6 +216,18 @@ describe('WorkoutRepository', () => {
       .not.toContain(foreign.id);
     expect((await secondRepository.listSessions(secondUserId)).sessions.map((session) => session.id))
       .toContain(foreign.id);
+
+    await owner.query(
+      `INSERT INTO personal_records (user_id, exercise_id, best_e1rm, achieved_at)
+       VALUES ($1, $2, 100.00, $3)`,
+      [secondUserId, exerciseId, new Date('2026-09-09T12:00:00.000Z')],
+    );
+    expect(await repository.findPersonalRecord(userId, exerciseId)).toBeNull();
+    expect(await secondRepository.findPersonalRecord(secondUserId, exerciseId)).toMatchObject({
+      exerciseId,
+      bestE1rm: 100,
+      sessionId: null,
+    });
   });
 
   it('resolves concurrent duplicate-client and active-day starts to one session', async () => {
@@ -240,6 +272,178 @@ describe('WorkoutRepository', () => {
       .toString('base64url');
     await expect(repository.listSessions(userId, malformedCursor))
       .rejects.toBeInstanceOf(InvalidSessionCursorError);
+  });
+
+  it('materializes a source-linked PR, preserves higher records, and recomputes edited sets', async () => {
+    const { id: sessionId, clientTs } = await beginExerciseSession('2028-03-01');
+
+    await engine.completeSet(userId, {
+      sessionId,
+      exerciseId,
+      setIndex: 0,
+      isCompleted: true,
+      weightKg: 60,
+      reps: 8,
+      clientTs,
+    });
+    const initial = await repository.findPersonalRecord(userId, exerciseId);
+    expect(initial).toMatchObject({
+      exerciseId,
+      bestE1rm: 76,
+      achievedAt: clientTs,
+      sessionId,
+    });
+
+    await engine.completeSet(userId, {
+      sessionId,
+      exerciseId,
+      setIndex: 1,
+      isCompleted: true,
+      weightKg: 50,
+      reps: 8,
+      clientTs,
+    });
+    expect(await repository.findPersonalRecord(userId, exerciseId)).toEqual(initial);
+
+    await engine.completeSet(userId, {
+      sessionId,
+      exerciseId,
+      setIndex: 0,
+      isCompleted: true,
+      weightKg: 40,
+      reps: 8,
+      clientTs: new Date('2028-03-01T13:00:00.000Z'),
+    });
+    expect(await repository.findPersonalRecord(userId, exerciseId)).toMatchObject({
+      exerciseId,
+      bestE1rm: 63.33,
+      achievedAt: clientTs,
+      sessionId,
+    });
+  });
+
+  it('preserves valid zero/null/incomplete logs without creating a zero PR', async () => {
+    await owner.query(
+      'DELETE FROM session_sets WHERE user_id = $1 AND exercise_id = $2',
+      [userId, exerciseId],
+    );
+    await owner.query(
+      'DELETE FROM personal_records WHERE user_id = $1 AND exercise_id = $2',
+      [userId, exerciseId],
+    );
+    const { id: sessionId, clientTs } = await beginExerciseSession('2028-03-02');
+    const inputs = [
+      { setIndex: 0, weightKg: null, reps: 8 },
+      { setIndex: 1, weightKg: 0, reps: 8 },
+      { setIndex: 2, weightKg: 60, reps: 0 },
+    ] as const;
+
+    for (const input of inputs) {
+      await engine.completeSet(userId, {
+        sessionId,
+        exerciseId,
+        isCompleted: true,
+        clientTs,
+        ...input,
+      });
+    }
+
+    expect(await repository.findPersonalRecord(userId, exerciseId)).toBeNull();
+    expect((await repository.findSession(userId, sessionId))?.sets).toHaveLength(3);
+  });
+
+  it('rolls back both the set and PR when a later transaction operation fails', async () => {
+    await owner.query(
+      'DELETE FROM session_sets WHERE user_id = $1 AND exercise_id = $2',
+      [userId, exerciseId],
+    );
+    await owner.query(
+      'DELETE FROM personal_records WHERE user_id = $1 AND exercise_id = $2',
+      [userId, exerciseId],
+    );
+    const { id: sessionId, clientTs } = await beginExerciseSession('2028-03-03');
+
+    await expect(repository.mutateSession(userId, sessionId, async (mutation) => {
+      await mutation.upsertSet({
+        exerciseId,
+        setIndex: 0,
+        isCompleted: true,
+        weightKg: 60,
+        reps: 8,
+        clientTs,
+      });
+      throw new Error('forced progression failure');
+    })).rejects.toThrow('forced progression failure');
+
+    expect((await repository.findSession(userId, sessionId))?.sets).toEqual([]);
+    expect(await repository.findPersonalRecord(userId, exerciseId)).toBeNull();
+  });
+
+  it('serializes concurrent PR natural-key writers and keeps the global maximum', async () => {
+    await owner.query(
+      'DELETE FROM session_sets WHERE user_id = $1 AND exercise_id = $2',
+      [userId, exerciseId],
+    );
+    await owner.query(
+      'DELETE FROM personal_records WHERE user_id = $1 AND exercise_id = $2',
+      [userId, exerciseId],
+    );
+    const [first, second] = await Promise.all([
+      beginExerciseSession('2028-03-04'),
+      beginExerciseSession('2028-03-05'),
+    ]);
+
+    await Promise.all([
+      engine.completeSet(userId, {
+        sessionId: first.id,
+        exerciseId,
+        setIndex: 0,
+        isCompleted: true,
+        weightKg: 80,
+        reps: 5,
+        clientTs: first.clientTs,
+      }),
+      engine.completeSet(userId, {
+        sessionId: second.id,
+        exerciseId,
+        setIndex: 0,
+        isCompleted: true,
+        weightKg: 60,
+        reps: 8,
+        clientTs: second.clientTs,
+      }),
+    ]);
+
+    expect(await repository.findPersonalRecord(userId, exerciseId)).toMatchObject({
+      exerciseId,
+      bestE1rm: 93.33,
+      sessionId: first.id,
+      achievedAt: first.clientTs,
+    });
+  });
+
+  it('rolls back a bounds-valid set when its e1RM exceeds PR storage capacity', async () => {
+    await owner.query(
+      'DELETE FROM session_sets WHERE user_id = $1 AND exercise_id = $2',
+      [userId, exerciseId],
+    );
+    await owner.query(
+      'DELETE FROM personal_records WHERE user_id = $1 AND exercise_id = $2',
+      [userId, exerciseId],
+    );
+    const { id: sessionId } = await beginExerciseSession('2028-03-06');
+
+    await expect(engine.completeSet(userId, {
+      sessionId,
+      exerciseId,
+      setIndex: 0,
+      isCompleted: true,
+      weightKg: 1000,
+      reps: 1000,
+    })).rejects.toBeInstanceOf(ProgressionValidationError);
+
+    expect((await repository.findSession(userId, sessionId))?.sets).toEqual([]);
+    expect(await repository.findPersonalRecord(userId, exerciseId)).toBeNull();
   });
 
   it('runs a legal lifecycle atomically through completion', async () => {

@@ -3,6 +3,12 @@ import * as schema from '../../db/schema/index';
 import { assertUserContext } from '../db/auth-context';
 import { withUser } from '../db/with-user';
 import type { Db, Tx, JwtClaims } from '../db/with-user';
+import { ProgressionEngine } from '../domain/progression/progression-engine';
+import type {
+  PersonalRecordValue,
+  ProgressionSet,
+  ProgressionStore,
+} from '../domain/progression/types';
 import {
   mapRoutineExercisePlan,
   mapSessionSet,
@@ -35,6 +41,7 @@ import {
 
 const {
   exercises,
+  personalRecords,
   routineDays,
   routineExercises,
   sessionSets,
@@ -151,6 +158,26 @@ export class WorkoutRepository {
 
   async findSession(userId: string, sessionId: string): Promise<SessionState | null> {
     return this.forUser(userId, (tx) => this.findSessionInTx(tx, userId, sessionId));
+  }
+
+  async findPersonalRecord(userId: string, exerciseId: string): Promise<PersonalRecordValue | null> {
+    return this.forUser(userId, async (tx) => {
+      const [record] = await tx
+        .select()
+        .from(personalRecords)
+        .where(and(
+          eq(personalRecords.userId, userId),
+          eq(personalRecords.exerciseId, exerciseId),
+        ))
+        .limit(1);
+
+      return record ? {
+        exerciseId: record.exerciseId,
+        bestE1rm: Number(record.bestE1rm),
+        achievedAt: record.achievedAt,
+        sessionId: record.sessionId,
+      } : null;
+    });
   }
 
   async findByClientId(userId: string, clientId: string): Promise<SessionState | null> {
@@ -278,6 +305,7 @@ export class WorkoutRepository {
         }
         currentState = await this.mapSessionInTx(tx, updated);
       };
+      const progression = new ProgressionEngine(this.progressionStore(tx, session.userId));
 
       const context: SessionMutationContext = {
         get state(): SessionState {
@@ -308,6 +336,7 @@ export class WorkoutRepository {
                 updatedAt: new Date(),
               },
             });
+          await progression.materializePersonalRecord(input.exerciseId);
           await refreshState();
         },
         completeTask: async (input: Omit<SessionTaskMutation, 'sessionId'>): Promise<void> => {
@@ -359,6 +388,96 @@ export class WorkoutRepository {
       await operation(context);
       return currentState;
     });
+  }
+
+  private progressionStore(tx: Tx, userId: string): ProgressionStore {
+    return {
+      listSets: async (exerciseId: string): Promise<readonly ProgressionSet[]> => {
+        const rows = await tx
+          .select({
+            sessionId: sessionSets.sessionId,
+            setIndex: sessionSets.setIndex,
+            isCompleted: sessionSets.isCompleted,
+            weightKg: sessionSets.weightKg,
+            reps: sessionSets.reps,
+            clientTs: sessionSets.clientTs,
+          })
+          .from(sessionSets)
+          .innerJoin(workoutSessions, eq(sessionSets.sessionId, workoutSessions.id))
+          .where(and(
+            eq(sessionSets.userId, userId),
+            eq(workoutSessions.userId, userId),
+            eq(sessionSets.exerciseId, exerciseId),
+            eq(sessionSets.isCompleted, true),
+          ));
+
+        return rows.map((row) => ({
+          sessionId: row.sessionId,
+          setIndex: row.setIndex,
+          isCompleted: row.isCompleted,
+          weightKg: row.weightKg === null ? null : Number(row.weightKg),
+          reps: row.reps,
+          clientTs: row.clientTs,
+        }));
+      },
+      lockPersonalRecord: async (exerciseId: string): Promise<PersonalRecordValue | null> => {
+        const [record] = await tx
+          .select()
+          .from(personalRecords)
+          .where(and(
+            eq(personalRecords.userId, userId),
+            eq(personalRecords.exerciseId, exerciseId),
+          ))
+          .for('update')
+          .limit(1);
+
+        return record ? {
+          exerciseId: record.exerciseId,
+          bestE1rm: Number(record.bestE1rm),
+          achievedAt: record.achievedAt,
+          sessionId: record.sessionId,
+        } : null;
+      },
+      insertPersonalRecordIfAbsent: async (record: PersonalRecordValue): Promise<boolean> => {
+        const inserted = await tx
+          .insert(personalRecords)
+          .values({
+            userId,
+            exerciseId: record.exerciseId,
+            bestE1rm: record.bestE1rm.toFixed(2),
+            achievedAt: record.achievedAt,
+            sessionId: record.sessionId,
+            updatedAt: new Date(),
+          })
+          .onConflictDoNothing({
+            target: [personalRecords.userId, personalRecords.exerciseId],
+          })
+          .returning({ id: personalRecords.id });
+        return inserted.length > 0;
+      },
+      replacePersonalRecord: async (record: PersonalRecordValue): Promise<void> => {
+        await tx
+          .update(personalRecords)
+          .set({
+            bestE1rm: record.bestE1rm.toFixed(2),
+            achievedAt: record.achievedAt,
+            sessionId: record.sessionId,
+            updatedAt: new Date(),
+          })
+          .where(and(
+            eq(personalRecords.userId, userId),
+            eq(personalRecords.exerciseId, record.exerciseId),
+          ));
+      },
+      deletePersonalRecord: async (exerciseId: string): Promise<void> => {
+        await tx
+          .delete(personalRecords)
+          .where(and(
+            eq(personalRecords.userId, userId),
+            eq(personalRecords.exerciseId, exerciseId),
+          ));
+      },
+    };
   }
 
   private forUser<T>(userId: string, operation: (tx: Tx) => Promise<T>): Promise<T> {

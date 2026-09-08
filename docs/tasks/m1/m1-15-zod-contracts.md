@@ -25,11 +25,11 @@ Route surface, per spec §4.3's table — 9 endpoints total: `POST /api/sync`, `
 - No route handler implementations — contracts only
 
 ### Non-Negotiable Invariants
-- [ ] **Unified envelope** `{ ok: true, data: T } | { ok: false, error: AppError }` used by every contract, per `PROMPTKIT.md` §6's "Deterministic Error Handling" guardrail
-- [ ] `SyncMutationSchema` is a `z.discriminatedUnion('op', [...])` exactly as sketched in spec §4.3, covering `set.upsert`, `task.complete`, `phase.advance`, `session.finish` — the spec only fully writes out `set.upsert`; this task must fully specify the other three, not leave them as `/* … */`
-- [ ] `weightKg` bounded `0`–`1000`, `reps` bounded `0`–`1000`, matching the database `check` constraints from M1-03 — Zod and the database must agree on these bounds, since spec §5 explicitly says "application validation is not a data integrity guarantee" and relies on both layers agreeing
-- [ ] `mutations` array capped at 200 per `SyncRequestSchema`, matching spec §4.3
-- [ ] `token_hash` / `type` params for `/auth/confirm` are Zod-validated, per spec §5's explicit callout (coordinate with M1-13, which consumes this)
+- [x] **Unified envelope** `{ ok: true, data: T } | { ok: false, error: AppError }` used by every contract, per `PROMPTKIT.md` §6's "Deterministic Error Handling" guardrail
+- [x] `SyncMutationSchema` is a `z.discriminatedUnion('op', [...])` exactly as sketched in spec §4.3, covering `set.upsert`, `task.complete`, `phase.advance`, `session.finish` — the spec only fully writes out `set.upsert`; this task must fully specify the other three, not leave them as `/* … */`
+- [x] `weightKg` bounded `0`–`1000`, `reps` bounded `0`–`1000`, matching the database `check` constraints from M1-03 — Zod and the database must agree on these bounds, since spec §5 explicitly says "application validation is not a data integrity guarantee" and relies on both layers agreeing
+- [x] `mutations` array capped at 200 per `SyncRequestSchema`, matching spec §4.3
+- [x] `token_hash` / `type` params for `/auth/confirm` are Zod-validated, per spec §5's explicit callout (coordinate with M1-13, which consumes this)
 
 ### Out of Scope
 - Route handler logic (M2)
@@ -38,14 +38,14 @@ Route surface, per spec §4.3's table — 9 endpoints total: `POST /api/sync`, `
 ---
 
 ## Implementation Tasks
-- [ ] 1. Write `AppError` and the discriminated envelope type in `lib/contracts/envelope.ts`
-- [ ] 2. Write `SyncMutationSchema` fully (all four `op` variants), `SyncRequestSchema`, `SyncResponseSchema`
-- [ ] 3. Write contracts for `GET /api/sessions` (query params: `cursor`), `POST /api/sessions` (body: `routineDayId`, `clientId`), `GET /api/sessions/:id` (path + optional `since` query)
-- [ ] 4. Write contract for `GET /api/exercises` (no input; output shape only)
-- [ ] 5. Write contract for `GET /api/progress/:exerciseSlug` (path param validation, output: e1RM trendline shape)
-- [ ] 6. Write contract for `POST /api/import/legacy` (raw localStorage payload shape — coordinate with spec §4.5's three divergent key shapes)
-- [ ] 7. Write contracts for `/auth/confirm` query params and `/auth/signout` (likely no body)
-- [ ] 8. Unit-test every schema: one valid-input pass case, and one invalid-input case per meaningfully distinct validation rule (bounds, required fields, discriminant mismatch)
+- [x] 1. Write `AppError` and the discriminated envelope type in `lib/contracts/envelope.ts`
+- [x] 2. Write `SyncMutationSchema` fully (all four `op` variants), `SyncRequestSchema`, `SyncResponseSchema`
+- [x] 3. Write contracts for `GET /api/sessions` (query params: `cursor`), `POST /api/sessions` (body: `routineDayId`, `clientId`), `GET /api/sessions/:id` (path + optional `since` query)
+- [x] 4. Write contract for `GET /api/exercises` (no input; output shape only)
+- [x] 5. Write contract for `GET /api/progress/:exerciseSlug` (path param validation, output: e1RM trendline shape)
+- [x] 6. Write contract for `POST /api/import/legacy` (raw localStorage payload shape — coordinate with spec §4.5's three divergent key shapes)
+- [x] 7. Write contracts for `/auth/confirm` query params and `/auth/signout` (likely no body)
+- [x] 8. Unit-test every schema: one valid-input pass case, and one invalid-input case per meaningfully distinct validation rule (bounds, required fields, discriminant mismatch)
 
 ---
 

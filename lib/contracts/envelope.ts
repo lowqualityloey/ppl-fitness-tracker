@@ -1,28 +1,19 @@
 /**
- * M1-12 (pre-M1-15): minimal AppError shape.
- *
- * Spec §4.3 defines the response envelope as
- * `{ ok: true, data: T } | { ok: false, error: AppError }`, but the full
- * AppError contract belongs to M1-15 (issue #17), which hasn't landed
- * yet. requireUser() (lib/auth/require-user.ts) needs *some* typed error
- * to throw for its 401 case now, so this file defines the minimal shape
- * that satisfies the envelope's `error: AppError` slot without inventing
- * anything M1-15 would have to walk back.
- *
- * M1-15 owns this file going forward — it should extend `AppError` and
- * the `code` union as needed for every other route's error cases, not
- * create a second, competing error type.
+ * Shared error envelope. M1-12 introduced the authenticated-session case;
+ * M1-13 adds only the public-auth boundary errors it needs. M1-15 owns the
+ * wider canonical contract and must extend this type rather than replace it.
  */
-
-/** Status codes actually thrown by application code so far. Extend in M1-15. */
-export type AppErrorCode = 'UNAUTHENTICATED';
+export type AppErrorCode = 'UNAUTHENTICATED' | 'VALIDATION_ERROR' | 'RATE_LIMITED';
 
 export interface AppError {
   code: AppErrorCode;
   message: string;
-  /** HTTP status a route handler should respond with for this error. */
   status: number;
 }
+
+export type AppEnvelope<T> =
+  | { ok: true; data: T }
+  | { ok: false; error: AppError };
 
 export class AppErrorException extends Error {
   readonly appError: AppError;
@@ -36,4 +27,12 @@ export class AppErrorException extends Error {
 
 export function unauthenticatedError(message = 'No authenticated session.'): AppError {
   return { code: 'UNAUTHENTICATED', message, status: 401 };
+}
+
+export function validationError(message = 'Invalid request.'): AppError {
+  return { code: 'VALIDATION_ERROR', message, status: 400 };
+}
+
+export function rateLimitedError(message = 'Too many sign-in attempts.'): AppError {
+  return { code: 'RATE_LIMITED', message, status: 429 };
 }

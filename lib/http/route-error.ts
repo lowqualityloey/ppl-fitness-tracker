@@ -17,6 +17,10 @@ import {
   SessionStartConflictError,
   SessionValidationError,
 } from '../domain/sessions/types';
+import {
+  SyncConflictError,
+  SyncValidationError,
+} from '../domain/sync/types';
 
 export function appErrorResponse(error: AppError): NextResponse<AppEnvelope<never>> {
   return NextResponse.json<AppEnvelope<never>>(appErrorEnvelope(error), { status: error.status });
@@ -30,12 +34,17 @@ export function routeErrorResponse(error: unknown): NextResponse<AppEnvelope<nev
   if (
     error instanceof ZodError ||
     error instanceof InvalidSessionCursorError ||
-    error instanceof SessionValidationError
+    error instanceof SessionValidationError ||
+    error instanceof SyncValidationError
   ) {
     return appErrorResponse(validationError());
   }
 
-  if (error instanceof SessionStartConflictError || error instanceof SessionConflictError) {
+  if (
+    error instanceof SessionStartConflictError ||
+    error instanceof SessionConflictError ||
+    error instanceof SyncConflictError
+  ) {
     return appErrorResponse(conflictError());
   }
 

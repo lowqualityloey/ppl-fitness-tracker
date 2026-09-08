@@ -43,6 +43,8 @@ const protectedTables = [
   'session_tasks',
   'personal_records',
   'sync_mutations',
+  'sync_entity_versions',
+  'sync_changes',
   'import_batches',
 ] as const;
 
@@ -228,6 +230,23 @@ async function seedFixtures(): Promise<Fixtures> {
      VALUES ($1, $2)`,
     [bMutationId, userB.id],
   );
+  const bVersion = await queryOne<{ id: string }>(
+    `INSERT INTO public.sync_entity_versions (
+       user_id, session_id, entity_type, entity_key, client_ts, effective_ts,
+       device_id, mutation_id, server_seq
+     )
+     VALUES ($1, $2, 'session', 'session:state', NOW(), NOW(), $3, $4, 1)
+     RETURNING id`,
+    [userB.id, bSession.id, randomUUID(), bMutationId],
+  );
+  const bChange = await queryOne<{ id: string }>(
+    `INSERT INTO public.sync_changes (
+       user_id, session_id, server_seq, mutation_id, entity_type, entity_key, operation
+     )
+     VALUES ($1, $2, 1, $3, 'session', 'session:state', 'phase.advance')
+     RETURNING id`,
+    [userB.id, bSession.id, bMutationId],
+  );
   const bImport = await queryOne<{ id: string }>(
     `INSERT INTO public.import_batches (user_id, source_fingerprint, report)
      VALUES ($1, $2, $3)
@@ -246,6 +265,8 @@ async function seedFixtures(): Promise<Fixtures> {
       { table: 'session_tasks', primaryKey: 'id', id: bTask.id },
       { table: 'personal_records', primaryKey: 'id', id: bRecord.id },
       { table: 'sync_mutations', primaryKey: 'mutation_id', id: bMutationId },
+      { table: 'sync_entity_versions', primaryKey: 'id', id: bVersion.id },
+      { table: 'sync_changes', primaryKey: 'id', id: bChange.id },
       { table: 'import_batches', primaryKey: 'id', id: bImport.id },
     ],
   };
@@ -600,8 +621,35 @@ describe('M1-06: RLS on all user-data tables', () => {
         .returning({ id: schema.personalRecords.id });
       const [mutation] = await tx
         .insert(schema.syncMutations)
-        .values({ mutationId: randomUUID(), userId: userA.id })
+        .values({ mutationId: randomUUID(), userId: userA.id, sessionId: session.id })
         .returning({ mutationId: schema.syncMutations.mutationId });
+      const [version] = await tx
+        .insert(schema.syncEntityVersions)
+        .values({
+          userId: userA.id,
+          sessionId: session.id,
+          entityType: 'session',
+          entityKey: 'session:state',
+          clientTs: new Date(),
+          effectiveTs: new Date(),
+          deviceId: randomUUID(),
+          mutationId: mutation?.mutationId ?? randomUUID(),
+          serverSeq: 1,
+        })
+        .returning({ id: schema.syncEntityVersions.id });
+      const [change] = await tx
+        .insert(schema.syncChanges)
+        .values({
+          userId: userA.id,
+          sessionId: session.id,
+          serverSeq: 1,
+          mutationId: mutation?.mutationId ?? randomUUID(),
+          entityType: 'session',
+          entityKey: 'session:state',
+          operation: 'phase.advance',
+        })
+        .returning({ id: schema.syncChanges.id });
+
       const [importBatch] = await tx
         .insert(schema.importBatches)
         .values({
@@ -611,14 +659,77 @@ describe('M1-06: RLS on all user-data tables', () => {
         })
         .returning({ id: schema.importBatches.id });
 
-      if (!set || !task || !record || !mutation || !importBatch) {
+      if (!set || !task || !record || !mutation || !version || !change || !importBatch) {
         throw new Error('Expected every reassignment fixture insert to return a row');
       }
-      return { session, set, task, record, mutation, importBatch };
+      return { session, set, task, record, mutation, version, change, importBatch };
     });
 
     const bSession = fixtures.bRows.find((row) => row.table === 'workout_sessions');
-    if (!bSession) throw new Error('Missing B workout-session fixture');
+    const bMutation = fixtures.bRows.find((row) => row.table === 'sync_mutations');
+    if (!bSession || !bMutation) throw new Error('Missing B relationship fixtures');
+
+    await expect(
+      withUser(appDb, userA.claims, (tx) =>
+        tx.insert(schema.syncEntityVersions).values({
+          userId: userA.id,
+          sessionId: bSession.id,
+          entityType: 'session',
+          entityKey: `session:foreign-${randomUUID()}`,
+          clientTs: new Date(),
+          effectiveTs: new Date(),
+          deviceId: randomUUID(),
+          mutationId: ownRows.mutation.mutationId,
+          serverSeq: 2,
+        }),
+      ),
+    ).rejects.toMatchObject({ code: '42501' });
+    await expect(
+      withUser(appDb, userA.claims, (tx) =>
+        tx.insert(schema.syncChanges).values({
+          userId: userA.id,
+          sessionId: ownRows.session.id,
+          serverSeq: 2,
+          mutationId: bMutation.id,
+          entityType: 'session',
+          entityKey: `session:foreign-${randomUUID()}`,
+          operation: 'phase.advance',
+        }),
+      ),
+    ).rejects.toMatchObject({ code: '42501' });
+
+    await expect(
+      withUser(appDb, userA.claims, (tx) =>
+        tx
+          .update(schema.syncEntityVersions)
+          .set({ sessionId: bSession.id })
+          .where(eq(schema.syncEntityVersions.id, ownRows.version.id)),
+      ),
+    ).rejects.toMatchObject({ code: '42501' });
+    await expect(
+      withUser(appDb, userA.claims, (tx) =>
+        tx
+          .update(schema.syncEntityVersions)
+          .set({ mutationId: bMutation.id })
+          .where(eq(schema.syncEntityVersions.id, ownRows.version.id)),
+      ),
+    ).rejects.toMatchObject({ code: '42501' });
+    await expect(
+      withUser(appDb, userA.claims, (tx) =>
+        tx
+          .update(schema.syncChanges)
+          .set({ sessionId: bSession.id })
+          .where(eq(schema.syncChanges.id, ownRows.change.id)),
+      ),
+    ).rejects.toMatchObject({ code: '42501' });
+    await expect(
+      withUser(appDb, userA.claims, (tx) =>
+        tx
+          .update(schema.syncChanges)
+          .set({ mutationId: bMutation.id })
+          .where(eq(schema.syncChanges.id, ownRows.change.id)),
+      ),
+    ).rejects.toMatchObject({ code: '42501' });
 
     await expect(
       withUser(appDb, userA.claims, (tx) =>

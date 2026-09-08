@@ -145,7 +145,8 @@ describe('M1-07: Schema drift detection (MERGE GATE)', () => {
       'exercises', 'routine_days', 'routine_exercises',
       // User-data tables (M1-06) 
       'profiles', 'workout_sessions', 'session_sets', 'session_tasks',
-      'personal_records', 'sync_mutations', 'import_batches'
+      'personal_records', 'sync_mutations', 'sync_entity_versions',
+      'sync_changes', 'import_batches'
     ];
 
     const result = await ownerClient.query<{ relname: string; cmds: string[] }>(`
@@ -187,13 +188,14 @@ describe('M1-07: Schema drift detection (MERGE GATE)', () => {
     `);
 
     const applicationTables = result.rows.filter(r => 
-      // Our 10 application tables from M1-03 schema
-      ['exercises', 'routine_days', 'routine_exercises', 'profiles', 
-       'workout_sessions', 'session_sets', 'session_tasks', 
-       'personal_records', 'sync_mutations', 'import_batches'].includes(r.relname)
+      // Our 12 application tables from the M2 schema
+      ['exercises', 'routine_days', 'routine_exercises', 'profiles',
+       'workout_sessions', 'session_sets', 'session_tasks',
+       'personal_records', 'sync_mutations', 'sync_entity_versions',
+       'sync_changes', 'import_batches'].includes(r.relname)
     );
 
-    expect(applicationTables).toHaveLength(10);
+    expect(applicationTables).toHaveLength(12);
     
     for (const table of applicationTables) {
       expect(table.rls_enabled).toBe(true);

@@ -104,6 +104,10 @@ export async function seedSessionFixtures(owner: TestSession): Promise<SessionFi
     const connectedDatabase = database;
     const connectedForeign = foreign;
     cleanupRows = async (): Promise<void> => {
+      await connectedDatabase.query(
+        'DELETE FROM personal_records WHERE session_id IN ($1, $2)',
+        [ids.session, ids.foreignSession],
+      );
       await connectedDatabase.query('DELETE FROM workout_sessions WHERE routine_day_id = $1', [ids.routineDay]);
       await connectedDatabase.query('DELETE FROM routine_exercises WHERE id = $1', [ids.routineExercise]);
       await connectedDatabase.query('DELETE FROM routine_days WHERE id = $1', [ids.routineDay]);
@@ -151,10 +155,10 @@ export async function seedSessionFixtures(owner: TestSession): Promise<SessionFi
          local_date, completed_at, server_seq
        )
        VALUES
-         ($1, $2, $3, $4, 'completed', 'post_workout', 'app', '2026-09-07',
-          '2026-09-07T12:00:00.000Z', 1),
-         ($5, $6, $3, $7, 'completed', 'post_workout', 'app', '2026-09-06',
-          '2026-09-06T12:00:00.000Z', 1)`,
+         ($1, $2, $3, $4, 'in_progress', 'exercise', 'app', '2026-09-07',
+          NULL, 0),
+         ($5, $6, $3, $7, 'in_progress', 'exercise', 'app', '2026-09-06',
+          NULL, 0)`,
       [
         ids.session,
         owner.userId,

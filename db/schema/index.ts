@@ -1,14 +1,13 @@
 /**
  * Complete Drizzle schema for the PPL Fitness Tracker
  * 
- * Implements all 9 tables from spec §4.1 with the full definitions.
- * The base tables match 0000_sleepy_sharon_carter.sql; later migrations add
- * seed-facing fields without changing the existing compatibility columns.
+ * Implements the application tables from the M2 schema. The base tables match
+ * 0000_sleepy_sharon_carter.sql; later migrations add seed-facing fields and
+ * additive sync metadata without changing existing compatibility columns.
  */
 
 import { relations, sql } from 'drizzle-orm';
 import {
-  bigint,
   boolean,
   check,
   date,
@@ -182,8 +181,57 @@ export const personalRecords = pgTable('personal_records', {
 export const syncMutations = pgTable('sync_mutations', {
   mutationId: uuid('mutation_id').primaryKey(),
   userId: uuid('user_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+  // Nullable compatibility columns keep pre-M2-04 ledger rows readable during Expand.
+  sessionId: uuid('session_id').references(() => workoutSessions.id, { onDelete: 'cascade' }),
+  deviceId: uuid('device_id'),
+  operation: text('operation'),
+  payloadHash: text('payload_hash'),
+  status: text('status'),
+  serverSeq: integer('server_seq'),
+  rejectionReason: text('rejection_reason'),
   appliedAt: timestamp('applied_at', { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => ({
+  statusValid: check('sync_mutations_status_valid', sql`status IS NULL OR status IN ('processing', 'applied', 'rejected')`),
+  operationValid: check('sync_mutations_operation_valid', sql`operation IS NULL OR operation IN ('set.upsert', 'task.complete', 'phase.advance', 'session.finish')`),
+  sessionLookup: index('sync_mutations_session_lookup').on(t.userId, t.sessionId, t.appliedAt),
+  sequenceLookup: index('sync_mutations_sequence_lookup').on(t.userId, t.sessionId, t.serverSeq),
+}));
+
+export const syncEntityVersions = pgTable('sync_entity_versions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+  sessionId: uuid('session_id').notNull().references(() => workoutSessions.id, { onDelete: 'cascade' }),
+  entityType: text('entity_type').notNull(),
+  entityKey: text('entity_key').notNull(),
+  clientTs: timestamp('client_ts', { withTimezone: true }).notNull(),
+  effectiveTs: timestamp('effective_ts', { withTimezone: true }).notNull(),
+  deviceId: uuid('device_id').notNull(),
+  mutationId: uuid('mutation_id').notNull().references(() => syncMutations.mutationId, { onDelete: 'cascade' }),
+  serverSeq: integer('server_seq').notNull(),
+}, (t) => ({
+  entityTypeValid: check('sync_entity_versions_entity_type_valid', sql`entity_type IN ('set', 'task', 'session')`),
+  entityVersionUnique: uniqueIndex('sync_entity_versions_entity_key').on(t.sessionId, t.entityType, t.entityKey),
+  sessionLookup: index('sync_entity_versions_session_lookup').on(t.userId, t.sessionId),
+  sequenceLookup: index('sync_entity_versions_sequence_lookup').on(t.sessionId, t.serverSeq),
+}));
+
+export const syncChanges = pgTable('sync_changes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+  sessionId: uuid('session_id').notNull().references(() => workoutSessions.id, { onDelete: 'cascade' }),
+  serverSeq: integer('server_seq').notNull(),
+  mutationId: uuid('mutation_id').notNull().references(() => syncMutations.mutationId, { onDelete: 'cascade' }),
+  entityType: text('entity_type').notNull(),
+  entityKey: text('entity_key').notNull(),
+  operation: text('operation').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  entityTypeValid: check('sync_changes_entity_type_valid', sql`entity_type IN ('set', 'task', 'session')`),
+  operationValid: check('sync_changes_operation_valid', sql`operation IN ('set.upsert', 'task.complete', 'phase.advance', 'session.finish')`),
+  sessionSequenceUnique: uniqueIndex('sync_changes_session_sequence').on(t.sessionId, t.serverSeq),
+  sessionMutationUnique: uniqueIndex('sync_changes_session_mutation').on(t.sessionId, t.mutationId),
+  sequenceLookup: index('sync_changes_sequence_lookup').on(t.userId, t.sessionId, t.serverSeq),
+}));
 
 export const importBatches = pgTable('import_batches', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -204,6 +252,8 @@ export const profilesRelations = relations(profiles, ({ many }) => ({
   sessionSets: many(sessionSets),
   personalRecords: many(personalRecords),
   syncMutations: many(syncMutations),
+  syncEntityVersions: many(syncEntityVersions),
+  syncChanges: many(syncChanges),
   importBatches: many(importBatches),
   ownedExercises: many(exercises),
   ownedRoutineDays: many(routineDays),
@@ -251,6 +301,9 @@ export const workoutSessionsRelations = relations(workoutSessions, ({ one, many 
   sessionSets: many(sessionSets),
   sessionTasks: many(sessionTasks),
   personalRecords: many(personalRecords),
+  syncMutations: many(syncMutations),
+  syncEntityVersions: many(syncEntityVersions),
+  syncChanges: many(syncChanges),
 }));
 
 export const sessionSetsRelations = relations(sessionSets, ({ one }) => ({
@@ -290,10 +343,46 @@ export const personalRecordsRelations = relations(personalRecords, ({ one }) => 
   }),
 }));
 
-export const syncMutationsRelations = relations(syncMutations, ({ one }) => ({
+export const syncMutationsRelations = relations(syncMutations, ({ one, many }) => ({
   user: one(profiles, {
     fields: [syncMutations.userId],
     references: [profiles.id],
+  }),
+  session: one(workoutSessions, {
+    fields: [syncMutations.sessionId],
+    references: [workoutSessions.id],
+  }),
+  entityVersions: many(syncEntityVersions),
+  changes: many(syncChanges),
+}));
+
+export const syncEntityVersionsRelations = relations(syncEntityVersions, ({ one }) => ({
+  user: one(profiles, {
+    fields: [syncEntityVersions.userId],
+    references: [profiles.id],
+  }),
+  session: one(workoutSessions, {
+    fields: [syncEntityVersions.sessionId],
+    references: [workoutSessions.id],
+  }),
+  mutation: one(syncMutations, {
+    fields: [syncEntityVersions.mutationId],
+    references: [syncMutations.mutationId],
+  }),
+}));
+
+export const syncChangesRelations = relations(syncChanges, ({ one }) => ({
+  user: one(profiles, {
+    fields: [syncChanges.userId],
+    references: [profiles.id],
+  }),
+  session: one(workoutSessions, {
+    fields: [syncChanges.sessionId],
+    references: [workoutSessions.id],
+  }),
+  mutation: one(syncMutations, {
+    fields: [syncChanges.mutationId],
+    references: [syncMutations.mutationId],
   }),
 }));
 

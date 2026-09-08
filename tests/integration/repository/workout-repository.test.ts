@@ -3,8 +3,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Client } from 'pg';
 import { createDb, type DbHandle } from '../../../lib/db/client.js';
 import type { JwtClaims } from '../../../lib/db/with-user.js';
+import type { SyncRequest } from '../../../lib/contracts/sync.js';
+import { SyncRequestSchema } from '../../../lib/contracts/sync.js';
 import { InvalidSessionCursorError, SessionConflictError, SessionNotFoundError, SessionValidationError } from '../../../lib/domain/sessions/types.js';
 import { ProgressionValidationError } from '../../../lib/domain/progression/types.js';
+import { canonicalMutationHash } from '../../../lib/domain/sync/sync-engine.js';
 import { SessionEngine } from '../../../lib/domain/sessions/session-engine.js';
 import { WorkoutRepository } from '../../../lib/repositories/workout-repository.js';
 
@@ -647,5 +650,249 @@ describe('WorkoutRepository', () => {
       status: 'in_progress',
       phase: 'pre_workout',
     });
+  });
+
+  it('applies all sync metadata atomically and makes replay side-effect free', async () => {
+    const { id: sessionId } = await beginExerciseSession('2028-03-10');
+    const mutation: SyncRequest['mutations'][number] = {
+      op: 'set.upsert',
+      mutationId: randomUUID(),
+      clientTs: '2026-09-08T12:00:00.000Z',
+      sessionId,
+      exerciseId,
+      setIndex: 0,
+      isCompleted: true,
+      weightKg: 60,
+      reps: 8,
+    };
+    const input: SyncRequest = { deviceId: randomUUID(), sinceSeq: 0, mutations: [mutation] };
+
+    const first = await repository.applySync(userId, input);
+    const replay = await repository.applySync(userId, input);
+
+    expect(first).toMatchObject({
+      serverSeq: 1,
+      applied: [mutation.mutationId],
+      rejected: [],
+      state: { id: sessionId, serverSeq: 1, sets: [{ exerciseId, setIndex: 0, weightKg: 60 }] },
+    });
+    expect(replay).toMatchObject({ serverSeq: 1, applied: [mutation.mutationId], rejected: [] });
+    expect((await repository.findSession(userId, sessionId))?.sets).toHaveLength(1);
+
+    const metadata = await owner.query<{ status: string; server_seq: number; entity_key: string }>(
+      `SELECT m.status, m.server_seq, c.entity_key
+       FROM sync_mutations m
+       JOIN sync_changes c ON c.mutation_id = m.mutation_id
+       WHERE m.mutation_id = $1`,
+      [mutation.mutationId],
+    );
+    expect(metadata.rows).toEqual([{ status: 'applied', server_seq: 1, entity_key: `set:${exerciseId}:0` }]);
+  });
+
+  it('replays terminal mutations without reopening the session and rejects new terminal writes', async () => {
+    const terminal = await engine.start(userId, routineDayId, randomUUID(), '2028-03-20');
+    await owner.query(
+      `UPDATE workout_sessions SET status = 'completed', completed_at = $2 WHERE id = $1`,
+      [terminal.id, new Date('2028-03-20T13:00:00.000Z')],
+    );
+
+    const replayMutation: SyncRequest['mutations'][number] = {
+      op: 'set.upsert', mutationId: randomUUID(), clientTs: '2028-03-20T12:00:00.000Z',
+      sessionId: terminal.id, exerciseId, setIndex: 0, isCompleted: true, weightKg: 60, reps: 8,
+    };
+    const terminalDeviceId = randomUUID();
+    await owner.query(
+      `INSERT INTO sync_mutations (
+         mutation_id, user_id, session_id, device_id, operation, payload_hash,
+         status, server_seq, applied_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, 'applied', 1, NOW())`,
+      [
+        replayMutation.mutationId,
+        userId,
+        terminal.id,
+        terminalDeviceId,
+        replayMutation.op,
+        canonicalMutationHash(replayMutation),
+      ],
+    );
+
+    const replay = await repository.applySync(userId, {
+      deviceId: terminalDeviceId,
+      sinceSeq: 0,
+      mutations: [replayMutation],
+    });
+    expect(replay).toMatchObject({ applied: [replayMutation.mutationId], rejected: [], state: { status: 'completed' } });
+
+    const newMutation = { ...replayMutation, mutationId: randomUUID() };
+    const rejected = await repository.applySync(userId, {
+      deviceId: terminalDeviceId,
+      sinceSeq: 1,
+      mutations: [newMutation],
+    });
+    expect(rejected).toMatchObject({
+      applied: [],
+      rejected: [{ mutationId: newMutation.mutationId, reason: 'CONFLICT' }],
+      state: { status: 'completed' },
+    });
+  });
+
+  it('uses legacy set timestamps as the conflict baseline before version backfill', async () => {
+    const { id: sessionId } = await beginExerciseSession('2028-03-15');
+    const legacyClientTs = new Date(Date.now() - 60_000);
+    await owner.query(
+      `INSERT INTO session_sets (
+         user_id, session_id, exercise_id, set_index, is_completed,
+         weight_kg, reps, client_ts
+       ) VALUES ($1, $2, $3, 0, true, 80, 8, $4)`,
+      [userId, sessionId, exerciseId, legacyClientTs],
+    );
+
+    const stale: SyncRequest['mutations'][number] = {
+      op: 'set.upsert', mutationId: randomUUID(), clientTs: new Date(Date.now() - 120_000).toISOString(),
+      sessionId, exerciseId, setIndex: 0, isCompleted: true, weightKg: 60, reps: 8,
+    };
+    const result = await repository.applySync(userId, {
+      deviceId: randomUUID(), sinceSeq: 0, mutations: [stale],
+    });
+
+    expect(result.rejected).toEqual([{ mutationId: stale.mutationId, reason: 'STALE_CONFLICT' }]);
+    expect((await repository.findSession(userId, sessionId))?.sets[0]).toMatchObject({ weightKg: 80, reps: 8 });
+    const version = await owner.query(
+      'SELECT 1 FROM sync_entity_versions WHERE session_id = $1 AND entity_key = $2',
+      [sessionId, `set:${exerciseId}:0`],
+    );
+    expect(version.rows).toEqual([]);
+  });
+
+  it('does not disclose a mutation ID collision owned by another user', async () => {
+    const secondEngine = new SessionEngine(secondRepository);
+    const foreignSession = await secondEngine.start(secondUserId, routineDayId, randomUUID(), '2028-03-16');
+    await secondEngine.completeTask(secondUserId, {
+      sessionId: foreignSession.id,
+      taskKey: 'warm_up',
+      completedAt: new Date('2028-03-16T12:00:00.000Z'),
+    });
+    await secondEngine.advancePhase(secondUserId, { sessionId: foreignSession.id, phase: 'exercise' });
+
+    const foreignMutation: SyncRequest['mutations'][number] = {
+      op: 'set.upsert', mutationId: randomUUID(), clientTs: '2028-03-16T12:00:00.000Z',
+      sessionId: foreignSession.id, exerciseId, setIndex: 0, isCompleted: true, weightKg: 60, reps: 8,
+    };
+    await secondRepository.applySync(secondUserId, {
+      deviceId: randomUUID(), sinceSeq: 0, mutations: [foreignMutation],
+    });
+
+    const result = await repository.applySync(userId, {
+      deviceId: randomUUID(), sinceSeq: 0, mutations: [{ ...foreignMutation, sessionId: (await beginExerciseSession('2028-03-17')).id }],
+    });
+    expect(result.rejected).toEqual([{ mutationId: foreignMutation.mutationId, reason: 'MUTATION_REJECTED' }]);
+  });
+
+  it('rejects a mixed-session batch at the contract boundary', async () => {
+    const first = await beginExerciseSession('2028-03-18');
+    const second = await beginExerciseSession('2028-03-19');
+    const base: SyncRequest['mutations'][number] = {
+      op: 'set.upsert', mutationId: randomUUID(), clientTs: '2028-03-18T12:00:00.000Z',
+      sessionId: first.id, exerciseId, setIndex: 0, isCompleted: true, weightKg: 60, reps: 8,
+    };
+    const request: SyncRequest = {
+      deviceId: randomUUID(), sinceSeq: 0,
+      mutations: [base, { ...base, mutationId: randomUUID(), sessionId: second.id }],
+    };
+    expect(SyncRequestSchema.safeParse(request).success).toBe(false);
+  });
+
+  it('rejects stale conflicts and preserves the winning set and PR', async () => {
+    const { id: sessionId } = await beginExerciseSession('2028-03-11');
+    const deviceId = randomUUID();
+    const winningClientTs = new Date(Date.now() - 1_000).toISOString();
+    const staleClientTs = new Date(Date.now() - 60_000).toISOString();
+    const winning: SyncRequest['mutations'][number] = {
+      op: 'set.upsert', mutationId: randomUUID(), clientTs: winningClientTs,
+      sessionId, exerciseId, setIndex: 0, isCompleted: true, weightKg: 80, reps: 8,
+    };
+    const stale: SyncRequest['mutations'][number] = {
+      ...winning, mutationId: randomUUID(), clientTs: staleClientTs, weightKg: 60,
+    };
+
+    await repository.applySync(userId, { deviceId, sinceSeq: 0, mutations: [winning] });
+    const result = await repository.applySync(userId, { deviceId, sinceSeq: 1, mutations: [stale] });
+
+    expect(result).toMatchObject({ serverSeq: 1, applied: [], rejected: [{ mutationId: stale.mutationId, reason: 'STALE_CONFLICT' }] });
+    expect((await repository.findSession(userId, sessionId))?.sets[0]).toMatchObject({ weightKg: 80, reps: 8 });
+    expect(await repository.findPersonalRecord(userId, exerciseId)).toMatchObject({ bestE1rm: 101.33, sessionId });
+  });
+
+  it('supports ordered lifecycle mutations and records item-level domain rejection', async () => {
+    const { id: sessionId } = await beginExerciseSession('2028-03-12');
+    const task: SyncRequest['mutations'][number] = {
+      op: 'task.complete', mutationId: randomUUID(), clientTs: '2026-09-08T12:00:00.000Z',
+      sessionId, taskKey: 'main_workout', completedAt: '2026-09-08T12:00:00.000Z',
+    };
+    const invalidPhase: SyncRequest['mutations'][number] = {
+      op: 'phase.advance', mutationId: randomUUID(), clientTs: '2028-03-12T12:00:01.000Z',
+      sessionId, phase: 'stretch',
+    };
+
+    const result = await repository.applySync(userId, {
+      deviceId: randomUUID(), sinceSeq: 0, mutations: [task, invalidPhase],
+    });
+
+    expect(result.serverSeq).toBe(1);
+    expect(result.applied).toEqual([task.mutationId]);
+    expect(result.rejected).toEqual([{ mutationId: invalidPhase.mutationId, reason: 'CONFLICT' }]);
+    expect(result.state.phase).toBe('exercise');
+    expect(result.state.tasks.map(({ taskKey }) => taskKey)).toContain('main_workout');
+  });
+
+  it('rolls back the set, PR, sequence, and sync ledger on unexpected progression failure', async () => {
+    await owner.query('DELETE FROM personal_records WHERE user_id = $1 AND exercise_id = $2', [userId, exerciseId]);
+    const { id: sessionId } = await beginExerciseSession('2028-03-13');
+    const mutation: SyncRequest['mutations'][number] = {
+      op: 'set.upsert', mutationId: randomUUID(), clientTs: '2026-09-08T12:00:00.000Z',
+      sessionId, exerciseId, setIndex: 0, isCompleted: true, weightKg: 1000, reps: 1000,
+    };
+
+    await expect(repository.applySync(userId, {
+      deviceId: randomUUID(), sinceSeq: 0, mutations: [mutation],
+    })).rejects.toThrow();
+
+    expect((await repository.findSession(userId, sessionId))?.sets).toEqual([]);
+    expect(await repository.findPersonalRecord(userId, exerciseId)).toBeNull();
+    const sessionRow = await owner.query<{ server_seq: number }>(
+      'SELECT server_seq FROM workout_sessions WHERE id = $1',
+      [sessionId],
+    );
+    expect(sessionRow.rows).toEqual([{ server_seq: 0 }]);
+    const versionRows = await owner.query(
+      'SELECT 1 FROM sync_entity_versions WHERE session_id = $1',
+      [sessionId],
+    );
+    const changeRows = await owner.query(
+      'SELECT 1 FROM sync_changes WHERE session_id = $1',
+      [sessionId],
+    );
+    expect(versionRows.rows).toEqual([]);
+    expect(changeRows.rows).toEqual([]);
+    const ledger = await owner.query('SELECT 1 FROM sync_mutations WHERE mutation_id = $1', [mutation.mutationId]);
+    expect(ledger.rows).toEqual([]);
+  });
+
+  it('serializes concurrent identical submissions into one domain write and sequence', async () => {
+    const { id: sessionId } = await beginExerciseSession('2028-03-14');
+    const mutation: SyncRequest['mutations'][number] = {
+      op: 'set.upsert', mutationId: randomUUID(), clientTs: '2026-09-08T12:00:00.000Z',
+      sessionId, exerciseId, setIndex: 0, isCompleted: true, weightKg: 60, reps: 8,
+    };
+    const input: SyncRequest = { deviceId: randomUUID(), sinceSeq: 0, mutations: [mutation] };
+
+    const results = await Promise.all([
+      repository.applySync(userId, input),
+      repository.applySync(userId, input),
+    ]);
+
+    expect(results.map((result) => result.applied)).toEqual([[mutation.mutationId], [mutation.mutationId]]);
+    expect(new Set(results.map((result) => result.serverSeq))).toEqual(new Set([1]));
+    expect((await repository.findSession(userId, sessionId))?.sets).toHaveLength(1);
   });
 });

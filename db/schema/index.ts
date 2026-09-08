@@ -2,7 +2,8 @@
  * Complete Drizzle schema for the PPL Fitness Tracker
  * 
  * Implements all 9 tables from spec §4.1 with the full definitions.
- * This matches the existing migration 0000_sleepy_sharon_carter.sql exactly.
+ * The base tables match 0000_sleepy_sharon_carter.sql; later migrations add
+ * seed-facing fields without changing the existing compatibility columns.
  */
 
 import { relations, sql } from 'drizzle-orm';
@@ -73,6 +74,7 @@ export const exercises = pgTable('exercises', {
   muscleGroups: text('muscle_groups').array().notNull(),
   equipment: text('equipment'),
   formTips: text('form_tips'),
+  beginnerNotes: text('beginner_notes'),
   videoUrl: text('video_url'),
   alternatives: text('alternatives').array().notNull().default(sql`'{}'`),
   ownerUserId: uuid('owner_user_id').references(() => profiles.id, { onDelete: 'cascade' }),
@@ -94,10 +96,14 @@ export const routineExercises = pgTable('routine_exercises', {
   exerciseId: uuid('exercise_id').notNull().references(() => exercises.id, { onDelete: 'cascade' }),
   orderIndex: integer('order_index').notNull(),
   targetSets: integer('target_sets').notNull(),
+  // Compatibility projection; targetRepsRange is the lossless source value.
   targetReps: integer('target_reps').notNull(),
+  targetRepsRange: text('target_reps_range'),
+  restTime: text('rest_time'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({
   routineExerciseOrder: uniqueIndex('routine_exercises_day_order').on(t.routineDayId, t.orderIndex),
+  routineExerciseDayExercise: uniqueIndex('routine_exercises_day_exercise').on(t.routineDayId, t.exerciseId),
 }));
 
 export const workoutSessions = pgTable('workout_sessions', {

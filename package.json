@@ -24,7 +24,8 @@
     "db:down": "supabase stop",
     "db:status": "supabase status -o env",
     "db:migrate": "drizzle-kit migrate",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "db:seed": "tsx db/seed/exercises.ts"
   },
   "dependencies": {
     "@supabase/ssr": "0.12.6",

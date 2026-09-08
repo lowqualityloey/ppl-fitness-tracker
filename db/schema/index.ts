@@ -54,6 +54,9 @@ export const taskKey = pgEnum('task_key', [
   'stretch'
 ]);
 
+export const exerciseKind = pgEnum('exercise_kind', ['strength', 'stretch']);
+export const routineExercisePhase = pgEnum('routine_exercise_phase', ['main_workout', 'stretch']);
+
 // ============================================================================
 // Tables (matching existing migration exactly)
 // ============================================================================
@@ -77,9 +80,17 @@ export const exercises = pgTable('exercises', {
   beginnerNotes: text('beginner_notes'),
   videoUrl: text('video_url'),
   alternatives: text('alternatives').array().notNull().default(sql`'{}'`),
+  kind: exerciseKind('kind').notNull().default('strength'),
+  durationSeconds: integer('duration_seconds'),
   ownerUserId: uuid('owner_user_id').references(() => profiles.id, { onDelete: 'cascade' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+}, () => ({
+  kindDurationConsistent: check(
+    'exercise_kind_duration_consistent',
+    sql`(kind = 'stretch' AND duration_seconds IS NOT NULL AND duration_seconds > 0)
+      OR (kind = 'strength' AND duration_seconds IS NULL)`,
+  ),
+}));
 
 export const routineDays = pgTable('routine_days', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -94,15 +105,16 @@ export const routineExercises = pgTable('routine_exercises', {
   id: uuid('id').primaryKey().defaultRandom(),
   routineDayId: uuid('routine_day_id').notNull().references(() => routineDays.id, { onDelete: 'cascade' }),
   exerciseId: uuid('exercise_id').notNull().references(() => exercises.id, { onDelete: 'cascade' }),
+  phase: routineExercisePhase('phase').notNull().default('main_workout'),
   orderIndex: integer('order_index').notNull(),
-  targetSets: integer('target_sets').notNull(),
+  targetSets: integer('target_sets'),
   // Compatibility projection; targetRepsRange is the lossless source value.
-  targetReps: integer('target_reps').notNull(),
+  targetReps: integer('target_reps'),
   targetRepsRange: text('target_reps_range'),
   restTime: text('rest_time'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({
-  routineExerciseOrder: uniqueIndex('routine_exercises_day_order').on(t.routineDayId, t.orderIndex),
+  routineExerciseOrder: uniqueIndex('routine_exercises_day_phase_order').on(t.routineDayId, t.phase, t.orderIndex),
   routineExerciseDayExercise: uniqueIndex('routine_exercises_day_exercise').on(t.routineDayId, t.exerciseId),
 }));
 

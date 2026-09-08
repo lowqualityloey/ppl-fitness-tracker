@@ -102,24 +102,26 @@ describe('M1-09: legacy exercise seed', () => {
     for (const daySlug of Object.keys(expectedByDay) as Array<keyof typeof expectedByDay>) {
       const result = await client.query<{
         name: string;
+        phase: string;
         order_index: number;
         target_sets: number;
         target_reps: number;
         target_reps_range: string;
         rest_time: string;
       }>(
-        `SELECT e.name, re.order_index, re.target_sets, re.target_reps,
+        `SELECT e.name, re.phase, re.order_index, re.target_sets, re.target_reps,
                 re.target_reps_range, re.rest_time
          FROM routine_exercises re
          JOIN routine_days rd ON rd.id = re.routine_day_id
          JOIN exercises e ON e.id = re.exercise_id
-         WHERE rd.slug = $1
+         WHERE rd.slug = $1 AND e.kind = 'strength'
          ORDER BY re.order_index`,
         [daySlug],
       );
 
       expect(result.rows).toHaveLength(6);
       expect(result.rows.map((row) => row.name)).toEqual(expectedByDay[daySlug]);
+      expect(result.rows.every((row) => row.phase === 'main_workout')).toBe(true);
       expect(result.rows.map((row) => row.order_index)).toEqual([0, 1, 2, 3, 4, 5]);
       expect(result.rows.map((row) => ({
         targetSets: row.target_sets,
@@ -189,7 +191,8 @@ describe('M1-09: legacy exercise seed', () => {
       `UPDATE routine_exercises
        SET order_index = 99
        WHERE routine_day_id = (SELECT id FROM routine_days WHERE slug = 'push')
-         AND exercise_id = (SELECT id FROM exercises WHERE slug = 'bench-press')`,
+         AND exercise_id = (SELECT id FROM exercises WHERE slug = 'bench-press')
+         AND phase = 'main_workout'`,
     );
     expect(moved.rowCount).toBe(1);
 
@@ -200,7 +203,7 @@ describe('M1-09: legacy exercise seed', () => {
        FROM routine_exercises re
        JOIN routine_days rd ON rd.id = re.routine_day_id
        JOIN exercises e ON e.id = re.exercise_id
-       WHERE rd.slug = 'push' AND e.slug = 'bench-press'`,
+       WHERE rd.slug = 'push' AND e.slug = 'bench-press' AND re.phase = 'main_workout'`,
     );
     expect(repaired.rows).toEqual([{ order_index: 0 }]);
 
@@ -208,7 +211,9 @@ describe('M1-09: legacy exercise seed', () => {
       `SELECT count(*)::text AS count
        FROM routine_exercises re
        JOIN routine_days rd ON rd.id = re.routine_day_id
-       WHERE rd.slug = ANY($1::text[])`,
+       JOIN exercises e ON e.id = re.exercise_id
+       WHERE rd.slug = ANY($1::text[])
+         AND e.kind = 'strength'`,
       [['push', 'legs', 'pull']],
     );
     expect(associationCount.rows[0]?.count).toBe('18');

@@ -1,6 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createClient } from '../supabase/server.js';
 import { AppErrorException, unauthenticatedError } from '../contracts/envelope.js';
+import {
+  createVerifiedUserContext,
+  type VerifiedUserContext,
+} from '../db/auth-context.js';
 
 /**
  * M1-12: The only legitimate source of a user id anywhere in this app.
@@ -25,9 +29,9 @@ import { AppErrorException, unauthenticatedError } from '../contracts/envelope.j
  *
  * @throws {AppErrorException} 401-shaped, when no session exists.
  */
-export async function requireUser(
+export async function requireUserContext(
   client?: SupabaseClient
-): Promise<{ userId: string }> {
+): Promise<VerifiedUserContext> {
   const supabase = client ?? (await createClient());
   const { data, error } = await supabase.auth.getUser();
 
@@ -35,5 +39,12 @@ export async function requireUser(
     throw new AppErrorException(unauthenticatedError());
   }
 
-  return { userId: data.user.id };
+  return createVerifiedUserContext(data.user);
+}
+
+export async function requireUser(
+  client?: SupabaseClient
+): Promise<{ userId: string }> {
+  const { userId } = await requireUserContext(client);
+  return { userId };
 }

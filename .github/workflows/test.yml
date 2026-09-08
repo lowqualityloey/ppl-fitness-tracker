@@ -19,7 +19,11 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          # 22+ needed for native WebSocket, which @supabase/supabase-js's
+          # bundled realtime client requires even though this project
+          # doesn't use realtime. 24 matches the local dev environment
+          # (see docs/STATE.md §5, node runtime).
+          node-version: "24"
           cache: "npm"
 
       - name: Install dependencies

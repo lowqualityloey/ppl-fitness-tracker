@@ -1,10 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { createClient } from '../supabase/server.js';
-import { AppErrorException, unauthenticatedError } from '../contracts/envelope.js';
+import { createClient } from '../supabase/server';
+import { AppErrorException, unauthenticatedError } from '../contracts/envelope';
 import {
   createVerifiedUserContext,
   type VerifiedUserContext,
-} from '../db/auth-context.js';
+} from '../db/auth-context';
 
 /**
  * M1-12: The only legitimate source of a user id anywhere in this app.

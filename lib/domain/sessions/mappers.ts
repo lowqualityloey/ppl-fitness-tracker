@@ -5,7 +5,7 @@ import type {
   sessionSets,
   sessionTasks,
   workoutSessions,
-} from '../../../db/schema/index.js';
+} from '../../../db/schema/index';
 import type {
   ExercisePlan,
   RoutineExercisePlan,
@@ -13,7 +13,7 @@ import type {
   SessionState,
   SessionSummary,
   SessionTaskState,
-} from './types.js';
+} from './types';
 
 export type WorkoutSessionRow = typeof workoutSessions.$inferSelect;
 export type RoutineDayRow = typeof routineDays.$inferSelect;

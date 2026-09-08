@@ -74,7 +74,7 @@ PostgreSQL schema + RLS + constraints
 | `requireUserContext` | `Promise<VerifiedUserContext>` | Verified Supabase identity; no request identity input. Unit/integration auth tests. |
 | `withUser` | `(db, claims, operation)` | Transaction-local RLS claim setup, including both GUCs and `is_local=true`. GUC regression tests. |
 | `WorkoutRepository` | `listSessions(userId, cursor?)`, `findSession(userId, id)`, `findByClientId(userId, clientId)`, `startSession(userId, routineDayId, clientId, localDate)` | Single user-scoped persistence seam, cursor paging, hydration, idempotent/concurrent start. App-role repository tests. |
-| `SessionEngine` | `start`, `completeSet`, `advancePhase`, `finish` | Deep lifecycle module: legal transitions, phase gates, task/set rules, atomic writes. Pure transition tests plus DB transaction tests. |
+| `SessionEngine` | `start`, `completeSet`, `completeTask`, `advancePhase`, `finish` | Deep lifecycle module: legal transitions, phase gates, task/set rules, atomic writes. Pure transition tests plus DB transaction tests. |
 | `ProgressionEngine` | `calculateE1rm`, `materializePersonalRecord` | e1RM and PR policy, committed-write fan-out. Pure math plus transaction tests. |
 | `SyncEngine` server path | bounded mutation batch application | Mutation ledger, sequence/change model, conflict policy, authoritative state. Reducer, concurrency, rollback, and HTTP tests. |
 | `LegacyImporter` | `import(raw) -> ImportReport` | Per-key parsing, fingerprint idempotency, archive/report semantics. Parser/property and DB integration tests. |

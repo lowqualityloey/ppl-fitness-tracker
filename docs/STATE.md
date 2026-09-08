@@ -3,15 +3,15 @@
 ## 1. Executive Summary & Current Position
 
 - **Project Name**: PPL Fitness Tracker
-- **Current Milestone / Epic**: **M2: Core Domain Engine — M2-00 foundation and M2-01 sessions API implemented; M2-02 next**
+- **Current Milestone / Epic**: **M2: Core Domain Engine — M2-00 foundation, M2-01 sessions API, and M2-02 SessionEngine implemented; M2-03 next**
 - **Overall Status**: ACTIVE <!-- Options: ACTIVE | PAUSED | STABILIZING | RELEASE_CANDIDATE -->
 - **Target Release**: v1.0.0, no date committed
-- **Current Working Branch**: `feat/m2-01-sessions-api`, with the M2-00 repository/runtime foundation merged to `main` and M2-01 sessions routes/fixtures implemented and validated locally.
+- **Current Working Branch**: `feat/m2-02-session-engine`, with M2-00 and M2-01 merged to `main` and M2-02 SessionEngine lifecycle mutations implemented and validated locally.
 
 > **Do not pin the current `main` SHA in this field.** It was tried three times and went stale three times, because the merge commit that lands the correction advances `main` past the value being recorded. Describe the state, not the hash. Run `git log --oneline -1` if you need the exact commit.
 - **Last Updated**: 2026-09-08
 
-**Where things actually stand.** M1 schema, RLS, auth, contracts, exercise/stretch seeds, and the M1-16 RED route baseline are on `main`. M2-00 adds a runtime app-role Drizzle client, verified auth-to-RLS context, session domain mappers, and a user-scoped `WorkoutRepository`; M2-01 adds the sessions API routes, deterministic fixtures, and focused route coverage on top of those seams. The legacy vanilla-JS app still runs unchanged alongside the target stack. Production email delivery remains intentionally deferred behind issue #16's provider and DNS decisions.
+**Where things actually stand.** M1 schema, RLS, auth, contracts, exercise/stretch seeds, and the M1-16 RED route baseline are on `main`. M2-00 adds the runtime app-role Drizzle client, verified auth-to-RLS context, session domain mappers, and user-scoped repository; M2-01 adds the sessions API; M2-02 adds the pure lifecycle transition table, transaction-scoped set/task/phase/finish mutations, and rollback coverage. The legacy vanilla-JS app still runs unchanged alongside the target stack. Production email delivery remains intentionally deferred behind issue #16's provider and DNS decisions.
 
 ---
 
@@ -22,7 +22,7 @@
 - [x] **Planning**: Spec written, six decisions resolved, ADRs recorded (Complete — 2026-09-08)
 - [x] **M0**: De-risk spike — RLS enforcement proven through Drizzle (Complete — 2026-09-08, **gate lifted**)
 - [/] **M1**: Contracts & Seams — code, contracts, seeds, RLS, auth, and RED baseline complete; production SMTP/delivery remains deferred under issue #16
-- [/] **M2**: Core Domain Engine — formal plan and GitHub issues #36–#42 filed; M2-00 foundation committed in `223e2b8`, M2-01 sessions API/fixtures implemented and validated, with remaining domain engines queued
+- [/] **M2**: Core Domain Engine — formal plan and GitHub issues #36–#42 filed; M2-00 foundation, M2-01 sessions API/fixtures, and M2-02 SessionEngine implemented and validated, with progression and sync engines queued
 - [ ] **M3**: Presentation — shadcn + tokens, session runner, offline outbox, WCAG audit (Queued)
 - [ ] **M4**: Hardening, telemetry, decommission the legacy static app (Queued)
 
@@ -70,13 +70,13 @@ estimated at ~20h plus external SMTP setup.
 
 **M1 exit criteria:** code/schema/RLS/auth/contracts and the route RED baseline are complete and merged. The production-release portion remains blocked by issue #16: custom SMTP, verified domain, SPF/DKIM, and real delivery monitoring.
 
-### M2 Checkpoint — M2-00 Foundation & M2-01 Sessions API
+### M2 Checkpoint — M2-00 Foundation, M2-01 Sessions API & M2-02 SessionEngine
 
 Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with atomic task files under `docs/tasks/m2/`. Filed under GitHub milestone `M2: Core Domain Engine` as issues **#36–#42**; these are the canonical tracking numbers:
 
 - [x] `#36` `M2-00`: runtime `DATABASE_URL` Drizzle client, shared DB/transaction types, verified auth-to-RLS context, session domain types/mappers, and user-scoped `WorkoutRepository` — implemented and committed in [223e2b8](https://github.com/lowqualityloey/ppl-fitness-tracker/commit/223e2b8); repository race/cursor/DSN review gates passed.
 - [x] `#37` `M2-01`: deterministic API fixtures and `/api/sessions` route handlers wired to the repository — implemented and validated with 12 focused API integration tests plus five route-error unit assertions using owner-seeded data, tenant-qualified app-role RLS, authentication/validation errors, idempotent starts, pagination, mapped child state, and cross-user isolation.
-- [ ] `#38` `M2-02`: `SessionEngine` lifecycle, phase gates, set/task mutations, and session completion.
+- [x] `#38` `M2-02`: `SessionEngine` lifecycle, phase gates, set/task mutations, terminal-state protection, and rollback-safe repository transactions — implemented and validated with pure transition tests plus app-role repository integration coverage; true sequence/device sync remains deferred to #39.
 - [ ] `#41` `M2-03`: `ProgressionEngine` e1RM calculations and personal-record materialization.
 - [ ] `#39` `M2-04`: server-side sync transaction, mutation idempotency, sequence design, LWW/device metadata, and conflict handling.
 - [ ] `#40` `M2-05`: `LegacyImporter` parsing, fingerprint idempotency, archive flow, and import report.
@@ -121,8 +121,8 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
 
 - **Target Workspace / Package**: N/A (standalone repo)
 - **Active RFC / Spec**: `docs/specs/2026-09-08-spec-fullstack-migration.md`
-- **Active Task Spec**: `docs/specs/2026-09-08-m2-core-domain-engine.md`, with atomic task files in `docs/tasks/m2/` and GitHub issues #36–#42. The formal plan, issue breakdown, M2-00 foundation, and M2-01 sessions API gate are complete; M2-02 is the next implementation gate.
-- **Key Source Files in Flight**: M2-00 runtime/auth/domain/repository files are committed in `223e2b8`. M2-01 now provides `src/app/api/sessions/`, deterministic API fixtures, shared route error translation, and route integration coverage without bypassing those seams.
+- **Active Task Spec**: `docs/specs/2026-09-08-m2-core-domain-engine.md`, with atomic task files in `docs/tasks/m2/` and GitHub issues #36–#42. The formal plan, issue breakdown, M2-00 foundation, M2-01 sessions API, and M2-02 SessionEngine gate are complete; M2-03 is the next implementation gate.
+- **Key Source Files in Flight**: M2-00 runtime/auth/domain/repository files are merged to `main`. M2-01 provides `src/app/api/sessions/`, deterministic API fixtures, shared route error translation, and route integration coverage; M2-02 adds `lib/domain/sessions/session-engine.ts`, its pure transition table, and transaction-scoped repository mutations.
 - **Spike sandbox — throwaway, delete once M1's integration suite covers the same ground**:
   - `spikes/m0-drizzle-rls/sql/001-setup.sql` — role, tables, 8 policies, `handle_new_user`. Comments record the measured surprises. **Creates `unprotected_future_table` on purpose**; do not copy it.
   - `spikes/m0-drizzle-rls/src/db.ts` — `withUserHardened()` is the version M1 must adopt. `withUserLeaky()` is a negative control, never to be imported.
@@ -178,7 +178,7 @@ Added by the M0 spike (ADR-0003 Amendment A1):
 
 ### Blockers
 
-**No immediate coding blocker.** M2-00 is implemented, reviewed, validated, and committed in `223e2b8`; M2-01 sessions routes and deterministic API fixtures are implemented and validated. M2-02 is the next active slice.
+**No immediate coding blocker.** M2-00 is implemented, reviewed, validated, and committed; M2-01 sessions routes and deterministic API fixtures are implemented and validated; M2-02 SessionEngine lifecycle mutations and rollback coverage are implemented and validated. M2-03 is the next active slice.
 
 *Resolved 2026-09-08 — `M0-00`, Node runtime.* Initially filed as "WSL Node is 18.19.1, too old for Next.js 16." That was overstated. `~/.nvm/versions/node/` already contained v22.19.0 and v24.18.0, and the `PATH` prepend at `~/.zshrc:119-122` selects the highest, so the **interactive** shell was already on Node 24 and Next.js 16 would have run fine.
 
@@ -224,8 +224,8 @@ Actions taken: `nvm install --lts` → v24.20.0, set as nvm default (additive; `
 
 ## 7. Next Immediate Actions (Queued)
 
-1. **Implement `#38`/M2-02.** Build `SessionEngine` lifecycle, phase gates, set/task mutations, and completion on the validated M2-00 repository and M2-01 route seams; keep true sync deltas and device-aware conflict handling deferred to #39.
-2. **Continue the dependency sequence `#38` → `#41` → `#39` → `#40` → `#42`.** Freeze SessionEngine write semantics before progression/sync/import and close each task's acceptance criteria before consuming its interface downstream.
+1. **Implement `#41`/M2-03.** Build `ProgressionEngine` e1RM calculations and personal-record materialization on the validated SessionEngine set-write seam; keep sync sequence/device conflict handling deferred to #39.
+2. **Continue the dependency sequence `#41` → `#39` → `#40` → `#42`.** Preserve the frozen SessionEngine write/archive interfaces and close each task's acceptance criteria before consuming its interface downstream.
 3. **Keep schema-risk work explicit.** Reconcile the Drizzle migration journal mismatch before generated migrations; use Expand-Contract for any sync/device/change-log schema; retain the missing Auth/profile FK as a tracked hardening risk.
 4. **Keep issue #16 deferred.** Custom SMTP/provider/DNS remains the separate M1 production-release blocker and must not block M2 coding or be described as complete.
 5. **Preserve the M3 boundary.** Do not delete legacy source folders or begin UI/design-system implementation until M2-06 closes the backend/API hardening gate.
@@ -256,3 +256,4 @@ Actions taken: `nvm install --lts` → v24.20.0, set as nvm default (additive; `
 | 2026-09-08 | Owner + Kiro | `pk:checkpoint` — M2 handoff | Synced the tracker to `feat/m2-core-domain-engine` and the completed-but-uncommitted M2-00 foundation: runtime `DATABASE_URL` Drizzle client, shared DB/transaction types, verified auth-to-RLS context, session domain mappers, and user-scoped `WorkoutRepository`. Recorded the deferred migration-journal, auth-profile-FK, session-delta, `deviceId`, and `server_seq` risks; replaced stale M1 next actions with the required retroactive M2 `pk:plan` → `docs/tasks/m2/` → GitHub issue sequence; retained SMTP issue #16 as deferred. Validation evidence and zero-loss handoff are in the session response; no commit, push, discard, or stash was performed.
 | 2026-09-08 | Owner + Kiro | M2 planning + `pk:commit` | Formalized M2 in `docs/specs/2026-09-08-m2-core-domain-engine.md`; created atomic task artifacts under `docs/tasks/m2/`; created milestone `M2: Core Domain Engine`; filed #36–#42; fixed and tested cursor validation, duplicate-start race recovery, two-user repository isolation, concurrent starts, pagination, and runtime DSN selection. Committed planning as `10da008` and M2-00 foundation as `223e2b8` (`Closes #36`). M2-01 sessions routes/fixtures are next; issue #16 remains deferred.
 | 2026-09-08 | Owner + Kiro | `M2-01` sessions API | Implemented `GET/POST /api/sessions` and `GET /api/sessions/:id` through verified Supabase auth, explicit user-scoped `WorkoutRepository`, `DATABASE_URL`, and RLS; added shared AppError/Zod/conflict/not-found translation; added deterministic owner/cross-user fixtures through `MIGRATION_DATABASE_URL`; and expanded the API suite to 12 passing tests plus five route-error unit assertions covering list isolation, cursor validation, idempotent starts, malformed input, unauthenticated reads, full-state `since` compatibility, and cross-user 404. True sync deltas remain deferred to M2-04; issue #16 remains deferred.
+| 2026-09-08 | Owner + Kiro | `M2-02` SessionEngine | Implemented the pure lifecycle transition table (`pre_workout → exercise ↔ rest → stretch → post_workout`), warm-up/main-set/stretch gates, typed lifecycle errors, user-scoped transaction mutation context, set/task upserts, phase advancement, completion, terminal protection, and forced rollback coverage. No schema, sync, device, PR, route, UI, SMTP, or legacy changes; true sequence/device semantics remain deferred to M2-04. |

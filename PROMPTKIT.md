@@ -31,7 +31,7 @@
 - No tests, no backend, no auth
 - **Known broken**: `npm run build` exits 0 but emits **zero JavaScript**. All four `<script>` tags are classic scripts, so Vite neither transforms nor copies them and leaves the original `src` in the output HTML. Every page in `dist/` 404s on its script and is inert. Do not treat a successful `build` exit code as evidence of a working build.
 
-### Target stack (v1 — backend through M2-05 merged, M2-06 in review as PR #53; re-verified by intake scan 2026-09-11)
+### Target stack (v1 — **M2 complete**: backend through M2-06 merged (`main` at `ce1c5d9`, PRs #43–#47, #51, #53); re-verified by intake scan 2026-09-11)
 
 - **Language & Runtime**: TypeScript `strict`, Node.js **≥ 20.9** (required by Next.js 16 — Node 18 is unsupported). nvm default is v24.20.0 LTS; see the shell footgun in §3.
 - **Framework**: Next.js 16 (App Router), React 19 — ADR-0001. Live: `src/app/` with placeholder home + `sign-in/`, route handlers under `src/app/api/{sessions,sessions/[id],sync}` and `src/app/auth/{signin,confirm}`, `src/middleware.ts` refreshing sessions. Runs on port 3001 alongside the legacy Vite server on 3000.
@@ -110,7 +110,7 @@ each serving correctly, zero collision.
   a route behind a skip, bring that registry and its guard back together — skips are counted and
   issue-attributed and self-expiring, never hidden by a glob. Run `npm run test:api:preflight` first:
   when results look impossible it separates a broken environment from broken code.
-  Measured 2026-09-11 **on `feat/m2-06-route-hardening` (PR #53)**: **7 files / 40 passed / 0 skipped**.
+  Measured 2026-09-11 **on merged `main` (`ce1c5d9`, PR #53 merged)**: **7 files / 40 passed / 0 skipped** — no declared skips remain.
   `tests/integration/api/import-legacy.test.ts` calls `seedExercises()` in `beforeAll`, and why:
   **CI has no seed step**, and the importer resolves legacy `ex1`…`ex6` against seeded routine
   content, so without that call the suite fails for a reason unrelated to the code under test. Any

@@ -3,13 +3,13 @@
 ## 1. Executive Summary & Current Position
 
 - **Project Name**: PPL Fitness Tracker
-- **Current Milestone / Epic**: **M2: Core Domain Engine — M2-00 → M2-05 merged to `main` (PRs #43–#47, #51; issue #40 closed); M2-06 (#42) implemented and **in review as PR #53** — no API route handler is missing anymore.** M2 is one merge from complete.
+- **Current Milestone / Epic**: **M2: Core Domain Engine — COMPLETE.** M2-00 → M2-06 all merged to `main` (PRs #43–#47, #51, #53; issue #42 closed). The milestone's last slice, M2-06 route hardening, merged as **PR #53 (`ce1c5d9`)**. **M3: Presentation** is next and has no task breakdown or issues yet — it needs `pk:plan` then `pk:tasks`.
 - **Overall Status**: ACTIVE <!-- Options: ACTIVE | PAUSED | STABILIZING | RELEASE_CANDIDATE -->
 - **Target Release**: v1.0.0, no date committed
-- **Current Working Branch**: `docs/state-post-m2-05-merge` — this post-merge documentation refresh, the only work not yet on `main`. Local `main` was fast-forwarded to `origin/main` after PR #51 landed, and the merged importer is verified on that tip below. Older rows and notes name historical refs; they were accurate when written, which is exactly why §1 refuses to pin a hash — a merge invalidates the value being recorded.
+- **Current Working Branch**: `docs/state-post-m2-06-merge` — this post-merge checkpoint refresh, the only work not yet on `main`. Local `main` is fast-forwarded to `origin/main` at `ce1c5d9` (PR #53, M2-06), and `feat/m2-06-route-hardening` is fully merged. Naming `main`'s SHA here is history for this refresh, not a pin to maintain — see the rule immediately below.
 
 > **Do not pin the current `main` SHA in this field.** It was tried three times and went stale three times, because the merge commit that lands the correction advances `main` past the value being recorded. Describe the state, not the hash. Run `git log --oneline -1` if you need the exact commit.
-- **Last Updated**: 2026-09-11 (M2-06 implemented on `feat/m2-06-route-hardening`, opened as PR #53; every number below came from a run against that branch, not from a prior doc line)
+- **Last Updated**: 2026-09-11 (M2-06 merged as `ce1c5d9`, issue #42 closed. Every number below was re-measured **on merged `main`** in this pass, not inherited from the branch run that opened PR #53.)
 - **Gate status**: #48 (D5 route-handler coverage + D1 lint enforcement) and #49 (this intake
   record) are **merged to `main`**, and `main`'s own Actions runs are green (4m32s and 4m40s).
   `npm run lint` exits 0 there. Consequence for the text below: the gates are no longer pending
@@ -32,7 +32,7 @@
 - [x] **Planning**: Spec written, six decisions resolved, ADRs recorded (Complete — 2026-09-08)
 - [x] **M0**: De-risk spike — RLS enforcement proven through Drizzle (Complete — 2026-09-08, **gate lifted**)
 - [/] **M1**: Contracts & Seams — code, contracts, seeds, RLS, auth, and RED baseline complete; production SMTP/delivery remains deferred under issue #16
-- [/] **M2**: Core Domain Engine — issues #36–#42; M2-00 → M2-05 **merged** (PRs #43–#47, #51); M2-06 route hardening (#42) is the remaining slice and is not started
+- [x] **M2**: Core Domain Engine — issues #36–#42 all merged (PRs #43–#47, #51, #53). **Complete 2026-09-11.**
 - [ ] **M3**: Presentation — shadcn + tokens, session runner, offline outbox, WCAG audit (Queued)
 - [ ] **M4**: Hardening, telemetry, decommission the legacy static app (Queued)
 
@@ -90,7 +90,7 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
 - [x] `#41` `M2-03`: `ProgressionEngine` Epley e1RM calculations and personal-record materialization — implemented with nullable/zero policy, edit-down recomputation, deterministic ties, app-role isolation, natural-key race handling, and rollback coverage; no schema migration or progress route introduced.
 - [x] `#39` `M2-04`: server-side sync transaction, mutation idempotency, per-session sequence/change model, deterministic clock/device conflict handling, and authenticated `/api/sync` — implementation complete on `feat/m2-04-sync-conflict-model`; final validation and issue-scoped PR are next. Rate limiting remains explicitly deferred to #42 and true `since` deltas remain deferred until a later response contract.
 - [x] `#40` `M2-05`: `LegacyImporter` parsing, fingerprint idempotency, archive flow, and import report — merged as PR #51. Per-key parsing with sibling isolation, content-addressed fingerprint replay, one-transaction archived-session writes, and an explicit loss report. "Archive flow" landed as **server-side non-destruction**: the endpoint has no delete path at all, and moving or clearing the user's original keys stays the client's step after it shows the report, which is the UI half queued in #42.
-- [ ] `#42` `M2-06`: all M1 route-handler tests green, performance/security gates, and M2 integration hardening. **Implemented; in review as PR #53** (AC 5 — this file — is the commit that closes it out).
+- [x] `#42` `M2-06`: all M1 route-handler tests green, performance/security gates, and M2 integration hardening — merged as **PR #53**. `POST /auth/signout`, `GET /api/exercises`, and `GET /api/progress/:exerciseSlug` shipped; the 120/min sync budget became an enforced control; batch-bound / duplicate-landing / latency gates added; the declared-pending registry was retired with its anti-rot guard because no route is pending any more. `test:api` is now 7 files / 40 passed / 0 skipped.
 
 **Process note, so this stops recurring**: issues `#6`, `#7`, `#9`, `#10` were done on `main` well before they were closed, because the branches that shipped them were stacked on each other instead of on `main`, and none of the PR bodies said "Closes #N". Going forward: branch from `main`, not from a feature branch, unless there's a real dependency; and every PR body must name the issue it closes.
 
@@ -168,12 +168,15 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
   - Full gate, measured sequence that actually works (verified 2026-09-11 with the stack
     up): `npm run db:up` → `npm run test:api:preflight` → `npm run typecheck` →
     `npm test` → `npm run test:api` → `npm run test:mutation` → `npm run db:down`.
-    Results, re-measured **on merged `main`** with the stack up (2026-09-11):
+    Results, re-measured **on merged `main`** (`ce1c5d9`) with the stack up (2026-09-11), after PR #53 landed:
     **`npm test` 24 files / 217 tests green**; **`test:api` 7 files / 40 passed / 0 skipped**
     (from intake's 25/225 + 36 passed/7 declared-skipped: the pending-handler guard file retired with
     the registry, and the sync budget skip went live when the limiter was wired in); preflight green;
     **`npm run test:mutation` exit 0**; `check-set-config.sh` exit 0; lint and typecheck exit 0.
-    has been run here, and note the gap it exposed: that script is bare `tsx
+    *Correction on the record:* while #53 was open this block sat under a heading reading "on merged
+    `main`" while carrying the branch's numbers. Same values, wrong warrant — the sentence was false
+    until this merge, which is why re-measuring after merge is a step and not a formality.
+    `npm run test:mutation` has been run here, and note the gap it exposed: that script is bare `tsx
     scripts/mutation-check.ts` with **no `--env-file-if-exists`**, unlike the test scripts, so it
     aborts with `MIGRATION_DATABASE_URL environment variable required` unless `.env.local` is
     sourced by hand. Needs `DATABASE_URL` +
@@ -239,13 +242,14 @@ Added by the M0 spike (ADR-0003 Amendment A1):
 
 ### Blockers
 
-**No immediate coding blocker.** M2-00 → M2-05 are merged; **M2-06 (#42) is implemented and in review as
-PR #53**, which makes the milestone one merge from complete. What remains after it is M3 (UI migration), not M2 work.
-Two residual risks this slice named rather than absorbed: the **documented 200 ms p95 budget is unverified in
-production mode** (measured on the dev harness: p95 268.8 ms, median 217.7, max 633.4 — the gate owns an 800 ms
-regression ceiling and fails at 200 ms, so the number is visible rather than implied), and the **rate limiters are
-process-local**, so N instances multiply the budget by N. See the remediation list below and
-`docs/tasks/2026-09-11-intake-debt-index.md`.
+**No immediate coding blocker. M2 is complete:** M2-00 → M2-06 are merged, the last as PR #53
+(`ce1c5d9`), and issue #42 is closed. Nothing in M2 remains. What the milestone left behind are two
+named residual risks rather than absorbed ones: the **documented 200 ms p95 budget is unverified in
+production mode** (dev-harness measurement: p95 268.8 ms, median 217.7, max 633.4 — the gate owns an
+800 ms regression ceiling and is proven to bite at 200 ms, so the gap is visible rather than implied),
+and the **rate limiters are process-local**, so N instances multiply the budget by N. A production-mode
+measurement (`next:build` + `next:start`) is the natural M4/telemetry task. See the remediation list
+below and `docs/tasks/2026-09-11-intake-debt-index.md.
 
 *Resolved 2026-09-08 — `M0-00`, Node runtime.* Initially filed as "WSL Node is 18.19.1, too old for Next.js 16." That was overstated. `~/.nvm/versions/node/` already contained v22.19.0 and v24.18.0, and the `PATH` prepend at `~/.zshrc:119-122` selects the highest, so the **interactive** shell was already on Node 24 and Next.js 16 would have run fine.
 
@@ -358,9 +362,9 @@ Carried forward, still open:
 2. ~~**Merge the M2-05 PR, then refresh the docs.**~~ **This row is that refresh.** §1, §3, §5, §7
    here and the `PROMPTKIT.md` §2/§3 bullets described an unmerged branch until it landed; the
    re-measured numbers on merged `main` are in §3 and §8.
-3. ~~**Start `#42`/M2-06.**~~ **Implemented, in review as PR #53.** The three remaining handlers are
-   live, the 120/min sync budget is enforced instead of documented, and batch-bound/duplicate-landing/
-   latency gates exist. Its AC 5 is the state refresh now landing in that same PR.
+3. ~~**Start `#42`/M2-06.**~~ **Merged as PR #53** (`ce1c5d9`), closing issue #42. Handlers live,
+   the 120/min sync budget is enforced rather than documented, and the batch-bound,
+   duplicate-landing, and latency gates exist.
 4. ~~**Merge PR #48 before M2-05's route lands.**~~ **Done.** It carried D5 (API suites in CI,
    preflight, declared-pending registry + anti-rot guard, `.env.example` fix) and D1 (24 casts
    removed via a narrowing helper, `--max-warnings=0`, CI `Lint` step) as two atomic commits.
@@ -377,6 +381,7 @@ Carried forward, still open:
    hardening risk; keep `--accent-legs` unresolved-but-flagged since it blocks M3, not M2.
 7. **Keep issue #16 deferred.** Custom SMTP/provider/DNS remains the separate M1 production-release blocker and must not block M2 coding or be described as complete.
 8. **Preserve the M3 boundary.** Do not delete legacy source folders or begin UI/design-system implementation until M2-06 closes the backend/API hardening gate.
+9. **Plan M3 before writing any M3 code.** `docs/tasks/m3/` does not exist and no M3 issues are filed; the §2 roadmap line is the only M3 artifact. Run `pk:plan` (screen/interaction inventory, token mapping against `DESIGN.md`, offline outbox design, component boundaries), then `pk:tasks` to decompose into issues — the sequence that produced M2's seven slices.
 ---
 
 ## 8. Session Continuity Log
@@ -412,3 +417,5 @@ Carried forward, still open:
 | 2026-09-11 | Agent (DSH) | Post-merge gate refresh | #48 and #49 merged. Local `main` fast-forwarded (0 unique commits), `feat/m2-05-legacy-importer` re-pointed at it. **Verified, not assumed**: `npm run lint` exit 0 on merged `main`, and both push-triggered `main` Actions runs green (4m32s, 4m40s) — which retires the last evidence caveat from #48: the `Lint`, `Preflight` and `Run API route-handler suites` steps have now executed on the default branch, not only on a PR branch. Corrected prose written mid-flight: `PROMPTKIT.md` §3 lint bullet (RED → exit 0, warning-fatal, gated) and its API-suite bullet (outside the gate → inside it, pending handlers declared individually), plus STATE §1/§3/§5/§7 wording about unmerged branches; debt-index D1/D5 rows now read CLOSED. Docs only, no behavior change. **Next**: M2-05 — check D4 before any `db:generate`; its 5 specs are declared pending against #40, so the last task is deleting that entry. |
 | 2026-09-11 | Agent (DSH) | `M2-05` implementation | Built the legacy importer end to end on `feat/m2-05-legacy-importer` and deleted the `importLegacy` declared-pending entry; the anti-rot guard was **observed failing at the moment the route appeared**, which is the control working rather than the test being annoying. **No migration was needed** (D4 never entered): `import_batches` ships in `0000` with RLS from `0003`, and its `unique (user_id, source_fingerprint)` is the idempotency key. Dispatched a subagent to inventory the legacy `localStorage` **write sites** instead of trusting the RFC, and three code decisions came out of that: (1) real browsers key pull day's collapsed checkbox as `""`, not the `"undefined"` the RFC records — and because `BooleanMapSchema` requires `z.string().min(1)`, **a genuine browser payload failed validation entirely**, which would have reported real history as malformed; the sentinel is now stripped before parsing and the loss is reported, and the RFC row carries an erratum. (2) legs writes a complete DOM snapshot to `checkboxStates` while `state.*` is sparse, so the snapshot wins. (3) push's `timestamp` is the *last save*, not the session start, and `phaseCompletion` is dead data that is never assigned `true`. It also confirmed `userStats` was never written at all (the dashboard derived streaks from day-of-week and `Math.random()`), and that no legacy payload captured weight, reps, RPE, or actual rest — so those columns stay NULL and the report says so rather than backfilling them from plan templates. Two fabrications this module refuses: a session from a payload recording no interaction (pull saves during load paths, so an all-`false` payload is a page visit), and per-set rows for pull day. **Atomicity**: `client_id` is derived from the fingerprint, so a concurrent twin collides on the unique index and replays the winner's report instead of doubling history; a batch that writes nothing raises rather than persisting an empty fingerprint, which would make every later retry replay nothing even after seeds were fixed. Verified: lint 0, typecheck 0, `npm test` **25 files / 225 tests**, `test:api` **25 pass / 7 skip**, `test:mutation` exit 0, and the new seams measured separately (22 domain, 9 persistence). The persistence spec includes a forced mid-transaction failure proving rollback and a live-session-unchanged check, because "no irreversible deletion in the server path" is otherwise an absence claim nobody can read off a diff. **Trap, second occurrence in this repo**: a `from './types.js'` specifier inside `lib/` passes `tsc` *and* vitest while Turbopack cannot resolve it, so every request to the new route 500s at compile time with the entire local suite green — M1-16's row above records the same bug in the M1-15 contract graph. Now a standing rule in `PROMPTKIT.md` §6; the discovery route was `curl`, not the test suite. Also learned: the API import suite calls `seedExercises()` in `beforeAll` because **CI has no seed step** and the importer maps `ex1`…`ex6` onto seeded content — without that call the route fails as "no seeded content", a config problem dressed as a server error. `tsconfig.json` was rewritten by `next dev` during these runs (D6, still open) and reverted. |
 | 2026-09-11 | Agent (DSH) | Post-merge refresh after #51 | PR #51 merged (issue #40 closed); local `main` fast-forwarded from 4-behind/0-ahead. **Verified on the merged tip rather than trusting the PR's own run**: `test:api:preflight` 4/4, `npm run lint` exit 0, `npm run typecheck` exit 0, `npm test` **25 files / 225 tests**, `npm run test:api` **25 passed / 7 declared-skipped**, and `main`'s own Actions run for that merge commit green at 5.1m — the fifth consecutive green run on the default branch, which is the point of the D5 gate rather than a coincidence. Corrected the prose that the merge invalidated: §1 milestone/branch/gate-status, §2 roadmap row **which still said `M2-05 importer active-but-unstarted`** and its `#40` task checkbox, §3 active-slice line plus the merged-surface list (now naming `lib/domain/import/` and `src/app/api/import/legacy`), §5 blockers and the D4 note, §7 (rewritten and renumbered 1–8), and `PROMPTKIT.md` §2's stack heading and §3's API bullet. Also fixed two things I had written myself hours earlier: §7 carried duplicated list numbering plus a broken parenthetical left by a clumsy in-place edit, and the D4 line still framed a trap as pending for a slice that had already landed — the honest wording is that **a trap never firing is not the same as it being disarmed**. `tsconfig.json` was rewritten by `next dev` for the third time this session (**D6**, still open); this time the diff was inspected rather than assumed — it is pure reformatting (arrays re-wrapped, one glob pattern appended), reverted, not committed. Nothing in this row is a behavior change: docs only, no source touched. **Next**: `#42`/M2-06, carrying two facts forward — API suites depend on seeded routine content that CI does not create, and `test:mutation` must be run with `.env.local` sourced. |
+
+| 2026-09-11 | Agent (DSH) | `M2-06` merge + `pk:checkpoint` | PR #53 merged (`ce1c5d9`), issue #42 closed — **M2 complete**. Local `main` fast-forwarded, full gate set re-measured on merged main (lint/typecheck 0; `npm test` 24 files/217; `test:api` 7 files/40 passed/0 skipped; mutation exit 0; preflight green). §1/§2/§3/§5/§7 now describe the merged world, §3 records the "on merged main" warrant defect that existed while #53 was open, and §7 item 9 points the next session at M3 planning. Handed forward: prod-mode p95 measurement, process-local limiters, six superseded local branches awaiting your word, D3/D4/D6/D7 unfiled, issue #16 still deferred. |

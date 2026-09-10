@@ -31,7 +31,7 @@
 - No tests, no backend, no auth
 - **Known broken**: `npm run build` exits 0 but emits **zero JavaScript**. All four `<script>` tags are classic scripts, so Vite neither transforms nor copies them and leaves the original `src` in the output HTML. Every page in `dist/` 404s on its script and is inert. Do not treat a successful `build` exit code as evidence of a working build.
 
-### Target stack (v1 — backend through M2-05 merged; re-verified by intake scan 2026-09-11)
+### Target stack (v1 — backend through M2-05 merged, M2-06 in review as PR #53; re-verified by intake scan 2026-09-11)
 
 - **Language & Runtime**: TypeScript `strict`, Node.js **≥ 20.9** (required by Next.js 16 — Node 18 is unsupported). nvm default is v24.20.0 LTS; see the shell footgun in §3.
 - **Framework**: Next.js 16 (App Router), React 19 — ADR-0001. Live: `src/app/` with placeholder home + `sign-in/`, route handlers under `src/app/api/{sessions,sessions/[id],sync}` and `src/app/auth/{signin,confirm}`, `src/middleware.ts` refreshing sessions. Runs on port 3001 alongside the legacy Vite server on 3000.
@@ -103,14 +103,14 @@ each serving correctly, zero collision.
   (`vitest run --exclude 'tests/integration/api/**'`). **Requires the stack up**: run
   `npm run db:up` first, or every DB-touching file fails with `ECONNREFUSED`.
 - **API suite**: `npm run test:api` (`vitest run tests/integration/api/`, also reachable as
-  `test:red`). These 6 files stay out of `npm test` because they boot a real `next dev` server,
-  but **CI runs this step separately, so the route handlers are inside the merge gate**. Handlers
-  that do not exist yet are declared individually in `tests/integration/api/pending-handlers.ts`
-  as counted, issue-attributed skips rather than hidden by a glob, and
-  `tests/unit/api/pending-handlers.test.ts` fails if a declared-pending route later appears on
-  disk, so an entry cannot outlive the work it waits for. Run `npm run test:api:preflight` first
-  when results look impossible: it separates a broken environment from broken code. See D5 (closed).
-  Measured 2026-09-11 **on merged `main`**: **25 passed / 7 skipped**. Note that
+  `test:red`). These 7 files stay out of `npm test` because they boot a real `next dev` server,
+  but **CI runs this step separately, so the route handlers are inside the merge gate**.
+  There are no declared-pending skips any more: `tests/integration/api/pending-handlers.ts` and its
+  anti-rot guard were **retired in #42** once every M1 route had a handler. If a future slice parks
+  a route behind a skip, bring that registry and its guard back together — skips are counted and
+  issue-attributed and self-expiring, never hidden by a glob. Run `npm run test:api:preflight` first:
+  when results look impossible it separates a broken environment from broken code.
+  Measured 2026-09-11 **on `feat/m2-06-route-hardening` (PR #53)**: **7 files / 40 passed / 0 skipped**.
   `tests/integration/api/import-legacy.test.ts` calls `seedExercises()` in `beforeAll`, and why:
   **CI has no seed step**, and the importer resolves legacy `ex1`…`ex6` against seeded routine
   content, so without that call the suite fails for a reason unrelated to the code under test. Any

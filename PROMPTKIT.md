@@ -102,10 +102,14 @@ each serving correctly, zero collision.
 - **Unit + Integration Tests**: `npm test`
   (`vitest run --exclude 'tests/integration/api/**'`). **Requires the stack up**: run
   `npm run db:up` first, or every DB-touching file fails with `ECONNREFUSED`.
-- **RED / API suite**: `npm run test:red` (`vitest run tests/integration/api/`). These
-  6 files are excluded from `npm test`, and **`.github/workflows/test.yml` runs only
-  `npm test`** — so the route-handler suites are not executed by the merge gate. They are
-  green where handlers exist and still red for M2-05's importer. See D5.
+- **API suite**: `npm run test:api` (`vitest run tests/integration/api/`, also reachable as
+  `test:red`). These 6 files stay out of `npm test` because they boot a real `next dev` server,
+  but **CI runs this step separately, so the route handlers are inside the merge gate**. Handlers
+  that do not exist yet are declared individually in `tests/integration/api/pending-handlers.ts`
+  as counted, issue-attributed skips rather than hidden by a glob, and
+  `tests/unit/api/pending-handlers.test.ts` fails if a declared-pending route later appears on
+  disk, so an entry cannot outlive the work it waits for. Run `npm run test:api:preflight` first
+  when results look impossible: it separates a broken environment from broken code. See D5 (closed).
 - **Mutation check**: `npm run test:mutation` (`tsx scripts/mutation-check.ts`) — removes
   each RLS control in turn and requires the drift test to go red. Needs the stack up.
 - **E2E Tests**: `npm run test:e2e` — **no specs exist.** `playwright.config.ts` points at
@@ -119,14 +123,15 @@ each serving correctly, zero collision.
   by Next.js itself and isn't present until `next dev`, `next build`, or
   `next typegen` has run once. `npm run typecheck` handles this; a bare `tsc`
   invocation will not.
-- **Lint**: `npm run lint` (ESLint flat config, `eslint-config-next`; legacy
-  directories and `spikes/` are explicitly ignored, not linted; `no-restricted-syntax`
-  plus `scripts/check-set-config.sh` ban direct `set_config` outside `withUser()`).
-  **Currently RED: exit 1, 24 errors + 2 warnings, all in four
-  `tests/integration/*.test.ts` files** (`app-role`, `handle-new-user-trigger`,
-  `rls-content-tables`, `schema-constraints`) — production code under `src/` and `lib/`
-  is `any`-free. CI has **no lint step**, so this stays broken silently. Do not cite
-  "lint clean" as evidence until D1 is closed. See D1.
+- **Lint**: `npm run lint` (`eslint --max-warnings=0 .`) — **exit 0, verified on merged `main`,
+  and enforced in CI** as the step immediately after `npm ci`. Legacy directories and `spikes/`
+  are explicitly ignored, not linted; `no-restricted-syntax` plus `scripts/check-set-config.sh`
+  ban direct `set_config` outside `withUser()`. This was red with 24 `no-explicit-any` errors in
+  four `tests/integration/*.test.ts` files until D1 cleared them by **narrowing** through
+  `tests/integration/pg-error.ts` (`unknown` → SQLSTATE/message, yielding `undefined`/`''` for
+  non-database throws) instead of casting to a fake error type — so a spec expecting `42501`
+  still fails when the driver throws something else. Warnings fail the build, so "lint clean" is
+  citable evidence now, and a reintroduced `any` is a CI break. See D1 (closed).
 - **DB migrations**: `npm run db:generate` / `npm run db:migrate` (`drizzle-kit`, owner
   role via `MIGRATION_DATABASE_URL` → direct port 54322, **not** the pooler). Migrations
   live in `supabase/migrations/` and are **mixed-authority**: `0000`–`0003` are

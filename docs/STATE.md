@@ -10,11 +10,12 @@
 
 > **Do not pin the current `main` SHA in this field.** It was tried three times and went stale three times, because the merge commit that lands the correction advances `main` past the value being recorded. Describe the state, not the hash. Run `git log --oneline -1` if you need the exact commit.
 - **Last Updated**: 2026-09-11 (`pk:onboard` re-scan; verified commands, not doc claims)
-- **Open PRs**: [**#48**](https://github.com/lowqualityloey/ppl-fitness-tracker/pull/48) carries
-  both gate fixes (D5 then D1, two commits, branch `test/ci-gates-d1-d5`), and the intake doc
-  refresh is its own PR. Until both merge, **`origin/main` still has no lint step, still does
-  not run the route-handler suites, and `npm run lint` is still red there** — every claim below
-  marked "implemented" describes those PRs, not the default branch.
+- **Gate status**: #48 (D5 route-handler coverage + D1 lint enforcement) and #49 (this intake
+  record) are **merged to `main`**, and `main`'s own Actions runs are green (4m32s and 4m40s).
+  `npm run lint` exits 0 there. Consequence for the text below: the gates are no longer pending
+  but enforced — a PR that reintroduces an `any`, drops an env var, or leaves a stale
+  pending-handler entry now fails in CI, so claims marked closed are backed by a gate.
+  Still open as debt: D2, D3 (docs half closed), D4, D6, D7.
 
 **Where things actually stand.** M1 schema, RLS, auth, contracts, exercise/stretch seeds, and the M1-16 route baseline are on `main`. M2-00 adds the runtime app-role Drizzle client, verified auth-to-RLS context, session domain mappers, and user-scoped repository; M2-01 adds the sessions API; M2-02 adds the pure lifecycle transition table, transaction-scoped set/task/phase/finish mutations, and rollback coverage; M2-03 adds pure Epley e1RM calculation and transaction-scoped personal-record recomputation with app-role ownership/rollback coverage; M2-04 adds bounded transactional sync, replay-safe mutation metadata, per-session sequencing/change rows, deterministic clock/device conflict resolution, and the authenticated `/api/sync` adapter.
 
@@ -144,10 +145,10 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
 - **Verification Commands** (measured 2026-09-11 on `origin/main`; all must run inside WSL):
   - Legacy dev: `npm run dev` (3000). Target dev: `npm run next:dev` (3001).
   - `npm run typecheck` → **exit 0, clean** (`next typegen && tsc --noEmit`; never run bare `tsc`).
-  - `npm run lint` on `origin/main` → **exit 1** (24 errors / 2 warnings, four integration
-    test files), and CI has no lint step, so the red state is invisible. Fixed in **PR #48**
-    (lint exit 0, `--max-warnings=0`, CI `Lint` step added) — unmerged, so
-    **`origin/main` is still red there**. See D1.
+  - `npm run lint` → **exit 0**, 0 errors / 0 warnings, re-verified on merged `main`. It was
+    exit 1 (24 errors + 2 warnings) until D1; the step now runs **in CI directly after `npm ci`**
+    and the script is `eslint --max-warnings=0 .`, so warnings fail too. Reintroducing an `any`
+    is a build break, not a style opinion. See D1 (closed).
   - `npx vitest run tests/unit` → **67 passed / 6 failed** with the stack down. All 6 are
     `tests/unit/with-user.test.ts` reaching real Postgres (`ECONNREFUSED :54322`). See D2.
   - Full gate, measured sequence that actually works (verified 2026-09-11 with the stack
@@ -155,11 +156,13 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
     `npm test` → `npm run test:api` → `npm run test:mutation` → `npm run db:down`.
     Results: **`npm test` 23 files / 196 tests green**; **`test:api` 20 passed / 12
     declared-skipped green**; preflight 4/4. Needs `DATABASE_URL` +
-    `MIGRATION_DATABASE_URL` on the process env — the gate branch's scripts pass
+    `MIGRATION_DATABASE_URL` on the process env — the npm scripts pass
     `--env-file-if-exists=.env.local` so npm loads them itself; on `main` you must source
     `.env.local` first, or DB-backed files fail or silently skip.
-  - `npm run test:red` becomes an alias for `test:api` in **PR #48**; on `main` the API suites
-    are still not executed by CI at all (D5, implemented there, unmerged).
+  - `npm run test:red` is an alias for `npm run test:api` (kept so older notes still resolve),
+    and **CI runs the API suites as their own step**, so `tests/integration/api/` is inside the
+    merge gate with the still-unbuilt handlers declared individually. See D5 (closed).
+
   - Repository integration tests need a tenant-qualified local Supavisor URL on 54329
     (`app_authenticated.pooler-dev`); the direct app-role port 54322 also passes the suite.
     The app-role password literal lives in migration `0001` — `supabase status` does **not**
@@ -236,10 +239,10 @@ The narrower claim that survived — "non-interactive shells resolve `/usr/bin/n
 ### Technical Debt & Risks
 
 **Remediation items — found by running, not reading (intake 2026-09-11).** Full cards with
-Gherkin AC in `docs/tasks/2026-09-11-intake-debt-index.md`. D1 and D5 are **implemented on
-local branches, not pushed**; the rest are open.
+Gherkin AC in `docs/tasks/2026-09-11-intake-debt-index.md`. **D1 and D5 are closed and merged** (PR #48, green on `main`).
+D2, D3, D4, D6 and D7 remain open.
 
-- ~~**D1 · `npm run lint` is red and CI never runs it.**~~ **Implemented in PR #48**:
+- ~~**D1 · `npm run lint` is red and CI never runs it.**~~ **CLOSED (merged, #48)**:
   all 24 `no-explicit-any` errors in `app-role`,
   `handle-new-user-trigger`, `rls-content-tables`, `schema-constraints` replaced with a
   narrowing helper (`tests/integration/pg-error.ts` — returns `undefined`/`''` for non-DB
@@ -247,7 +250,7 @@ local branches, not pushed**; the rest are open.
   `--max-warnings=0`, and CI gained a `Lint` step. Verified: lint exit 0, and exit 1 on a
   deliberately reintroduced `any`.
 - ~~**D5 · The 6 route-handler suites are excluded from `npm test`, and `test.yml` runs only
-  `npm test`.**~~ **Implemented in PR #48**: CI runs
+  `npm test`.**~~ **CLOSED (merged, #48)**: CI runs
   `npm run test:api`, env moved to job level, a preflight step precedes it, and the 11
   specs whose handlers are still unbuilt (`signout`/`exercises`/`progress` → #42,
   `importLegacy` → #40) are declared individually in
@@ -321,7 +324,7 @@ Carried forward, still open:
    commits yet). Reuse `lib/contracts/import.ts` and domain write semantics; deterministic
    SHA-256 source fingerprint through `import_batches`; never trust a request user id;
    preserve raw legacy keys until the client acknowledges. Target: `tests/integration/api/import-legacy.test.ts` goes green.
-2. **Merge PR #48 before M2-05's route lands.** It carries D5 (API suites in CI, preflight,
+2. ~~**Merge PR #48 before M2-05's route lands.**~~ **Done**. It carries D5 (API suites in CI, preflight,
    declared-pending registry + anti-rot guard, `.env.example` fix) and D1 (24 casts removed via
    a narrowing helper, `--max-warnings=0`, CI `Lint` step) as two atomic commits on
    `test/ci-gates-d1-d5`. Both verified green locally with the stack up, and both new gates were
@@ -371,3 +374,4 @@ Carried forward, still open:
 | 2026-09-09 | Owner + GitHub | `M2-04` merge | PR #47 merged to `main` as `0546f7b`, after #43–#46 landed M2-00 → M2-03. `feat/m2-05-legacy-importer` cut from that tip. Recorded from git history at re-scan time, not from this session's actions — no work was performed on the importer. |
 | 2026-09-11 | Agent (DSH, `pk:onboard`) | Brownfield re-ingest + gate audit | Re-scanned the repo against its own profile and corrected the drift rather than regenerating it. **Verified**: `typecheck` exit 0; `npm run lint` **exit 1** (24 errors / 2 warnings, four integration test files, and **no lint step in `test.yml`**); `npx vitest run tests/unit` **67 pass / 6 fail**, all six from `tests/unit/with-user.test.ts` needing live Postgres; legacy `npm run build` still exits 0 emitting **0 `.js` files**; `_journal.json` covers `0000`–`0003` while `0004`–`0006` are hand-authored; `playwright.config.ts` names an absent `tests/e2e`; Supabase stack stopped, Docker `29.7.2` reachable; local `main` ref stale vs `origin/main`. Clean on: zero `TODO/FIXME`, zero `: any` in `src/`+`lib/`, zero empty `catch {}`, `strict` + `noUncheckedIndexedAccess`, working tree clean, secrets ignored. **Corrected**: `PROMPTKIT.md` banner (mid-migration is now backend-vs-frontend, not unbuilt), §2 stack status and testing reality, §3 Node-resolution table (v18 only under a stripped environment), §3 commands (migrations/seeds/mutation exist; lint red; API suites outside CI; journal mixed-authority warning), §1–§8 here. **Added**: `docs/tasks/2026-09-11-intake-debt-index.md` — D1 lint gate absent, D2 non-hermetic unit layer, D3 phantom E2E config, D4 journal gap, D5 route suites outside CI, each with Gherkin AC and a fix shape, plus a non-findings list so the next intake does not re-run them. `DESIGN.md` skipped: already a real token profile with ADR-0004/0005 deviations, not a template. No commits, pushes, or `pk:tasks` issue filing performed — that is offered, not assumed. |
 | 2026-09-11 | Agent (DSH) | Gate follow-through: D5 + D1 implemented | Ran the gates for real. Started the local stack (needed a widened file sandbox: the CLI writes `~/.supabase`), then found `npm run test:red` reporting 21 failures / 20 skips. Root-cause chain, each step disproving the last: `MIGRATION_DATABASE_URL` missing → whole files reported **skipped**, not failed (a `beforeAll` throw, so the "intentionally RED" framing had been hiding 13 suites that actually pass); with env loaded, `/api/sessions` + `/api/sync` returned blanket **HTTP 500**, which looks exactly like an M2-04 regression; the real cause was `.env.local` still holding `REPLACE_IN_M1-04` as the app-role password — a credential `supabase status` cannot supply because migration `0001` creates the role with its own literal. Supavisor had escalated to `ECIRCUITBREAKER`. **With the credential corrected: sessions 12/12 and sync 7/7 pass; `npm test` is 23 files / 196 tests green** — the first full local pass this repo has had, and evidence the merged M2 backend is sound. Implemented **D5** on branch `test/ci-gates-d1-d5` -> **PR #48** (CI runs `test:api`; env to job level; `scripts/preflight.ts` distinguishes env-broken from code-broken and compares the credential by SHA-256 prefix without printing it; `pending-handlers.ts` declares the 11 unbuilt-handler specs as counted, issue-attributed skips; `tests/unit/api/pending-handlers.test.ts` fails if a pending entry's route later appears; `fixtures.ts` throws at module scope so a missing credential can never read as a skip again; `.env.example` template corrected — it advertised a non-tenant-qualified username and pointed at `db:status`, which cannot answer). Implemented **D1** in the same PR (22 casts → `tests/integration/pg-error.ts` narrowing helpers rather than a fake error type, so a wrong SQLSTATE still fails; 2 unused bindings dropped; `--max-warnings=0`; CI `Lint` step). **Negative controls run for both new gates**: stripped env → API file fails loudly; scratch `const probe: any` → lint exit 1, removed → exit 0. Verification: lint 0/0, typecheck 0, `test:api` 20 pass / 12 skip, 4 edited security suites 32/32. Found but not fixed: **D6** `next dev` rewrites tracked `tsconfig.json` during API runs (reverted); **D7** `pg`'s default generic leaves the integration suites on *inferred* `any` rows — real strictness work, filed rather than smuggled into a lint commit. **Branch topology**: the two gate branches were combined onto `test/ci-gates-d1-d5` as two commits and opened as **PR #48** — a `package.json` conflict (adjacent `lint` and `test` script lines) resolved by hand as the union of both, `test.yml` auto-merged cleanly, and the combined branch re-verified at lint 0 / typecheck 0 / tree clean. SHAs were deliberately not quoted: one branch had already moved under them when it was rebased to drop an accidentally-included commit, which is the same reason `docs/STATE.md` §1 refuses to pin `main`. **On merge, refresh the docs**: `PROMPTKIT.md` §3's lint and API-suite paragraphs and §3/§5 here describe `main`, which stops being true the moment these two land; and the M2-05 importer will want D4 resolved first if it needs a migration at all. |
+| 2026-09-11 | Agent (DSH) | Post-merge gate refresh | #48 and #49 merged. Local `main` fast-forwarded (0 unique commits), `feat/m2-05-legacy-importer` re-pointed at it. **Verified, not assumed**: `npm run lint` exit 0 on merged `main`, and both push-triggered `main` Actions runs green (4m32s, 4m40s) — which retires the last evidence caveat from #48: the `Lint`, `Preflight` and `Run API route-handler suites` steps have now executed on the default branch, not only on a PR branch. Corrected prose written mid-flight: `PROMPTKIT.md` §3 lint bullet (RED → exit 0, warning-fatal, gated) and its API-suite bullet (outside the gate → inside it, pending handlers declared individually), plus STATE §1/§3/§5/§7 wording about unmerged branches; debt-index D1/D5 rows now read CLOSED. Docs only, no behavior change. **Next**: M2-05 — check D4 before any `db:generate`; its 5 specs are declared pending against #40, so the last task is deleting that entry. |

@@ -3,6 +3,8 @@ import { createAppEnvelopeSchema } from './envelope';
 import {
   IsoDateTimeSchema,
   NonNegativeIntegerSchema,
+  RepsSchema,
+  WeightKgSchema,
   SessionPhaseSchema,
   TaskKeySchema,
   UuidSchema,
@@ -16,8 +18,7 @@ const MutationIdentityShape = {
 };
 
 /** Matches session_sets.weight_kg numeric(6,2) as well as its 0–1000 check. */
-export const WeightKgSchema = z.number().min(0).max(1000).multipleOf(0.01);
-export const RepsSchema = z.number().int().min(0).max(1000);
+export { WeightKgSchema, RepsSchema };
 
 export const SetUpsertMutationSchema = z.object({
   ...MutationIdentityShape,

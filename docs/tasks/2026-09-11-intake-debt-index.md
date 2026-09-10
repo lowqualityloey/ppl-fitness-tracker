@@ -14,11 +14,11 @@ credential that had been faking a code regression, and two structural findings (
 
 | Item | State | Where |
 | :--- | :--- | :--- |
-| D1 lint red, unenforced | **implemented** — PR **#48**, branch `test/ci-gates-d1-d5` | 22 casts → typed helpers, 2 unused bindings dropped, `--max-warnings=0`, CI `Lint` step |
+| D1 lint red, unenforced | **CLOSED** — merged in PR #48 | 22 casts → typed helpers, 2 unused bindings dropped, `--max-warnings=0`, CI `Lint` step; `main` lint exit 0 |
 | D2 non-hermetic unit layer | open | unchanged; see the correction under D2 — it passes with a working environment, so the defect is classification, not correctness |
 | D3 phantom E2E config | **doc-closed** | `PROMPTKIT.md` §2/§3 now state E2E does not exist; `tests/e2e/` to be created with its first spec in M3/M4 |
 | D4 migration journal gap | open | blocks the next `db:generate`; M2-05 should avoid needing one |
-| D5 route suites outside CI | **implemented** — PR **#48**, branch `test/ci-gates-d1-d5` | API step + preflight + declared-pending registry + anti-rot guard + env guard |
+| D5 route suites outside CI | **CLOSED** — merged in PR #48 | API step + preflight + declared-pending registry + anti-rot guard + env guard; `main` CI runs the gate green |
 | D6 test run rewrites tracked `tsconfig.json` | open (new) | below |
 | D7 integration suites read `pg` results as inferred `any` | open (new) | below |
 
@@ -72,6 +72,13 @@ Scenario: The gate is proven to be able to fail
 **Fix shape**: add a `Lint` step (or job) to `test.yml`; type the four test files' row
 shapes via the Drizzle `$inferSelect` types or narrow local interfaces rather than `any`;
 drop the two unused bindings. Do **not** add an ignore entry — these are tracked files.
+
+**Closed 2026-09-11 (merged, PR #48)** — all 24 cleared by narrowing through
+`tests/integration/pg-error.ts` (`unknown` → SQLSTATE/message; `undefined`/`''` for
+non-database throws) rather than by typing a fake error, which would have let a spec expecting
+`42501` pass against an unrelated error. 2 unused bindings dropped, `lint` is now
+`eslint --max-warnings=0 .`, CI runs it after `npm ci`. Proven able to fail: a scratch
+`const probe: any = 1` exits 1 naming the rule. Leftover strictness is now D7, not D1.
 
 ---
 
@@ -212,6 +219,11 @@ flaky". The actual hazard turned out to be neither flakiness nor D2 — it was a
 (see "Closed during follow-through" below), which made 10 route assertions fail as HTTP 500
 while looking exactly like product bugs. The mitigation added for that is
 `npm run test:api:preflight`, not a reordering of D2 and D5.
+
+**Closed 2026-09-11 (merged, PR #48)** — CI runs `npm run test:api` behind
+`npm run test:api:preflight`, env hoisted to job level, and the 11 specs whose handlers do not
+exist are declared in `tests/integration/api/pending-handlers.ts` as counted, issue-attributed
+skips with the anti-rot guard. Measured in CI on the default branch: 20 passed / 12 skipped.
 
 ---
 

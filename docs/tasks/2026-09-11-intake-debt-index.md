@@ -14,18 +14,19 @@ credential that had been faking a code regression, and two structural findings (
 
 | Item | State | Where |
 | :--- | :--- | :--- |
-| D1 lint red, unenforced | **implemented** — branch `lint/enforce-zero-any` | 22 casts → typed helpers, 2 unused bindings dropped, `--max-warnings=0`, CI `Lint` step |
+| D1 lint red, unenforced | **implemented** — PR **#48**, branch `test/ci-gates-d1-d5` | 22 casts → typed helpers, 2 unused bindings dropped, `--max-warnings=0`, CI `Lint` step |
 | D2 non-hermetic unit layer | open | unchanged; see the correction under D2 — it passes with a working environment, so the defect is classification, not correctness |
 | D3 phantom E2E config | **doc-closed** | `PROMPTKIT.md` §2/§3 now state E2E does not exist; `tests/e2e/` to be created with its first spec in M3/M4 |
 | D4 migration journal gap | open | blocks the next `db:generate`; M2-05 should avoid needing one |
-| D5 route suites outside CI | **implemented** — branch `ci/m2-route-handler-gate` | API step + preflight + declared-pending registry + anti-rot guard + env guard |
+| D5 route suites outside CI | **implemented** — PR **#48**, branch `test/ci-gates-d1-d5` | API step + preflight + declared-pending registry + anti-rot guard + env guard |
 | D6 test run rewrites tracked `tsconfig.json` | open (new) | below |
 | D7 integration suites read `pg` results as inferred `any` | open (new) | below |
 
-Branch names only, no commit SHAs: this table was first written with hashes, and one branch
-was then rebased to drop an accidentally-included commit, invalidating it on the spot. Same
-reasoning `docs/STATE.md` §1 already records for not pinning `main`. Use
-`git log --oneline origin/main..&lt;branch&gt;` for the current tip.
+Branch and PR names, deliberately **no commit SHAs**: this table was first written with hashes,
+and two events invalidated them inside an hour — a branch was rebased to drop an
+accidentally-included commit, then both gate branches were re-ordered onto one branch to resolve a
+`package.json` conflict before the PR was opened. Same reasoning `docs/STATE.md` §1 already records
+for not pinning `main`. Current tip: `git log --oneline origin/main..test/ci-gates-d1-d5`.
 
 
 ---

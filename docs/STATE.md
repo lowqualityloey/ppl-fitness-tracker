@@ -6,7 +6,7 @@
 - **Current Milestone / Epic**: **M2: Core Domain Engine — COMPLETE.** M2-00 → M2-06 all merged to `main` (PRs #43–#47, #51, #53; issue #42 closed). The milestone's last slice, M2-06 route hardening, merged as **PR #53 (`ce1c5d9`)**. **M3: Presentation** is next and has no task breakdown or issues yet — it needs `pk:plan` then `pk:tasks`.
 - **Overall Status**: ACTIVE <!-- Options: ACTIVE | PAUSED | STABILIZING | RELEASE_CANDIDATE -->
 - **Target Release**: v1.0.0, no date committed
-- **Current Working Branch**: `docs/state-post-m2-06-merge` — this post-merge checkpoint refresh, the only work not yet on `main`. Local `main` is fast-forwarded to `origin/main` at `ce1c5d9` (PR #53, M2-06), and `feat/m2-06-route-hardening` is fully merged. Naming `main`'s SHA here is history for this refresh, not a pin to maintain — see the rule immediately below.
+- **Current Working Branch**: `docs/m3-presentation-plan` (PR #55) — the M3 Presentation RFC plus the §7/§8 rows recording it; docs-only, no code touched. `main` is at `e1664c2` (PR #54 merged, **CI completed/success**), so the previous refresh branch is fully landed. Naming `main`'s SHA here is history for this pass, not a pin to maintain — see the rule below.
 
 > **Do not pin the current `main` SHA in this field.** It was tried three times and went stale three times, because the merge commit that lands the correction advances `main` past the value being recorded. Describe the state, not the hash. Run `git log --oneline -1` if you need the exact commit.
 - **Last Updated**: 2026-09-11 (M2-06 merged as `ce1c5d9`, issue #42 closed. Every number below was re-measured **on merged `main`** in this pass, not inherited from the branch run that opened PR #53.)
@@ -131,7 +131,7 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
 
 - **Target Workspace / Package**: N/A (standalone repo)
 - **Active RFC / Spec**: `docs/specs/2026-09-08-spec-fullstack-migration.md`
-- **Active Task Spec**: `docs/specs/2026-09-08-m2-core-domain-engine.md`, with atomic task files in `docs/tasks/m2/` and GitHub issues #36–#42. M2-00 → M2-05 are implemented, reviewed, and merged: **`M2-05` closed at 5/5 tasks** (`docs/tasks/m2/M2-05-legacy-importer.md`, issue #40, PR #51). **`M2-06` (#42) is the remaining M2 slice.**
+- **Active Task Spec**: `docs/specs/2026-09-11-spec-m3-presentation.md` (M3, status Draft — awaiting `pk:grill` then `pk:tasks`; `docs/tasks/m3/` does not exist yet by design). The completed M2 record is `docs/specs/2026-09-08-m2-core-domain-engine.md` with its task files in `docs/tasks/m2/`.
 - **M2-05 surface, as built**: `lib/domain/import/legacy-importer.ts` (pure parse→plan:
   per-key isolation, `legacySlotToOrderIndex` as the single 1-based→0-based seam,
   `stripCollapsedCheckboxKey` for the pull-day sentinel, evidence rules that refuse to mint a

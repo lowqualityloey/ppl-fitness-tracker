@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Client } from 'pg';
+import { pgErrorCode } from './pg-error.js';
 
 // Local Supabase credentials (shared defaults, safe to inline)
 const SUPABASE_API_URL = 'http://127.0.0.1:54321';
@@ -121,7 +122,7 @@ describe('M1-04: handle_new_user trigger functionality', () => {
         expect(profile.rows).toHaveLength(1);
       } catch (err) {
         // Expected: unique constraint violation on auth.users.id
-        expect((err as any)?.code).toMatch(/23505|23000/);
+        expect(pgErrorCode(err)).toMatch(/23505|23000/);
       }
     });
   });

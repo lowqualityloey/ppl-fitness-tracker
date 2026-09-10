@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Client } from 'pg';
+import { pgErrorCode, pgErrorMessage } from './pg-error.js';
 
 describe('M1-03: Schema Constraints & Verification', () => {
   let client: Client;
@@ -166,8 +167,8 @@ describe('M1-03: Schema Constraints & Verification', () => {
         
         throw new Error('Should have failed with check constraint violation');
       } catch (err) {
-        expect((err as any)?.code).toBe('23514'); // check_violation
-        expect((err as any)?.message).toContain('weight_sane');
+        expect(pgErrorCode(err)).toBe('23514'); // check_violation
+        expect(pgErrorMessage(err)).toContain('weight_sane');
       }
 
       // Test: negative weight should fail  
@@ -182,8 +183,8 @@ describe('M1-03: Schema Constraints & Verification', () => {
         
         throw new Error('Should have failed with check constraint violation');
       } catch (err) {
-        expect((err as any)?.code).toBe('23514'); // check_violation
-        expect((err as any)?.message).toContain('weight_sane');
+        expect(pgErrorCode(err)).toBe('23514'); // check_violation
+        expect(pgErrorMessage(err)).toContain('weight_sane');
       }
 
       // Cleanup
@@ -226,8 +227,8 @@ describe('M1-03: Schema Constraints & Verification', () => {
         
         throw new Error('Should have failed with check constraint violation');
       } catch (err) {
-        expect((err as any)?.code).toBe('23514'); // check_violation
-        expect((err as any)?.message).toContain('reps_sane');
+        expect(pgErrorCode(err)).toBe('23514'); // check_violation
+        expect(pgErrorMessage(err)).toContain('reps_sane');
       }
 
       // Test: negative reps should fail
@@ -242,8 +243,8 @@ describe('M1-03: Schema Constraints & Verification', () => {
         
         throw new Error('Should have failed with check constraint violation');
       } catch (err) {
-        expect((err as any)?.code).toBe('23514'); // check_violation
-        expect((err as any)?.message).toContain('reps_sane');
+        expect(pgErrorCode(err)).toBe('23514'); // check_violation
+        expect(pgErrorMessage(err)).toContain('reps_sane');
       }
 
       // Cleanup
@@ -277,8 +278,8 @@ describe('M1-03: Schema Constraints & Verification', () => {
         
         throw new Error('Should have failed with unique constraint violation');
       } catch (err) {
-        expect((err as any)?.code).toBe('23505'); // unique_violation
-        expect((err as any)?.message).toContain('one_active_session_per_day');
+        expect(pgErrorCode(err)).toBe('23505'); // unique_violation
+        expect(pgErrorMessage(err)).toContain('one_active_session_per_day');
       }
 
       // But a completed session should be allowed (partial index only on 'in_progress')

@@ -49,6 +49,19 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Lint runs first: it needs no stack and no database, so it is the cheapest place
+      # to catch a discipline break. This workflow had no lint step at all, which is how
+      # `npm run lint` came to sit red with 24 `no-explicit-any` errors while
+      # PROMPTKIT.md §6 forbids them — a declared control with no runner is not a
+      # control. `npm run lint` now passes --max-warnings=0, so warnings fail too
+      # instead of accumulating into a tolerated background hum.
+      #
+      # Merge note: if this lands alongside the branch that adds the API-suite step, the
+      # two touch the same region of this file. Both changes are additive; keep this step
+      # directly after `npm ci`.
+      - name: Lint
+        run: npm run lint
+
       - name: Start Supabase
         run: npx supabase start
 

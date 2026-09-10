@@ -3,13 +3,13 @@
 ## 1. Executive Summary & Current Position
 
 - **Project Name**: PPL Fitness Tracker
-- **Current Milestone / Epic**: **M2: Core Domain Engine — M2-00 → M2-04 all merged to `main` (PRs #43–#47); M2-05 legacy importer is the active slice and is not started; M2-06 route hardening queued**
+- **Current Milestone / Epic**: **M2: Core Domain Engine — M2-00 → M2-04 all merged to `main` (PRs #43–#47); M2-05 legacy importer is **implemented** on `feat/m2-05-legacy-importer` (open PR, not yet merged); M2-06 route hardening queued**
 - **Overall Status**: ACTIVE <!-- Options: ACTIVE | PAUSED | STABILIZING | RELEASE_CANDIDATE -->
 - **Target Release**: v1.0.0, no date committed
-- **Current Working Branch**: `feat/m2-05-legacy-importer`, cut at `origin/main` (`0546f7b`) with **zero commits of its own** — the M2-04 branch it follows was merged as PR #47 and this branch contains no importer work yet. Note the **local `main` ref is stale** (`a1de6b0`, PR #35); `origin/main` is 13 commits ahead of it, so `git log main..HEAD` over-reports. Use `origin/main` as the comparison base.
+- **Current Working Branch**: `feat/m2-05-legacy-importer`, cut from `origin/main` after PRs #48–#50 landed, and carrying the M2-05 importer (feature, tests, and this record). Local `main` was fast-forwarded to `origin/main`, so `git log main..HEAD` reports this branch's own commits only. Compare against `origin/main`, not the historical refs named in older rows below — they were accurate when written and are exactly the kind of value a merge invalidates.
 
 > **Do not pin the current `main` SHA in this field.** It was tried three times and went stale three times, because the merge commit that lands the correction advances `main` past the value being recorded. Describe the state, not the hash. Run `git log --oneline -1` if you need the exact commit.
-- **Last Updated**: 2026-09-11 (`pk:onboard` re-scan; verified commands, not doc claims)
+- **Last Updated**: 2026-09-11 (M2-05 implemented; every number below came from a run, not from a prior doc line)
 - **Gate status**: #48 (D5 route-handler coverage + D1 lint enforcement) and #49 (this intake
   record) are **merged to `main`**, and `main`'s own Actions runs are green (4m32s and 4m40s).
   `npm run lint` exits 0 there. Consequence for the text below: the gates are no longer pending
@@ -19,7 +19,7 @@
 
 **Where things actually stand.** M1 schema, RLS, auth, contracts, exercise/stretch seeds, and the M1-16 route baseline are on `main`. M2-00 adds the runtime app-role Drizzle client, verified auth-to-RLS context, session domain mappers, and user-scoped repository; M2-01 adds the sessions API; M2-02 adds the pure lifecycle transition table, transaction-scoped set/task/phase/finish mutations, and rollback coverage; M2-03 adds pure Epley e1RM calculation and transaction-scoped personal-record recomputation with app-role ownership/rollback coverage; M2-04 adds bounded transactional sync, replay-safe mutation metadata, per-session sequencing/change rows, deterministic clock/device conflict resolution, and the authenticated `/api/sync` adapter.
 
-**What does not exist yet, stated plainly**: any real UI (only a placeholder home page and the sign-in form — Tailwind/shadcn/tokens land in M3), the M2-05 importer (contract in `lib/contracts/import.ts`, no implementation, no `import_batches` write path), any E2E spec (`playwright.config.ts` names `tests/e2e`, which is absent), and production email delivery (issue #16, deferred). The legacy vanilla-JS app still runs unchanged alongside the target stack, and `npm run build` still emits zero JavaScript — re-verified 2026-09-11, not inherited from the old note.
+**What does not exist yet, stated plainly**: any real UI (only a placeholder home page and the sign-in form — Tailwind/shadcn/tokens land in M3), the any E2E spec (`playwright.config.ts` names `tests/e2e`, which is absent), and production email delivery (issue #16, deferred). The legacy vanilla-JS app still runs unchanged alongside the target stack, and `npm run build` still emits zero JavaScript — re-verified 2026-09-11, not inherited from the old note.
 
 ---
 
@@ -129,8 +129,20 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
 
 - **Target Workspace / Package**: N/A (standalone repo)
 - **Active RFC / Spec**: `docs/specs/2026-09-08-spec-fullstack-migration.md`
-- **Active Task Spec**: `docs/specs/2026-09-08-m2-core-domain-engine.md`, with atomic task files in `docs/tasks/m2/` and GitHub issues #36–#42. M2-00 → M2-04 are implemented, reviewed, and merged. **`M2-05` is the active slice and is at 0/5 implementation tasks** (`docs/tasks/m2/M2-05-legacy-importer.md`, issue #40) — contract and schema exist, importer code does not.
-- **Key Source Files for M2-05**: `lib/contracts/import.ts` (Zod boundary for the three legacy localStorage keys + `userStats`, already shipped by M1-15), `db/schema/index.ts` (`import_batches`, deterministic `(userId, sourceFingerprint)` uniqueness), `lib/repositories/workout-repository.ts` (878 lines, domain write semantics to reuse for archived legacy sessions), `tests/integration/api/import-legacy.test.ts` (harness exists; expected red until the route lands), `src/app/api/` (new import route handler to add).
+- **Active Task Spec**: `docs/specs/2026-09-08-m2-core-domain-engine.md`, with atomic task files in `docs/tasks/m2/` and GitHub issues #36–#42. M2-00 → M2-04 are implemented, reviewed, and merged. **`M2-05` is implemented — 5/5 tasks** (`docs/tasks/m2/M2-05-legacy-importer.md`, issue #40) on `feat/m2-05-legacy-importer`, PR open and not yet merged.
+- **M2-05 surface, as built**: `lib/domain/import/legacy-importer.ts` (pure parse→plan:
+  per-key isolation, `legacySlotToOrderIndex` as the single 1-based→0-based seam,
+  `stripCollapsedCheckboxKey` for the pull-day sentinel, evidence rules that refuse to mint a
+  session from a page visit), `lib/domain/import/legacy-import-service.ts` (`LegacyImporter` +
+  replay-before-write ordering), `lib/domain/import/types.ts` (`LegacyImportStore` port + the two
+  error classes), `lib/repositories/legacy-import-repository.ts` (one transaction: day resolution →
+  archived sessions → sets → `import_batches`, `client_id` derived from the fingerprint so a racing
+  twin collides), `src/app/api/import/legacy/route.ts` (thin adapter), `lib/auth/rate-limit.ts`
+  (`legacyImportRateLimiter`, 5/hour keyed by user id), `lib/http/route-error.ts`
+  (`LegacyImportValidationError` → 400). `lib/contracts/import.ts` is unchanged except that real
+  payloads now get their collapsed key stripped before it reaches `BooleanMapSchema` — the contract
+  itself was left strict on purpose, since rejecting a `""` key is right for every *other* map.
+  `db/schema` and migrations: untouched, no `db:generate` ran.
 - **Merged M2 surface, for orientation**: `lib/domain/sessions/` (transition table + mappers), `lib/domain/progression/` (Epley e1RM + PR recomputation), `lib/domain/sync/` (reducer, `types.ts`), `lib/http/route-error.ts`, `src/app/api/{sessions,sessions/[id],sync}`, migrations `0004`–`0006`.
 - **Spike sandbox — throwaway, delete once M1's integration suite covers the same ground**:
   - `spikes/m0-drizzle-rls/sql/001-setup.sql` — role, tables, 8 policies, `handle_new_user`. Comments record the measured surprises. **Creates `unprotected_future_table` on purpose**; do not copy it.
@@ -154,8 +166,14 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
   - Full gate, measured sequence that actually works (verified 2026-09-11 with the stack
     up): `npm run db:up` → `npm run test:api:preflight` → `npm run typecheck` →
     `npm test` → `npm run test:api` → `npm run test:mutation` → `npm run db:down`.
-    Results: **`npm test` 23 files / 196 tests green**; **`test:api` 20 passed / 12
-    declared-skipped green**; preflight 4/4. Needs `DATABASE_URL` +
+    Results, re-measured on the M2-05 branch with the stack up (2026-09-11):
+    **`npm test` 25 files / 225 tests green**; **`test:api` 25 passed / 7
+    declared-skipped green** (the 5 import specs moved from skip to pass; the 7 remaining skips
+    are #42's unbuilt routes); preflight 4/4; **`npm run test:mutation` exit 0** — first time it
+    has been run here, and note the gap it exposed: that script is bare `tsx
+    scripts/mutation-check.ts` with **no `--env-file-if-exists`**, unlike the test scripts, so it
+    aborts with `MIGRATION_DATABASE_URL environment variable required` unless `.env.local` is
+    sourced by hand. Needs `DATABASE_URL` +
     `MIGRATION_DATABASE_URL` on the process env — the npm scripts pass
     `--env-file-if-exists=.env.local` so npm loads them itself; on `main` you must source
     `.env.local` first, or DB-backed files fail or silently skip.
@@ -320,28 +338,31 @@ Carried forward, still open:
 
 ## 7. Next Immediate Actions (Queued)
 
-1. **Start `#40`/M2-05 legacy importer** on `feat/m2-05-legacy-importer` (0/5 tasks, no
-   commits yet). Reuse `lib/contracts/import.ts` and domain write semantics; deterministic
-   SHA-256 source fingerprint through `import_batches`; never trust a request user id;
-   preserve raw legacy keys until the client acknowledges. Target: `tests/integration/api/import-legacy.test.ts` goes green.
-2. ~~**Merge PR #48 before M2-05's route lands.**~~ **Done**. It carries D5 (API suites in CI, preflight,
-   declared-pending registry + anti-rot guard, `.env.example` fix) and D1 (24 casts removed via
-   a narrowing helper, `--max-warnings=0`, CI `Lint` step) as two atomic commits on
-   `test/ci-gates-d1-d5`. Both verified green locally with the stack up, and both new gates were
-   observed failing when their control was removed. `origin/main` stays ungated until it merges,
-   and this PR's own Actions run is the first time those steps execute in CI at all — read the
-   checks, not just the local table, before trusting them. Kept off the M2-05 branch on purpose:
-   a feature branch that also changes the gate hides which regression either one caught.
-   **Then update `PROMPTKIT.md` §3 and §3/§5 here** — they describe `main` and go stale on
-   merge.
-3. **Decide D4 (journal vs hand-authored migrations) before any `db:generate`** and record
+1. ~~**Start `#40`/M2-05 legacy importer** on `feat/m2-05-legacy-importer`.~~ **Implemented** on
+   that branch as three commits (feature, tests, docs); **PR open, not merged**. All five issue
+   tasks are done — including deleting the `importLegacy` entry from the declared-pending
+   registry, which was observed failing its own anti-rot guard the moment the route appeared on
+   disk. No migration was needed, so D4 never blocked it: `import_batches` already ships in `0000`
+   with RLS from `0003`.
+2. **Merge the M2-05 PR, then start `#42`/M2-06.** After merge, refresh §1 and §3 here plus the
+   API-suite bullet in `PROMPTKIT.md` — they describe an unmerged branch and stop being true at
+   the merge commit.
+3. ~~**Merge PR #48 before M2-05's route lands.**~~ **Done.** It carried D5 (API suites in CI,
+   preflight, declared-pending registry + anti-rot guard, `.env.example` fix) and D1 (24 casts
+   removed via a narrowing helper, `--max-warnings=0`, CI `Lint` step) as two atomic commits.
+   Both were verified green locally with the stack up, and both new gates were observed failing
+   when their control was removed. Read CI's checks, not just a local table: a gate that has only
+   ever run on a branch is not yet a gate. Kept off the M2-05 branch on purpose — a feature branch
+   that also changes the gate hides which regression either one caught. **Then update
+   `PROMPTKIT.md` §3 and §3/§5 here**: they described `main` and went stale on merge, which is the
+   §8 row below this one.
+4. **Decide D4 (journal vs hand-authored migrations) before any `db:generate`** and record
    the chosen authorship model in `PROMPTKIT.md` §3; decide D7 (typed rows in the security
    suites) before M2-06 writes its negative controls.
-4. **Keep schema-risk work explicit.** Retain the missing Auth/profile FK as a tracked
+5. **Keep schema-risk work explicit.** Retain the missing Auth/profile FK as a tracked
    hardening risk; keep `--accent-legs` unresolved-but-flagged since it blocks M3, not M2.
-5. **Keep issue #16 deferred.** Custom SMTP/provider/DNS remains the separate M1 production-release blocker and must not block M2 coding or be described as complete.
-6. **Preserve the M3 boundary.** Do not delete legacy source folders or begin UI/design-system implementation until M2-06 closes the backend/API hardening gate.
-
+6. **Keep issue #16 deferred.** Custom SMTP/provider/DNS remains the separate M1 production-release blocker and must not block M2 coding or be described as complete.
+7. **Preserve the M3 boundary.** Do not delete legacy source folders or begin UI/design-system implementation until M2-06 closes the backend/API hardening gate.
 ---
 
 ## 8. Session Continuity Log
@@ -375,3 +396,4 @@ Carried forward, still open:
 | 2026-09-11 | Agent (DSH, `pk:onboard`) | Brownfield re-ingest + gate audit | Re-scanned the repo against its own profile and corrected the drift rather than regenerating it. **Verified**: `typecheck` exit 0; `npm run lint` **exit 1** (24 errors / 2 warnings, four integration test files, and **no lint step in `test.yml`**); `npx vitest run tests/unit` **67 pass / 6 fail**, all six from `tests/unit/with-user.test.ts` needing live Postgres; legacy `npm run build` still exits 0 emitting **0 `.js` files**; `_journal.json` covers `0000`–`0003` while `0004`–`0006` are hand-authored; `playwright.config.ts` names an absent `tests/e2e`; Supabase stack stopped, Docker `29.7.2` reachable; local `main` ref stale vs `origin/main`. Clean on: zero `TODO/FIXME`, zero `: any` in `src/`+`lib/`, zero empty `catch {}`, `strict` + `noUncheckedIndexedAccess`, working tree clean, secrets ignored. **Corrected**: `PROMPTKIT.md` banner (mid-migration is now backend-vs-frontend, not unbuilt), §2 stack status and testing reality, §3 Node-resolution table (v18 only under a stripped environment), §3 commands (migrations/seeds/mutation exist; lint red; API suites outside CI; journal mixed-authority warning), §1–§8 here. **Added**: `docs/tasks/2026-09-11-intake-debt-index.md` — D1 lint gate absent, D2 non-hermetic unit layer, D3 phantom E2E config, D4 journal gap, D5 route suites outside CI, each with Gherkin AC and a fix shape, plus a non-findings list so the next intake does not re-run them. `DESIGN.md` skipped: already a real token profile with ADR-0004/0005 deviations, not a template. No commits, pushes, or `pk:tasks` issue filing performed — that is offered, not assumed. |
 | 2026-09-11 | Agent (DSH) | Gate follow-through: D5 + D1 implemented | Ran the gates for real. Started the local stack (needed a widened file sandbox: the CLI writes `~/.supabase`), then found `npm run test:red` reporting 21 failures / 20 skips. Root-cause chain, each step disproving the last: `MIGRATION_DATABASE_URL` missing → whole files reported **skipped**, not failed (a `beforeAll` throw, so the "intentionally RED" framing had been hiding 13 suites that actually pass); with env loaded, `/api/sessions` + `/api/sync` returned blanket **HTTP 500**, which looks exactly like an M2-04 regression; the real cause was `.env.local` still holding `REPLACE_IN_M1-04` as the app-role password — a credential `supabase status` cannot supply because migration `0001` creates the role with its own literal. Supavisor had escalated to `ECIRCUITBREAKER`. **With the credential corrected: sessions 12/12 and sync 7/7 pass; `npm test` is 23 files / 196 tests green** — the first full local pass this repo has had, and evidence the merged M2 backend is sound. Implemented **D5** on branch `test/ci-gates-d1-d5` -> **PR #48** (CI runs `test:api`; env to job level; `scripts/preflight.ts` distinguishes env-broken from code-broken and compares the credential by SHA-256 prefix without printing it; `pending-handlers.ts` declares the 11 unbuilt-handler specs as counted, issue-attributed skips; `tests/unit/api/pending-handlers.test.ts` fails if a pending entry's route later appears; `fixtures.ts` throws at module scope so a missing credential can never read as a skip again; `.env.example` template corrected — it advertised a non-tenant-qualified username and pointed at `db:status`, which cannot answer). Implemented **D1** in the same PR (22 casts → `tests/integration/pg-error.ts` narrowing helpers rather than a fake error type, so a wrong SQLSTATE still fails; 2 unused bindings dropped; `--max-warnings=0`; CI `Lint` step). **Negative controls run for both new gates**: stripped env → API file fails loudly; scratch `const probe: any` → lint exit 1, removed → exit 0. Verification: lint 0/0, typecheck 0, `test:api` 20 pass / 12 skip, 4 edited security suites 32/32. Found but not fixed: **D6** `next dev` rewrites tracked `tsconfig.json` during API runs (reverted); **D7** `pg`'s default generic leaves the integration suites on *inferred* `any` rows — real strictness work, filed rather than smuggled into a lint commit. **Branch topology**: the two gate branches were combined onto `test/ci-gates-d1-d5` as two commits and opened as **PR #48** — a `package.json` conflict (adjacent `lint` and `test` script lines) resolved by hand as the union of both, `test.yml` auto-merged cleanly, and the combined branch re-verified at lint 0 / typecheck 0 / tree clean. SHAs were deliberately not quoted: one branch had already moved under them when it was rebased to drop an accidentally-included commit, which is the same reason `docs/STATE.md` §1 refuses to pin `main`. **On merge, refresh the docs**: `PROMPTKIT.md` §3's lint and API-suite paragraphs and §3/§5 here describe `main`, which stops being true the moment these two land; and the M2-05 importer will want D4 resolved first if it needs a migration at all. |
 | 2026-09-11 | Agent (DSH) | Post-merge gate refresh | #48 and #49 merged. Local `main` fast-forwarded (0 unique commits), `feat/m2-05-legacy-importer` re-pointed at it. **Verified, not assumed**: `npm run lint` exit 0 on merged `main`, and both push-triggered `main` Actions runs green (4m32s, 4m40s) — which retires the last evidence caveat from #48: the `Lint`, `Preflight` and `Run API route-handler suites` steps have now executed on the default branch, not only on a PR branch. Corrected prose written mid-flight: `PROMPTKIT.md` §3 lint bullet (RED → exit 0, warning-fatal, gated) and its API-suite bullet (outside the gate → inside it, pending handlers declared individually), plus STATE §1/§3/§5/§7 wording about unmerged branches; debt-index D1/D5 rows now read CLOSED. Docs only, no behavior change. **Next**: M2-05 — check D4 before any `db:generate`; its 5 specs are declared pending against #40, so the last task is deleting that entry. |
+| 2026-09-11 | Agent (DSH) | `M2-05` implementation | Built the legacy importer end to end on `feat/m2-05-legacy-importer` and deleted the `importLegacy` declared-pending entry; the anti-rot guard was **observed failing at the moment the route appeared**, which is the control working rather than the test being annoying. **No migration was needed** (D4 never entered): `import_batches` ships in `0000` with RLS from `0003`, and its `unique (user_id, source_fingerprint)` is the idempotency key. Dispatched a subagent to inventory the legacy `localStorage` **write sites** instead of trusting the RFC, and three code decisions came out of that: (1) real browsers key pull day's collapsed checkbox as `""`, not the `"undefined"` the RFC records — and because `BooleanMapSchema` requires `z.string().min(1)`, **a genuine browser payload failed validation entirely**, which would have reported real history as malformed; the sentinel is now stripped before parsing and the loss is reported, and the RFC row carries an erratum. (2) legs writes a complete DOM snapshot to `checkboxStates` while `state.*` is sparse, so the snapshot wins. (3) push's `timestamp` is the *last save*, not the session start, and `phaseCompletion` is dead data that is never assigned `true`. It also confirmed `userStats` was never written at all (the dashboard derived streaks from day-of-week and `Math.random()`), and that no legacy payload captured weight, reps, RPE, or actual rest — so those columns stay NULL and the report says so rather than backfilling them from plan templates. Two fabrications this module refuses: a session from a payload recording no interaction (pull saves during load paths, so an all-`false` payload is a page visit), and per-set rows for pull day. **Atomicity**: `client_id` is derived from the fingerprint, so a concurrent twin collides on the unique index and replays the winner's report instead of doubling history; a batch that writes nothing raises rather than persisting an empty fingerprint, which would make every later retry replay nothing even after seeds were fixed. Verified: lint 0, typecheck 0, `npm test` **25 files / 225 tests**, `test:api` **25 pass / 7 skip**, `test:mutation` exit 0, and the new seams measured separately (22 domain, 9 persistence). The persistence spec includes a forced mid-transaction failure proving rollback and a live-session-unchanged check, because "no irreversible deletion in the server path" is otherwise an absence claim nobody can read off a diff. **Trap, second occurrence in this repo**: a `from './types.js'` specifier inside `lib/` passes `tsc` *and* vitest while Turbopack cannot resolve it, so every request to the new route 500s at compile time with the entire local suite green — M1-16's row above records the same bug in the M1-15 contract graph. Now a standing rule in `PROMPTKIT.md` §6; the discovery route was `curl`, not the test suite. Also learned: the API import suite calls `seedExercises()` in `beforeAll` because **CI has no seed step** and the importer maps `ex1`…`ex6` onto seeded content — without that call the route fails as "no seeded content", a config problem dressed as a server error. `tsconfig.json` was rewritten by `next dev` during these runs (D6, still open) and reverted. |

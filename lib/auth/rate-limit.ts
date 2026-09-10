@@ -46,6 +46,18 @@ export class AuthRateLimiter {
 export const signInRateLimiter = new AuthRateLimiter();
 
 /**
+ * M2-05: five legacy imports per user per hour.
+ *
+ * Same sliding window as sign-in, but keyed by verified user id, because the
+ * documented budget is per user and the request is authenticated before it is
+ * counted. An IP key here would let one NAT'd household spend everyone else's
+ * allowance; `clientIp` exists only because sign-in can be attempted before an
+ * identity exists. The process-local caveat above applies identically: this is a
+ * single-instance courtesy limit, not a distributed control.
+ */
+export const legacyImportRateLimiter = new AuthRateLimiter(5, 60 * 60 * 1000);
+
+/**
  * Only accept ingress-provided metadata. Never use X-Forwarded-For directly:
  * a caller can choose it and evade throttling. Vercel strips/spoofs neither
  * this platform-specific header. Non-Vercel/local requests share `unknown`.

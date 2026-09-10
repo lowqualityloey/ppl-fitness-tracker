@@ -41,7 +41,7 @@
 - **Backend & Database**: Supabase — PostgreSQL **17.6** (measured on the local stack 2026-09-08; earlier drafts said 16), Supabase Auth (email magic link) — ADR-0002. **Realtime is not in use**: zero `.channel(`/realtime references in application code, and `npm run db:up` starts the stack with `-x realtime,...`, so the local stack does not even run it.
 - **ORM**: Drizzle (`db/schema/index.ts`), connecting as a non-owner `app_authenticated` role — ADR-0003. `db/seed/` loads exercise and stretch content.
 - **Validation**: Zod at every boundary (`lib/contracts/` — envelope, auth, sessions, sync, progress, exercises, legacy import)
-- **Testing**: Vitest — **28 spec files in place**: 9 unit, 13 integration, 6 route-handler API suites (`tests/integration/api/`). Playwright E2E is **configured but does not exist yet** — `playwright.config.ts` points at `./tests/e2e`, which is absent, and there are zero spec files; the offline-session flow arrives with M3/M4. See `docs/tasks/2026-09-11-intake-debt-index.md` D3.
+- **Testing**: Vitest — **31 spec files in place** (counted with `find` on 2026-09-11, not inherited from the last edit): 11 unit, 14 DB-backed integration, 6 route-handler API suites (`tests/integration/api/`). Playwright E2E is **configured but does not exist yet** — `playwright.config.ts` points at `./tests/e2e`, which is absent, and there are zero spec files; the offline-session flow arrives with M3/M4. See `docs/tasks/2026-09-11-intake-debt-index.md` D3.
 
 ---
 
@@ -110,8 +110,18 @@ each serving correctly, zero collision.
   `tests/unit/api/pending-handlers.test.ts` fails if a declared-pending route later appears on
   disk, so an entry cannot outlive the work it waits for. Run `npm run test:api:preflight` first
   when results look impossible: it separates a broken environment from broken code. See D5 (closed).
+  Measured 2026-09-11 on the M2-05 branch: **25 passed / 7 skipped**. Note that
+  `tests/integration/api/import-legacy.test.ts` calls `seedExercises()` in `beforeAll`, and why:
+  **CI has no seed step**, and the importer resolves legacy `ex1`…`ex6` against seeded routine
+  content, so without that call the suite fails for a reason unrelated to the code under test. Any
+  future suite that depends on system content has to state the same precondition rather than hope
+  some other file seeded it first.
 - **Mutation check**: `npm run test:mutation` (`tsx scripts/mutation-check.ts`) — removes
-  each RLS control in turn and requires the drift test to go red. Needs the stack up.
+  each RLS control in turn and requires the drift test to go red. Needs the stack up, **and it is
+  the only gate script that does not pass `--env-file-if-exists=.env.local`**: run bare it exits with
+  `MIGRATION_DATABASE_URL environment variable required`, so source the env first
+  (`set -a; . ./.env.local; set +a`). Verified exit 0 on 2026-09-11 — every control removed made the
+  drift test go red, and restoring it made the suite pass again.
 - **E2E Tests**: `npm run test:e2e` — **no specs exist.** `playwright.config.ts` points at
   `./tests/e2e`, which is not present. Treat E2E as absent until M3/M4, not as a gap to
   paper over. See D3.
@@ -209,7 +219,8 @@ Design source of truth is `DESIGN.md` (a TailAdmin profile). Its brand voice and
 - [ ] **Timers store an absolute deadline.** `endsAt` timestamps, with remaining time derived from `Date.now()`. Never a decrementing `setInterval` counter — browsers throttle background timers to roughly once per minute, which is a live defect in the legacy modules.
 - [ ] **Security headers are server-sent.** Never `<meta http-equiv>` for CSP, `X-Frame-Options`, or `X-Content-Type-Options`; browsers ignore the latter two in meta form entirely. No `'unsafe-inline'`.
 
-### Two rules earned from this repository's own history
+### Three rules earned from this repository's own history
 
 - [ ] **A security control does not exist until a test proves it runs.** `SECURITY_IMPROVEMENTS.md` in this repo documents an authorization system whose deny branch is unreachable, a second `AuthManager` that no page loads, and a `canAccessPhase()` that returns `true` unconditionally. Three documented layers, zero enforcement. Any authorization or isolation claim must ship with a merge-gating test that would fail if the control were removed.
 - [ ] **Documentation describes what exists, not what is planned.** Two module READMEs in this repo advertise a React/Express/PostgreSQL/JWT/Cloudinary system that was never built. Aspirational docs are worse than absent ones. Mark unbuilt work as unbuilt, including in this file.
+- [ ] **A green typecheck and a green test suite do not prove a route compiles.** A relative import written `from './types.js'` that points at a `./types.ts` file satisfies `tsc` (extension substitution is allowed), and satisfies Vitest, but Next's Turbopack cannot resolve it — so *every request to a route that imports it returns 500 at module load* while the entire suite stays green. This has happened twice: once in the M1-15 contract graph (fixed during M1-16) and again on 2026-09-11 in `lib/domain/import/`, where it cost a full API-suite run before the cause was readable. The rule: source under `lib/` and `src/` that Next compiles uses **extensionless** relative imports; `.js` specifiers belong in test files, which run under Node. Prove a handler exists by sending it one request — the API suite, or `curl` — not by typechecking it.

@@ -2,7 +2,12 @@
 
 > **Instructions for AI**: Read this file during every session. Adhere strictly to the project domain boundaries, commands, documentation targets, and non-negotiable architectural rules defined below.
 
-> **This project is mid-migration.** Two stacks coexist. The *legacy* stack is what currently runs; the *target* stack is what is being built. Nothing in the target stack exists yet as of 2026-09-08. Do not describe target-stack components as if they are implemented. See `docs/STATE.md` for the live position.
+> **This project is mid-migration.** Two stacks coexist, and the split is now **backend vs. frontend**, not "built vs. unbuilt".
+>
+> - The *target* stack's **server side exists and is merged to `main`**: schema + migrations `0000`–`0006`, RLS on every table, magic-link auth, Zod contracts, the sessions API, `SessionEngine`, `ProgressionEngine`, and transactional conflict-aware sync (M1 complete; M2-00 → M2-04 merged as PRs #43–#47).
+> - The target stack has **no UI** beyond a placeholder `src/app/page.tsx` and `src/app/sign-in/`. Tailwind, shadcn and design tokens land in M3. A user who opens this app today still gets the legacy vanilla-JS pages.
+>
+> Do not describe unbuilt target-stack components as if they exist, and do not describe the merged backend as if it were still a plan. See `docs/STATE.md` for the live position.
 
 ---
 
@@ -26,16 +31,17 @@
 - No tests, no backend, no auth
 - **Known broken**: `npm run build` exits 0 but emits **zero JavaScript**. All four `<script>` tags are classic scripts, so Vite neither transforms nor copies them and leaves the original `src` in the output HTML. Every page in `dist/` 404s on its script and is inert. Do not treat a successful `build` exit code as evidence of a working build.
 
-### Target stack (v1 — scaffold exists as of 2026-09-08, M1 in progress)
+### Target stack (v1 — backend through M2-04 merged; re-verified by intake scan 2026-09-11)
 
 - **Language & Runtime**: TypeScript `strict`, Node.js **≥ 20.9** (required by Next.js 16 — Node 18 is unsupported). nvm default is v24.20.0 LTS; see the shell footgun in §3.
-- **Framework**: Next.js 16 (App Router), React 19 — ADR-0001. **Scaffolded** (`M1-01`/#3): `next.config.ts`, `tsconfig.json`, `eslint.config.mjs`, `src/app/` with a placeholder home page. Runs on port 3001 alongside the legacy Vite server on 3000.
+- **Framework**: Next.js 16 (App Router), React 19 — ADR-0001. Live: `src/app/` with placeholder home + `sign-in/`, route handlers under `src/app/api/{sessions,sessions/[id],sync}` and `src/app/auth/{signin,confirm}`, `src/middleware.ts` refreshing sessions. Runs on port 3001 alongside the legacy Vite server on 3000.
+- **Domain layer**: `lib/domain/{sessions,progression,sync}` (pure transition table, Epley e1RM, sync reducer), `lib/repositories/workout-repository.ts` (user-scoped, transactional), `lib/db/{client,with-user,auth-context}`, `lib/http/route-error.ts`, `lib/auth/`, `lib/supabase/server.ts`.
 - **Styling & Design System**: Tailwind CSS v4, shadcn/ui, tokens derived from `DESIGN.md` — ADR-0005. **Not yet added** — this lands in M3, not the M1 scaffold; `src/app/globals.css` is currently a bare reset.
-- **State & Data Fetching**: Server Actions + Route Handlers; `useOptimistic` for set-tap; client outbox in IndexedDB
-- **Backend & Database**: Supabase — PostgreSQL **17.6** (measured on the local stack 2026-09-08; earlier drafts said 16), Supabase Auth (email magic link), Supabase Realtime — ADR-0002
-- **ORM**: Drizzle, connecting as a non-owner `app_authenticated` role — ADR-0003
-- **Validation**: Zod at every boundary
-- **Testing**: Vitest (unit + integration), Playwright (E2E, including an offline-session flow)
+- **State & Data Fetching**: Route Handlers are what exists (`src/app/api/*`). **Server Actions, `useOptimistic` set-tap, and the IndexedDB client outbox are all unimplemented** — zero occurrences of `"use server"`, `useOptimistic`, or `indexedDB`/outbox anywhere in `src/` or `lib/` (measured 2026-09-11). They are M3/M4 work.
+- **Backend & Database**: Supabase — PostgreSQL **17.6** (measured on the local stack 2026-09-08; earlier drafts said 16), Supabase Auth (email magic link) — ADR-0002. **Realtime is not in use**: zero `.channel(`/realtime references in application code, and `npm run db:up` starts the stack with `-x realtime,...`, so the local stack does not even run it.
+- **ORM**: Drizzle (`db/schema/index.ts`), connecting as a non-owner `app_authenticated` role — ADR-0003. `db/seed/` loads exercise and stretch content.
+- **Validation**: Zod at every boundary (`lib/contracts/` — envelope, auth, sessions, sync, progress, exercises, legacy import)
+- **Testing**: Vitest — **28 spec files in place**: 9 unit, 13 integration, 6 route-handler API suites (`tests/integration/api/`). Playwright E2E is **configured but does not exist yet** — `playwright.config.ts` points at `./tests/e2e`, which is absent, and there are zero spec files; the offline-session flow arrives with M3/M4. See `docs/tasks/2026-09-11-intake-debt-index.md` D3.
 
 ---
 
@@ -55,24 +61,26 @@
 
 **1. Always run inside WSL, never from PowerShell against the UNC path.** The repo lives on the WSL filesystem. Installing from Windows against `\\wsl.localhost\...` fetches the wrong platform binaries (win32 optional deps for esbuild/rollup, which then fail to load under Linux), and `cmd.exe` cannot use a UNC path as a working directory — it silently falls back to the Windows directory, so the build fails for a reason unrelated to the code.
 
-**2. Non-interactive shells resolve the wrong Node version.** Node is managed by nvm. The `PATH` prepend that selects it lives in `~/.zshrc`, which zsh only sources for *interactive* shells. `~/.bashrc` has no nvm block at all. So:
+**2. Node comes from nvm, and which shell you are in decides the version.** Re-measured 2026-09-11:
 
 | Invocation | Resolves to |
 | :--- | :--- |
-| Interactive terminal | current nvm default (v24.20.0) — correct |
-| `bash -lc` / `zsh -lc` | `/usr/bin/node` **v18.19.1** — too old for Next.js 16 |
+| Interactive terminal | nvm default **v24.20.0** — correct |
+| Plain `bash -c`, `bash -lc`, `zsh -lc` (this agent harness included) | **v24.20.0** — correct; the nvm `PATH` prepend is inherited from the parent process environment |
+| `env -i bash -c 'node -v'` (stripped environment) | `/usr/bin/node` **v18.19.1** — too old for Next.js 16 |
 
-Automation must therefore source nvm explicitly. **Use this form for every node/npm command:**
+So the earlier claim that *all* non-interactive shells get v18 was overstated: it only
+bites when the environment is stripped or when a caller sanitises `PATH`. Still treat it
+as live risk in CI-style sandboxes, systemd units, and cron. Cheap belt-and-braces form
+for any automation that might not inherit the nvm `PATH`:
 
 ```bash
-wsl.exe -d Ubuntu -- bash -c '. "$HOME/.nvm/nvm.sh" >/dev/null 2>&1; cd /home/heyloey/personal/ppl-fitness-tracker && npm run dev'
+. "$HOME/.nvm/nvm.sh" >/dev/null 2>&1; cd /home/heyloey/personal/ppl-fitness-tracker && npm run next:dev
 ```
 
-Verify before trusting a build: `node --version` must report ≥ 20.9. If it reports v18, nvm was not sourced.
+Verify before trusting a result: `node --version` must report ≥ 20.9. v18 means nvm was not sourced.
 
-*Optional permanent fix (user's environment, not the repo):* creating a `~/.zshenv` with the same `PATH` prepend as `~/.zshrc:119-122` would make all zsh invocations resolve correctly, since `.zshenv` is sourced for every shell including non-interactive. Not applied — the explicit-source form above works without touching dotfiles.
-
-### Target (scaffolded 2026-09-08 by `M1-01` / issue #3 — verified commands)
+### Target (backend merged; commands re-verified 2026-09-11 by intake scan)
 
 Next.js 16 lives at the repo root alongside the legacy app (`PROMPTKIT.md` §4: no
 monorepo, single `package.json`). It runs on **port 3001**, not 3000 — the legacy
@@ -85,21 +93,50 @@ each serving correctly, zero collision.
   legacy `npm run build`, which is verified zero-JS (see the note above) and stays
   that way until M4
 - **Start (production)**: `npm run next:start`
-- **Unit / Integration Tests**: `npm test` (Vitest; passes with exit 0 and no tests
-  until `M1-16`/#18 adds the first ones — this is intentional for the RED phase, not
-  a gap)
-- **E2E Tests**: `npm run test:e2e` (Playwright; no spec files yet)
+- **Test files that exist today**: 27 spec files — 9 under `tests/unit/`, 13 under
+  `tests/integration/`, 6 under `tests/integration/api/` (plus `fixtures.ts` and
+  `test-server.ts` helpers). Unit layer measured 2026-09-11: **67 passed, 6 failed** —
+  and the 6 failures are environmental, not a regression:
+  `tests/unit/with-user.test.ts` opens a real socket to Postgres `:54322`, so it is an
+  integration test filed in the unit layer. See D2.
+- **Unit + Integration Tests**: `npm test`
+  (`vitest run --exclude 'tests/integration/api/**'`). **Requires the stack up**: run
+  `npm run db:up` first, or every DB-touching file fails with `ECONNREFUSED`.
+- **RED / API suite**: `npm run test:red` (`vitest run tests/integration/api/`). These
+  6 files are excluded from `npm test`, and **`.github/workflows/test.yml` runs only
+  `npm test`** — so the route-handler suites are not executed by the merge gate. They are
+  green where handlers exist and still red for M2-05's importer. See D5.
+- **Mutation check**: `npm run test:mutation` (`tsx scripts/mutation-check.ts`) — removes
+  each RLS control in turn and requires the drift test to go red. Needs the stack up.
+- **E2E Tests**: `npm run test:e2e` — **no specs exist.** `playwright.config.ts` points at
+  `./tests/e2e`, which is not present. Treat E2E as absent until M3/M4, not as a gap to
+  paper over. See D3.
 - **Typecheck**: `npm run typecheck` (runs `next typegen` first, then
-  `tsc --noEmit`; verified to reject implicit `any` — strict mode is enforced,
-  not just declared). Bare `npx tsc --noEmit` fails on a fresh checkout with
+  `tsc --noEmit`; **verified exit 0 on 2026-09-11**, and verified to reject implicit `any`
+  — strict mode is enforced, not just declared, with `noUncheckedIndexedAccess: true`
+  also on). Bare `npx tsc --noEmit` fails on a fresh checkout with
   `Cannot find name 'LayoutProps'` — that type is generated into `.next/types`
   by Next.js itself and isn't present until `next dev`, `next build`, or
   `next typegen` has run once. `npm run typecheck` handles this; a bare `tsc`
   invocation will not.
 - **Lint**: `npm run lint` (ESLint flat config, `eslint-config-next`; legacy
-  directories and `spikes/` are explicitly ignored, not linted)
-- **DB migrations**: `npx drizzle-kit generate` / `migrate` (owner role,
-  `MIGRATION_DATABASE_URL`) — not yet scaffolded, lands in `M1-03`/#5
+  directories and `spikes/` are explicitly ignored, not linted; `no-restricted-syntax`
+  plus `scripts/check-set-config.sh` ban direct `set_config` outside `withUser()`).
+  **Currently RED: exit 1, 24 errors + 2 warnings, all in four
+  `tests/integration/*.test.ts` files** (`app-role`, `handle-new-user-trigger`,
+  `rls-content-tables`, `schema-constraints`) — production code under `src/` and `lib/`
+  is `any`-free. CI has **no lint step**, so this stays broken silently. Do not cite
+  "lint clean" as evidence until D1 is closed. See D1.
+- **DB migrations**: `npm run db:generate` / `npm run db:migrate` (`drizzle-kit`, owner
+  role via `MIGRATION_DATABASE_URL` → direct port 54322, **not** the pooler). Migrations
+  live in `supabase/migrations/` and are **mixed-authority**: `0000`–`0003` are
+  drizzle-generated (present in `meta/_journal.json`), `0004`–`0006` are hand-authored and
+  **absent from the journal**. `drizzle-kit generate` therefore reasons from a stale
+  snapshot — read `docs/tasks/2026-09-11-intake-debt-index.md` D4 before generating the
+  next one, and prefer hand-authoring plus an Expand→Contract note.
+- **Seeds**: `npm run db:seed` (exercises + routine associations),
+  `npm run db:seed:stretches` (deduped stretch content). Both idempotent, both have
+  verifying integration tests.
 - **Local Supabase stack** (scaffolded 2026-09-08 by `M1-02`/#4): `npm run db:up`
   / `npm run db:down` / `npm run db:status`. `supabase` CLI is a devDependency
   (`2.117.0`, matching the M0 spike) rather than a global install, so
@@ -108,8 +145,11 @@ each serving correctly, zero collision.
   how the app connects in production; `MIGRATION_DATABASE_URL` connects
   directly to 54322 as the owner role. Copy `.env.example` to `.env.local` to
   get real local values (already done in this checkout).
-  **`app_authenticated` does not exist until `M1-04`** — `DATABASE_URL` will
-  fail authentication until then. That's expected, not a setup bug.
+  `app_authenticated` **exists** (created by `0001_app_authenticated_role_trigger.sql`,
+  `M1-04`/#6), so `DATABASE_URL` authenticates once the stack is up. Verified attributes:
+  `LOGIN NOBYPASSRLS NOSUPERUSER NOINHERIT`, owns nothing.
+  **Stack state as of the 2026-09-11 intake: stopped** (`docker ps` empty, daemon
+  `29.7.2` reachable) — start it with `npm run db:up` before running any DB-backed gate.
 
 Node version note: `next build`'s Turbopack warns that it ignored
 `package-lock.json` because `/home/heyloey` (this machine's home directory) sits

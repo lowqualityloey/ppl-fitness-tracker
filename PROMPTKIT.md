@@ -31,7 +31,7 @@
 - No tests, no backend, no auth
 - **Known broken**: `npm run build` exits 0 but emits **zero JavaScript**. All four `<script>` tags are classic scripts, so Vite neither transforms nor copies them and leaves the original `src` in the output HTML. Every page in `dist/` 404s on its script and is inert. Do not treat a successful `build` exit code as evidence of a working build.
 
-### Target stack (v1 — backend through M2-04 merged; re-verified by intake scan 2026-09-11)
+### Target stack (v1 — backend through M2-05 merged; re-verified by intake scan 2026-09-11)
 
 - **Language & Runtime**: TypeScript `strict`, Node.js **≥ 20.9** (required by Next.js 16 — Node 18 is unsupported). nvm default is v24.20.0 LTS; see the shell footgun in §3.
 - **Framework**: Next.js 16 (App Router), React 19 — ADR-0001. Live: `src/app/` with placeholder home + `sign-in/`, route handlers under `src/app/api/{sessions,sessions/[id],sync}` and `src/app/auth/{signin,confirm}`, `src/middleware.ts` refreshing sessions. Runs on port 3001 alongside the legacy Vite server on 3000.
@@ -110,7 +110,7 @@ each serving correctly, zero collision.
   `tests/unit/api/pending-handlers.test.ts` fails if a declared-pending route later appears on
   disk, so an entry cannot outlive the work it waits for. Run `npm run test:api:preflight` first
   when results look impossible: it separates a broken environment from broken code. See D5 (closed).
-  Measured 2026-09-11 on the M2-05 branch: **25 passed / 7 skipped**. Note that
+  Measured 2026-09-11 **on merged `main`**: **25 passed / 7 skipped**. Note that
   `tests/integration/api/import-legacy.test.ts` calls `seedExercises()` in `beforeAll`, and why:
   **CI has no seed step**, and the importer resolves legacy `ex1`…`ex6` against seeded routine
   content, so without that call the suite fails for a reason unrelated to the code under test. Any

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { Client } from 'pg';
+import { pgErrorMessage } from './pg-error.js';
 
 // Local Supabase credentials (shared defaults, safe to inline)
 const SUPABASE_API_URL = 'http://127.0.0.1:54321';
@@ -107,7 +108,12 @@ describe('M1-05: RLS on content tables', () => {
     return JSON.parse(json);
   }
 
-  async function executeAsUser(user: TestUser, query: string, params: any[] = []): Promise<any> {
+  // Return type deliberately inferred: node-postgres' default generic already yields
+  // `QueryResult<any>`, and ~20 call sites below read `result.rows[0].<column>`. Naming a
+  // strict row type here would force an "a row must exist" guard at every one of them —
+  // worth doing, but as its own typed-rows pass over these suites, not smuggled inside a
+  // lint fix. Tracked as D7 in docs/tasks/2026-09-11-intake-debt-index.md.
+  async function executeAsUser(user: TestUser, query: string, params: unknown[] = []) {
     const userClient = new Client({
       connectionString: process.env.MIGRATION_DATABASE_URL?.replace(
         'postgres:postgres',
@@ -308,7 +314,7 @@ describe('M1-05: RLS on content tables', () => {
       } catch (err) {
         // Should fail because INSERT policy requires owner_user_id = auth.uid()
         // which cannot be NULL
-        expect((err as any)?.message).toContain('new row violates row-level security policy');
+        expect(pgErrorMessage(err)).toContain('new row violates row-level security policy');
       }
     });
 
@@ -336,7 +342,7 @@ describe('M1-05: RLS on content tables', () => {
         `, [userA.id]);
         throw new Error('Should have failed due to RLS policy');
       } catch (err) {
-        expect((err as any)?.message).toContain('new row violates row-level security policy');
+        expect(pgErrorMessage(err)).toContain('new row violates row-level security policy');
       }
     });
 
@@ -375,21 +381,22 @@ describe('M1-05: RLS on content tables', () => {
         `, [routineDay.rows[0].id, exercise.rows[0].id]);
         throw new Error('Should have failed due to RLS policy');
       } catch (err) {
-        expect((err as any)?.message).toContain('new row violates row-level security policy');
+        expect(pgErrorMessage(err)).toContain('new row violates row-level security policy');
       }
     });
   });
 
   describe('Scenario 4: Grant check - RLS vs missing grants', () => {
     it('should return filtered results, not permission denied errors', async () => {
-      // Create mixed data: system exercise + user A override
-      const systemExercise = await ownerClient.query(`
+      // Create mixed data: system exercise + user A override. The returned ids are not
+      // used — this scenario asserts on visibility, so only the rows' existence matters.
+      await ownerClient.query(`
         INSERT INTO exercises (slug, name, muscle_groups, owner_user_id)
         VALUES ('test-system-grant-check', 'System Exercise', '{"chest"}', NULL)
         RETURNING id
       `);
 
-      const userAOverride = await executeAsUser(userA, `
+      await executeAsUser(userA, `
         INSERT INTO exercises (slug, name, muscle_groups, owner_user_id)
         VALUES ('test-user-a-grant-check', 'User A Exercise', '{"back"}', $1)
         RETURNING id

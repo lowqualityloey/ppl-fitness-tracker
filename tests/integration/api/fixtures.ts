@@ -29,6 +29,43 @@ const TEST_PASSWORD = 'm1-16-route-test-password';
 process.env.NEXT_PUBLIC_SUPABASE_URL ??= SUPABASE_URL;
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??= SUPABASE_ANON_KEY;
 
+/**
+ * Fail loudly at collection time if the suite cannot possibly work.
+ *
+ * Without this, a missing `MIGRATION_DATABASE_URL` throws inside `beforeAll`, and
+ * Vitest reports the whole file's tests as **skipped** — 20 skipped tests, exit code
+ * driven only by whatever else failed. A misconfigured machine therefore looks like a
+ * deliberately-pending suite, which is how `tests/integration/api/` came to be described
+ * as "intentionally RED" long after the handlers shipped.
+ *
+ * A module-scope throw surfaces as a file-level error instead, which cannot be mistaken
+ * for a skip.
+ *
+ * The sibling failure mode, hit for real in this checkout on 2026-09-11, is worse: if the
+ * credentials are *present but wrong* — here `.env.local` still carried the
+ * `REPLACE_IN_M1-04` placeholder while migration `0001` creates the role with a real
+ * literal — the routes return blanket HTTP 500 and the specs fail on status assertions
+ * that look exactly like product bugs. `npm run test:api:preflight` distinguishes the two
+ * in seconds and never prints the secret.
+ */
+const REQUIRED_ENV = [
+  ['MIGRATION_DATABASE_URL', 'owner role, direct port 54322 — fixture setup and seeds'],
+  ['DATABASE_URL', 'app role, through the pooler — what the route handlers connect as'],
+] as const;
+
+const missing = REQUIRED_ENV.filter(([name]) => !process.env[name])
+  .map(([name, purpose]) => `  - ${name} (${purpose})`);
+
+if (missing.length > 0) {
+  throw new Error(
+    'API integration suites need a running Supabase stack and its credentials.\n' +
+    'Missing:\n' + missing.join('\n') + '\n' +
+    'Start the stack and give the test process its env:  npm run db:up && npm run test:api\n' +
+    '(the npm scripts pass `--env-file-if-exists=.env.local`; if you invoke vitest or node ' +
+    'directly, source .env.local yourself — Vitest does not put non-VITE_ prefixed keys on process.env.)',
+  );
+}
+
 interface TestSession {
   userId: string;
   cookie: string;

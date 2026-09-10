@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppEnvelopeSchema } from '../../../lib/contracts/envelope.js';
 import { LegacyImportResponseSchema } from '../../../lib/contracts/import.js';
 import { authHeaders, createTestSession, type TestSession } from './fixtures.js';
+import { isPending } from './pending-handlers.js';
 import { jsonRequest, responseBody, startApiServer, stopApiServer } from './test-server.js';
 
 const legacyPayload = {
@@ -20,7 +21,10 @@ async function expectAppError(response: Response, status: number, code: string):
   if (parsed.success && !parsed.data.ok) expect(parsed.data.error.code).toBe(code);
 }
 
-describe('M1-16 RED: POST /api/import/legacy', () => {
+// Pending while the handler is unbuilt. Delete the `importLegacy` entry from
+// ./pending-handlers.ts when POST /api/import/legacy lands (#40 / M2-05); these five
+// specs are that issue's acceptance harness.
+describe.skipIf(isPending('importLegacy'))('M1-16 RED: POST /api/import/legacy', () => {
   let owner!: TestSession;
 
   beforeAll(async () => {

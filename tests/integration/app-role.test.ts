@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Client } from 'pg';
+import { pgErrorCode, pgErrorMessage } from './pg-error.js';
 
 describe('M1-04: app_authenticated role attributes and security posture', () => {
   let client: Client;
@@ -84,8 +85,8 @@ describe('M1-04: app_authenticated role attributes and security posture', () => 
           throw new Error('Should have failed with permission denied');
         } catch (err) {
           // Expected: permission denied for schema auth
-          expect((err as any)?.code).toBe('42501');
-          expect((err as any)?.message).toContain('permission denied for schema');
+          expect(pgErrorCode(err)).toBe('42501');
+          expect(pgErrorMessage(err)).toContain('permission denied for schema');
         }
       } finally {
         await appClient.end();
@@ -108,8 +109,8 @@ describe('M1-04: app_authenticated role attributes and security posture', () => 
           throw new Error('Should have failed with permission denied');
         } catch (err) {
           // Expected: permission denied for schema auth
-          expect((err as any)?.code).toBe('42501');
-          expect((err as any)?.message).toContain('permission denied for schema');
+          expect(pgErrorCode(err)).toBe('42501');
+          expect(pgErrorMessage(err)).toContain('permission denied for schema');
         }
       } finally {
         await appClient.end();
@@ -142,8 +143,8 @@ describe('M1-04: app_authenticated role attributes and security posture', () => 
             throw new Error(`Query "${query}" should have failed with permission denied`);
           } catch (err) {
             // Expected: permission denied for schema auth OR function does not exist
-            const errorCode = (err as any)?.code;
-            const errorMessage = (err as any)?.message?.toLowerCase();
+            const errorCode = pgErrorCode(err);
+            const errorMessage = pgErrorMessage(err).toLowerCase();
             
             // Accept either schema permission error or function not existing
             const isExpectedError = errorCode === '42501' || // permission denied
@@ -192,9 +193,9 @@ describe('M1-04: app_authenticated role attributes and security posture', () => 
         }
       } catch (err) {
         // Expected on Supabase: 42501 permission denied
-        if ((err as any)?.code === '42501') {
+        if (pgErrorCode(err) === '42501') {
           // This is the expected behavior - can't alter superuser attributes
-          expect((err as any)?.message).toMatch(/permission denied|superuser/i);
+          expect(pgErrorMessage(err)).toMatch(/permission denied|superuser/i);
           console.log('PRODUCTION: Role alteration blocked by database security');
         } else {
           // Re-throw if it's an unexpected error

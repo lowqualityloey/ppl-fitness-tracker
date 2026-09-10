@@ -21,6 +21,7 @@ import {
   SyncConflictError,
   SyncValidationError,
 } from '../domain/sync/types';
+import { LegacyImportValidationError } from '../domain/import/types';
 
 export function appErrorResponse(error: AppError): NextResponse<AppEnvelope<never>> {
   return NextResponse.json<AppEnvelope<never>>(appErrorEnvelope(error), { status: error.status });
@@ -35,7 +36,8 @@ export function routeErrorResponse(error: unknown): NextResponse<AppEnvelope<nev
     error instanceof ZodError ||
     error instanceof InvalidSessionCursorError ||
     error instanceof SessionValidationError ||
-    error instanceof SyncValidationError
+    error instanceof SyncValidationError ||
+    error instanceof LegacyImportValidationError
   ) {
     return appErrorResponse(validationError());
   }

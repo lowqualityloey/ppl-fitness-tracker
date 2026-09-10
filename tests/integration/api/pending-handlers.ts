@@ -43,11 +43,6 @@ export const PENDING_ROUTES = {
     issue: '#42',
     reason: 'GET /api/progress/:exerciseSlug handler is not implemented',
   },
-  importLegacy: {
-    handlerPath: 'src/app/api/import',
-    issue: '#40',
-    reason: 'POST /api/import/legacy handler is not implemented (M2-05 importer)',
-  },
 } as const satisfies Record<string, PendingRoute>;
 
 export type PendingRouteKey = keyof typeof PENDING_ROUTES;

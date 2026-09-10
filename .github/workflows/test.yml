@@ -10,6 +10,26 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    # Job-level so every DB-backed step gets the same credentials. These were
+    # previously inline on a single `npm test` step, which meant any additional
+    # suite had to duplicate the whole block (and silently could not, if someone
+    # forgot) — see D5 in docs/tasks/2026-09-11-intake-debt-index.md.
+    env:
+      # Supabase local development URLs (ADR-0003):
+      #   DATABASE_URL routes through the pooler (54329), matching production.
+      #   MIGRATION_DATABASE_URL connects directly as owner (54322) — the
+      #   pooler requires a tenant identifier that a bare owner connection
+      #   does not carry, so migrations/seeds must bypass it.
+      # The app-role password is this repo's own literal from migration
+      # 0001_app_authenticated_role_trigger.sql, not a Supabase-generated one,
+      # so it must be kept in sync with that file. `test:api:preflight` asserts it.
+      DATABASE_URL: postgresql://app_authenticated.pooler-dev:Wd7EmwRWWqY9s7jMVD3kVqnt+OaW5PowxNIxCY5Ful0=@127.0.0.1:54329/postgres
+      MIGRATION_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+      # Well-known Supabase local-dev defaults (public by design, safe to
+      # commit — see .env.example). Needed by tests/integration/require-user.test.ts.
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -38,20 +58,29 @@ jobs:
       - name: Security check - Ban direct set_config calls
         run: ./scripts/check-set-config.sh
 
+      # Separate step, before the suites, so that an environment problem is
+      # attributable on its own rather than appearing as N status-code
+      # assertions. This is the check that would have distinguished the
+      # 2026-09-11 local incident (unfilled app-role credential -> blanket
+      # HTTP 500s) from a genuine code regression.
+      - name: Preflight integration environment
+        run: npm run test:api:preflight
+
       - name: Run test suite (includes schema drift detection)
         run: npm test
-        env:
-          # Supabase local development URLs (ADR-0003):
-          #   DATABASE_URL routes through the pooler (54329), matching production.
-          #   MIGRATION_DATABASE_URL connects directly as owner (54322) — the
-          #   pooler requires a tenant identifier that a bare owner connection
-          #   does not carry, so migrations/seeds must bypass it.
-          DATABASE_URL: postgresql://app_authenticated.pooler-dev:Wd7EmwRWWqY9s7jMVD3kVqnt+OaW5PowxNIxCY5Ful0=@127.0.0.1:54329/postgres
-          MIGRATION_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
-          # Well-known Supabase local-dev defaults (public by design, safe to
-          # commit — see .env.example). Needed by tests/integration/require-user.test.ts.
-          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
+
+      # The route-handler suites under tests/integration/api/ stay out of
+      # `npm test` — they boot a `next dev` server and need the live stack, so
+      # the fast lane should not depend on them. They are NOT, however, outside
+      # the merge gate any more: `npm test`'s directory glob used to be the only
+      # thing standing between CI and these files, which meant M2-01/M2-04's
+      # route guarantees were never executed by CI at all. Specs whose handler is
+      # still unbuilt are declared individually in
+      # tests/integration/api/pending-handlers.ts (counted as skips, attributed to
+      # an issue, and guarded by tests/unit/api/pending-handlers.test.ts) instead
+      # of being hidden by exclusion.
+      - name: Run API route-handler suites
+        run: npm run test:api
 
       - name: Stop Supabase
         run: npx supabase stop

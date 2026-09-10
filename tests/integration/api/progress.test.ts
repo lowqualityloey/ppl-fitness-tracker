@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppEnvelopeSchema } from '../../../lib/contracts/envelope.js';
 import { ExerciseProgressResponseSchema } from '../../../lib/contracts/progress.js';
 import { authHeaders, createTestSession, type TestSession } from './fixtures.js';
+import { isPending } from './pending-handlers.js';
 import { apiRequest, responseBody, startApiServer, stopApiServer } from './test-server.js';
 
 async function expectAppError(response: Response, status: number, code: string): Promise<void> {
@@ -11,7 +12,9 @@ async function expectAppError(response: Response, status: number, code: string):
   if (parsed.success && !parsed.data.ok) expect(parsed.data.error.code).toBe(code);
 }
 
-describe('M1-16 RED: GET /api/progress/:exerciseSlug', () => {
+// Pending while the handler is unbuilt. Delete the `progress` entry from
+// ./pending-handlers.ts when GET /api/progress/:exerciseSlug lands (#42).
+describe.skipIf(isPending('progress'))('M1-16 RED: GET /api/progress/:exerciseSlug', () => {
   let owner!: TestSession;
 
   beforeAll(async () => {

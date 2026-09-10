@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { legacyImportRateLimiter } from '../../../../../lib/auth/rate-limit';
 import { requireUserContext } from '../../../../../lib/auth/require-user';
-import {
-  appErrorEnvelope,
-  appSuccess,
-  rateLimitedError,
-} from '../../../../../lib/contracts/envelope';
+import { appSuccess } from '../../../../../lib/contracts/envelope';
 import { LegacyImportRequestSchema } from '../../../../../lib/contracts/import';
 import { LegacyImporter } from '../../../../../lib/domain/import/legacy-import-service';
 import { getDb } from '../../../../../lib/db/client';
+import { rateLimitedResponse } from '../../../../../lib/http/rate-limit-response';
 import { routeErrorResponse } from '../../../../../lib/http/route-error';
 import { LegacyImportRepository } from '../../../../../lib/repositories/legacy-import-repository';
 
@@ -40,15 +37,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const context = await requireUserContext();
 
-    const limit = legacyImportRateLimiter.check(context.userId);
-    if (!limit.allowed) {
-      const error = rateLimitedError(
-        `Too many import requests. Try again in ${limit.retryAfterSeconds} seconds.`,
-      );
-      const response = NextResponse.json(appErrorEnvelope(error), { status: error.status });
-      response.headers.set('Retry-After', String(limit.retryAfterSeconds));
-      return response;
-    }
+    // M2-06 (#42): the 429 shape now comes from the shared helper, so this route
+    // cannot drift from the sync route's envelope, status, or Retry-After header.
+    const limited = rateLimitedResponse(legacyImportRateLimiter, context.userId, 'import');
+    if (limited) return limited;
 
     const repository = new LegacyImportRepository(getDb(), context.claims);
     const importer = new LegacyImporter(repository);

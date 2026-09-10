@@ -58,6 +58,18 @@ export const signInRateLimiter = new AuthRateLimiter();
 export const legacyImportRateLimiter = new AuthRateLimiter(5, 60 * 60 * 1000);
 
 /**
+ * The sync budget the client is documented to: 120 requests per minute per user.
+ *
+ * Until #42 this number existed only in prose and in a skipped test, which is the
+ * same as not existing — the route would accept any volume a caller sent. It is
+ * deliberately far looser than the import limiter: sync is the app's ordinary
+ * write path and fires on every reconnect, so its limit is a backstop against a
+ * hot loop, not an anti-abuse throttle. Same process-local caveat as every other
+ * limiter in this file.
+ */
+export const syncRateLimiter = new AuthRateLimiter(120, 60 * 1000);
+
+/**
  * Only accept ingress-provided metadata. Never use X-Forwarded-For directly:
  * a caller can choose it and evade throttling. Vercel strips/spoofs neither
  * this platform-specific header. Non-Vercel/local requests share `unknown`.

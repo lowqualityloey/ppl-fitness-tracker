@@ -203,8 +203,16 @@ describe('M2-04: POST /api/sync', () => {
     await expectAppError(response, 400, 'VALIDATION_ERROR');
   });
 
-  // Route hardening, including the distributed limiter, is owned by issue #42.
-  it.skip('enforces the documented 120 requests per minute per-user limit', async () => {
+  // Live since #42 wired `syncRateLimiter` into the route. Declared last on
+  // purpose: it exhausts this user's window, so anything after it would 429.
+  // Budget: 121 sequential round trips measured 25-30s locally, so the per-test
+  // timeout is 90s rather than the 30s it was written with. A gate that is
+  // correct but flaky under slower CI hardware gets blamed on the test subject.
+  // Note what this asserts and what it does not — the limiter is process-local,
+  // so this proves the route honours a budget, not that the budget survives more
+  // than one server instance. That distribution gap is recorded as a residual
+  // risk rather than papered over by the wording here.
+  it('enforces the documented 120 requests per minute per-user limit', async () => {
     let lastResponse: Response | undefined;
     for (let attempt = 0; attempt < 121; attempt += 1) {
       lastResponse = await jsonRequest('/api/sync', syncBody(), {
@@ -213,5 +221,5 @@ describe('M2-04: POST /api/sync', () => {
     }
     if (!lastResponse) throw new Error('Expected a rate-limit response.');
     await expectAppError(lastResponse, 429, 'RATE_LIMITED');
-  }, 30_000);
+  }, 90_000);
 });

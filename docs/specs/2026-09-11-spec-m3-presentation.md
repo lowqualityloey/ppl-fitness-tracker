@@ -1,7 +1,7 @@
 # Technical Design Document (RFC): M3 — Presentation & Client Integration
 
 - **Author**: Agent (DSH), with Owner decisions recorded in §2.4
-- **Status**: Draft for `pk:grill` / Owner approval
+- **Status**: Grilled 2026-09-11 (§8) — awaiting Owner sign-off, then `pk:tasks`
 - **Created**: 2026-09-11
 - **Target Release**: M3 of the full-stack migration (PRs #8–#12 in the master spec's numbering)
 
@@ -26,7 +26,7 @@ The specific engineering problem is **not** "render components". It is that a wo
 
 | # | Goal | Measurement method |
 | :-- | :--- | :--- |
-| **G-M3-1** | Complete the offline workout loop: start a session, tick sets with prefilled weight/reps, close the tab, reopen with **no network**, see the sets still there; reconnect and watch the queue drain with no lost or duplicated sets. | Playwright E2E with `context.set_offline(true)`, asserting final server rows equal the local intent (row-level, not response-level). |
+| **G-M3-1** | Complete the workout loop with **one online step**: press Start with connectivity, then tick sets with prefilled weight/reps, close the tab, reopen with **no network**, see the sets still there; reconnect and watch the queue drain with no lost or duplicated sets — including a queued `session.finish`. | Playwright E2E with `context.set_offline(true)` **after** the start call, asserting final server rows equal the local intent (row-level, not response-level). |
 | **G-M3-2** | **Set-tap to local UI update < 50 ms**, with no network in the interaction path. | Playwright `performance.measure()` around the pointer handler in a **production** build (`playwright.config.ts` already runs `next:build && next:start`), median + p95 of 100 taps. |
 | **G-M3-3** | **Cross-device propagation < 5 s p95** with the polling channel chosen in §2.4. | Two Playwright browser contexts, same user; measure the distribution of "mutation committed → visible in peer context". |
 | **G-M3-4** | Outbox drains a **60-mutation queue in < 5 s** after reconnect. | E2E that enqueues 60 mutations offline, restores the network, and times the drain to server-row equality. |
@@ -37,6 +37,7 @@ The specific engineering problem is **not** "render components". It is that a wo
 ### 2.2 Non-Goals (deliberate exclusions)
 
 - **Supabase Realtime subscriptions.** Structurally unavailable under the current authorization model (§3.4) and deferred by decision. M3 ships polling; M4 may revisit as a privilege decision.
+- **Offline session start.** Pressing Start requires connectivity: the four sync mutations (`set.upsert`, `task.complete`, `phase.advance`, `session.finish`) contain **no `session.start`** — starting is a separate `POST /api/sessions` — so queueing a start would replay a create against the `(user_id, routine_day_id, local_date)` uniqueness constraint and surface a 409 twenty minutes late. Everything *after* Start is offline-capable. Owner decision 2026-09-11; see §8.1.
 - **Dark mode.** ADR-0005: v1 is light-only. Tokens are authored as `:root` custom properties so a later `.dark` block is additive.
 - **Deleting the legacy modules, their READMEs, or their `localStorage` keys.** M4 owns decommission. M3 must run *beside* them without breaking them — including never writing to `pushWorkoutProgress`, `legsWorkoutProgress`, `pullDayProgress`, `userStats`, or `guest_mode`, so a user who has not migrated loses nothing.
 - **Production SMTP / magic-link deliverability** (issue #16). A launch blocker, not an M3 task; it is the front door for a magic-link-only app and stays with the Owner.
@@ -189,10 +190,10 @@ type StoredMutation = {
 Invariants, each with a named test:
 
 - **Durable before acknowledged.** A tap is not "saved" until IndexedDB has the record. Optimistic UI may precede it; the *promise* may not.
-- **Per-session FIFO, cross-session unconstrained.** The server enforces `server_seq` ordering per session and rejects out-of-order applies; the outbox never makes it harder than that.
+- **Per-session FIFO, cross-session unconstrained** — but **FIFO is not a transaction.** `server_seq` is per-session and the sync response reports item-level `applied[]` / `rejected[]`, so mutation 2 may land while mutation 1 is refused. The outbox orders sends; it does not promise all-or-nothing, and no client code may assume otherwise.
 - **Idempotent forever.** `mutationId` is generated once, at enqueue time, and survives drain, retry, tab close, and reload. A response that is lost is never a reason to invent a new id.
 - **One in-flight batch.** A second concurrent drain of the same user's queue is a self-inflicted race; the 429 budget exists but is not a design goal.
-- **Rejections surface, never vanish.** `rejected` items become user-visible state. A rejected mutation with no UI is a silent data-loss event with extra steps.
+- **Rejections surface, never vanish — and any rejection invalidates local state.** `rejected[]` items become user-visible state naming the set and the reason, and the first rejection in a batch triggers a **full authoritative refetch** of that session. Surgical rollback of one item is not attempted: it is the mechanism by which a client ends up believing a version of the session the server never accepted.
 - **`localStorage` is never the queue.** Legacy keys are read **once**, by the import flow, and never written.
 
 ### 4.4 Design tokens (M3-01), with measured contrast
@@ -202,7 +203,7 @@ Invariants, each with a named test:
 | Token | Value | `#ffffff` | `#f9fafb` | Verdict |
 | :--- | :--- | :--- | :--- | :--- |
 | `--accent-push` | `#465fff` | 4.84:1 | 4.63:1 | **Passes** 3:1; matches the ≈4.8:1 recorded in ADR-0004 |
-| `--accent-pull` | `#fb6514` | **3.01:1** | **2.88:1** | **Fails** SC 1.4.11 on the app surface |
+| `--accent-pull` | **redefined** to a measured-passing value (§8.4) | ≥ 3:1 target | ≥ 3:1 target | **Resolution of a real failure:** the `#fb6514` it specified measures 3.01:1 / 2.88:1 and is renamed `--accent-pull-bright`, decorative only |
 | `--accent-legs` | `#7a3ff2` (new) | 5.50:1 | 5.26:1 | **Passes**; hue-distinct from both |
 | focus ring | 2px `#465fff` + 2px offset | 4.84:1 | — | ADR-0004 override, shipped value |
 | `DESIGN.md` focus | `#ecf3ff` | **1.12:1** | 1.07:1 | The already-recorded failure. Not used. |
@@ -288,5 +289,32 @@ This is the second time this project has found a specified colour that fails the
 - [ ] Zero-downtime plan verified: **no migration expected**, index decision evidence-gated, `CONCURRENTLY` rules understood (§4.2).
 - [ ] FMEA covers every failure with a named detection method, not only a mitigation (§5.2).
 - [ ] Test surfaces are public interfaces, not private mocks (§3.2).
-- [ ] **`pk:grill` before the first line of M3 code** — the priority questions are the outbox's ordering and merge rules (§4.3), polling's SLA arithmetic (§3.4), and whether `--accent-pull-strong` should be a new token or a corrected `--accent-pull` (§4.4).
+- [x] **Grilling completed 2026-09-11** — against the plan's own principles (deletion test, FMEA, zero-downtime, interface-as-test-surface). It found four defects in this document, recorded in §8; two needed Owner decisions and both are settled. `.promptkit/workflows/grill.md` **does not exist in this installation** despite `AGENTS.md` advertising the trigger, so the drill was run manually rather than pretended to.
 - [ ] Then `pk:tasks` to decompose M3-00…M3-05 into issues with Gherkin AC, in `docs/tasks/m3/`, matching M2's task-file shape.
+
+---
+
+## 8. Grilling Outcomes & Amendments (2026-09-11)
+
+Run manually — see §7's note on the missing workflow file — against `plan.md`'s own standards. Every item below is a defect **in this document as first written**; the in-place edits in §2.1, §2.2, §4.3 and §4.4 are the corrections, and this section records why, plus the prose supersessions a single-line edit could not carry.
+
+### 8.1 The outbox could not express "start a workout" *(severe — it invalidated a stated goal)*
+`Outbox.enqueue(mutation)` was specified as though the sync protocol covered the session lifecycle. It does not: `lib/contracts/sync.ts` admits exactly four ops — `set.upsert`, `task.complete`, `phase.advance`, `session.finish` — and starting is a separate `POST /api/sessions` with no `mutationId` idempotency wrapper. G-M3-1 as written ("start a session … with zero connectivity") therefore described a flow this architecture cannot produce.
+**Decision:** Start requires connectivity; everything after it is offline-capable, including a queued `session.finish`. Rationale: Start is one cheap request typically made before signal drops, whereas the 60-plus taps *are* the offline case; and replaying a queued create against `(user_id, routine_day_id, local_date)` converts a second device's earlier Start into a 409 delivered long after the user stopped looking. **Deviation from the master RFC's G5 is deliberate and now named in §2.2** — G5 says a full workout can be *completed* offline, which remains true; the *start* is the exception. If that distinction is unacceptable, the fix is a `session.start` sync op on the server (new contract, new engine transition, new tests), not client cleverness.
+
+### 8.2 Partial application breaks the rollback story *(moderate)*
+The sync response reports item-level results, so a batch can apply mutation 2 while rejecting mutation 1. The original §4.3 "per-session FIFO" invariant invited a surgical local rollback, which would leave the client asserting a session state the server never accepted. Amended: FIFO orders sends, is not a transaction, and **the first rejection in a batch forces a full authoritative refetch**.
+
+### 8.3 The 5 s SLA depends on M3-00, not on scheduling *(moderate)*
+Polling every 3 s against an 8–15 KB full-session payload — which is all `GET /api/sessions/[id]` can return until `since` is real — measures 200–270 ms per request in dev mode *including* the two `getUser()` round trips (middleware plus route). That leaves thin margin on a 5 s promise over cellular. Two consequences written into the milestones:
+- **M3-00's real `since` deltas are a hard prerequisite of M3-03's poller**, not an optimisation. No deltas, no honest SLA claim.
+- **Cadence must be limiter-aware.** M2-06's 120 req/min per-user sync budget is shared with the user's real writes; a 3 s poll is ~20 req/min, two visible tabs plus workout writes gets careless. Rule: choose cadence so polls plus writes stay under roughly 40% of the budget, back off to a slow poll whenever the page is hidden, and poll immediately after each own-write response. §5.3's caveat stands: the SLA is measured with the runner visible.
+
+### 8.4 Two tokens for one meaning was the wrong fix *(minor, but it recurs)*
+§4.4 first proposed `--accent-pull-strong` alongside the failing `#fb6514`. That keeps a *semantic* token pointing at a value known to fail the standard, with the accessible value as a suffix variant — the exact arrangement that lets palettes drift. **Superseded:** `--accent-pull` is **redefined** to the measured-passing value and `#fb6514` is renamed **`--accent-pull-bright`, decorative only** (gradients, large fills, never a border, badge text, or focus target). `DESIGN.md` records this as a second measured deviation beside the ADR-0004 focus-ring override, and the §4.4 contrast *gate* is what stops it being the third.
+
+### 8.5 What survived the grill unchanged
+The module boundaries pass the deletion test, notably `TimerController` (whose justification is a specific legacy defect, not a hunch), the IndexedDB-over-`localStorage` choice, and the rejection of Server Actions for mutations, a separate `Reconciler` class, and TanStack persistence posing as a durable queue. "No migration expected in M3" also survived: `preferred_unit`, `server_seq`, and the set columns all exist, so M3-00 is contract and query work — with the index decision still deferred to `EXPLAIN (ANALYZE, BUFFERS)` evidence per §4.2.
+
+### 8.6 Ready for `pk:tasks`
+Decompose M3-00…M3-05 into `docs/tasks/m3/` with Gherkin AC, in M2's task-file shape, keeping §6's dependency facts intact: **M3-00 blocks M3-03's poller**, M3-01 blocks every screen (tokens, gates, E2E harness), and no task may claim a screen against an endpoint that does not yet exist.

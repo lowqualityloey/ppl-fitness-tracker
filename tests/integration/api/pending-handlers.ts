@@ -28,11 +28,6 @@ export interface PendingRoute {
 }
 
 export const PENDING_ROUTES = {
-  signout: {
-    handlerPath: 'src/app/auth/signout',
-    issue: '#42',
-    reason: 'POST /auth/signout handler is not implemented',
-  },
   exercises: {
     handlerPath: 'src/app/api/exercises',
     issue: '#42',

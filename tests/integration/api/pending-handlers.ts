@@ -28,11 +28,6 @@ export interface PendingRoute {
 }
 
 export const PENDING_ROUTES = {
-  exercises: {
-    handlerPath: 'src/app/api/exercises',
-    issue: '#42',
-    reason: 'GET /api/exercises handler is not implemented',
-  },
   progress: {
     handlerPath: 'src/app/api/progress',
     issue: '#42',

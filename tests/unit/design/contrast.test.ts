@@ -61,13 +61,27 @@ describe('shipped palette passes the gate', () => {
   });
 
   it('clears each threshold with the literal shipped hex, not an alias', () => {
-    // The gate reads :root literals; an unresolved var() reference would
-    // have thrown already. Belt: every accent/focus token is a real hex.
+    // The gate reads :root values; an unresolved var() reference would have
+    // been reported as unmeasurable already. Belt: every accent/focus token
+    // is a real hex *at the leaf*, not an alias pointing elsewhere.
     for (const token of ['--accent-push', '--accent-pull', '--accent-legs', '--focus-ring']) {
       expect(palette.get(token), token).toMatch(/^#[0-9a-f]{6}$/);
     }
     // And the redefinition actually happened: pull is no longer the old orange.
     expect(palette.get('--accent-pull')).not.toBe('#fb6514');
+  });
+
+  it('follows var() indirection to the leaf it renders as', () => {
+    // The token layer is built on aliases (M3 spec: `:root` literals, then
+    // shadcn names mapped onto them). A gate that measures only leaf hexes
+    // cannot see `--muted-foreground` at all — audit entry 2. Now the resolved
+    // palette carries it, and its value is the leaf's value.
+    expect(palette.get('--muted-foreground')).toBe('#475467');
+    expect(palette.get('--background')).toBe('#f9fafb');
+    expect(palette.get('--card')).toBe('#ffffff');
+    expect(palette.get('--secondary')).toBe('#e4e7ec');
+    // And it is measured under the alias's own name, so a re-point is visible.
+    expect(GATE_MATRIX.some((r) => r.token === '--muted-foreground')).toBe(true);
   });
 });
 
@@ -85,6 +99,43 @@ describe('the gate can fail (Scenario 2: observed red, permanently)', () => {
     // the page surface (border bar 3.0) and 2.88 < 4.5 as badge text.
     expect(printed).toContain('2.88:1');
     expect(printed).toContain('--accent-pull');
+  });
+
+  it('goes red when an alias is re-pointed — audit entry 2, observed permanently', () => {
+    // The exact shape of the hole the M3-10 audit found: `--muted-foreground`
+    // re-pointed away from its leaf. The old parser never even saw the token;
+    // this palette copy measures it by name, follows the value to its leaf,
+    // and reports the ratio that leaf paints with.
+    const repointed = parseRootTokens(
+      globalsCss.replace(
+        '--muted-foreground: var(--on-surface-variant);',
+        '--muted-foreground: var(--outline);',
+      ),
+    );
+    expect(repointed.get('--muted-foreground')).toBe('#d0d5dd');
+    const failures = runGate(repointed).filter((r) => !r.pass);
+    expect(failures.map((r) => r.token)).toContain('--muted-foreground');
+    const printed = formatResults(failures);
+    // 1.47:1 on the card, 1.41:1 on the page — near-white body text, both
+    // computed by the gate, not quoted from here.
+    expect(printed).toContain('1.47:1');
+    expect(printed).toContain('1.41:1');
+  });
+
+  it('reports an unmeasurable value as a FAIL with its reason, not as a crash', () => {
+    // Audit entry 1: the first parser threw at import time on a non-hex, so
+    // the suite went red while telling the reader nothing. Red with a reason.
+    const broken = parseRootTokens(
+      globalsCss.replace(
+        '--muted-foreground: var(--on-surface-variant);',
+        '--muted-foreground: oklch(0.93 0.01 250);',
+      ),
+    );
+    const failures = runGate(broken).filter((r) => !r.pass);
+    const row = failures.find((r) => r.token === '--muted-foreground');
+    expect(row, formatResults(failures)).toBeDefined();
+    expect(row!.label).toContain('unmeasurable');
+    expect(row!.pass).toBe(false);
   });
 });
 

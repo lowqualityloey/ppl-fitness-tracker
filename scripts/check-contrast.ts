@@ -68,6 +68,26 @@ export const GATE_MATRIX: GateRow[] = [
   { label: 'body text', token: '--on-surface', role: 'text', against: ['--surface-bright', '--surface'] },
   { label: 'muted text', token: '--on-surface-variant', role: 'text', against: ['--surface-bright', '--surface'] },
   { label: 'secondary-label text (tertiary)', token: '--tertiary', role: 'text', against: ['--surface-bright', '--surface'] },
+  // The alias layer, measured by the NAME components consume. Without these
+  // rows the gate only policed leaf tokens, and the token layer is built so
+  // primitives reference aliases: re-pointing `--muted-foreground` (what
+  // every `text-muted-foreground` renders) to another token slipped past the
+  // leaf-only gate in the M3-10 audit — entry 2 of
+  // `docs/tests/2026-09-11-m3-verification-audit.md`. Because
+  // `parseRootTokens` now follows `var()` to its leaf, these rows measure the
+  // value that actually paints, and a re-pointed alias moves the number.
+  // Deliberately absent: `--ring`, `--popover-foreground`,
+  // `--accent-foreground` — no vendored primitive consumes them (ADR-0004's
+  // ring is the global `outline` rule on `--focus-ring`, measured above).
+  // `tests/unit/design/contrast.test.ts` scans class usage and fails if that
+  // changes without a row here.
+  { label: 'page text (alias)', token: '--foreground', role: 'text', against: ['--background'] },
+  { label: 'card text (alias)', token: '--card-foreground', role: 'text', against: ['--card'] },
+  { label: 'muted text (alias)', token: '--muted-foreground', role: 'text', against: ['--card', '--background'] },
+  { label: 'CTA label (alias)', token: '--primary-foreground', role: 'text', against: ['--primary'] },
+  { label: 'secondary badge text (alias)', token: '--secondary-foreground', role: 'text', against: ['--secondary'] },
+  { label: 'destructive label (alias)', token: '--destructive-foreground', role: 'text', against: ['--destructive'] },
+  { label: 'destructive text (alias)', token: '--destructive', role: 'text', against: ['--background', '--card'] },
 ];
 
 export function hexToRgb(hex: string): [number, number, number] {
@@ -94,28 +114,71 @@ export function contrastRatio(a: string, b: string): number {
   return Math.round(((hi + 0.05) / (lo + 0.05)) * 100) / 100;
 }
 
-/** Extract literal hex values declared in the `:root` block of a CSS file. */
-export function parseRootTokens(css: string): Map<string, string> {
+/** Raw `--token: value;` declarations inside the single `:root` block, unparsed. */
+function parseRootDeclarations(css: string): Map<string, string> {
   const root = /:root\s*\{([^}]*)\}/.exec(css);
   if (!root) throw new Error('No :root block found — the gate reads shipped values, so it must find them.');
-  const tokens = new Map<string, string>();
-  for (const m of root[1]!.matchAll(/(--[\w-]+)\s*:\s*(#[0-9a-fA-F]{6})\s*;/g)) {
-    tokens.set(m[1]!, m[2]!.toLowerCase());
+  const raw = new Map<string, string>();
+  for (const m of root[1]!.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) {
+    raw.set(m[1]!, m[2]!.trim());
   }
-  return tokens;
+  return raw;
+}
+
+/**
+ * Extract the values declared in the `:root` block of a CSS file, **following
+ * `var()` aliases down to their leaf**.
+ *
+ * The first version of this parser kept only literal hexes. That silently
+ * excluded every alias — and most of the tokens the primitives actually consume
+ * (`--muted-foreground`, `--card-foreground`, `--ring`, …) *are* aliases. The
+ * M3-10 audit broke `--muted-foreground` by re-pointing it at a near-white
+ * `oklch()`, and the gate stayed green while axe went red on `/settings`:
+ * re-pointing an alias was a violation the unit gate could not see at all
+ * (audit entry 2, `docs/tests/2026-09-11-m3-verification-audit.md`). Following
+ * `var()` indirection down to its leaf closes that hole: a token's measured
+ * value is now the value it renders as, whether it was written as a hex or as
+ * an alias chain.
+ *
+ * A value that resolves to something other than `#rrggbb` (an `oklch()`, a
+ * gradient, an unresolvable alias) is returned verbatim so `runGate` can report
+ * it as a measured FAIL instead of throwing at import time — the old behaviour
+ * was a collection error that told the reader nothing (audit entry 1).
+ */
+export function parseRootTokens(css: string): Map<string, string> {
+  const raw = parseRootDeclarations(css);
+  const resolved = new Map<string, string>();
+  // `seen` holds every token the current chain has *visited*; re-entering one
+  // is a cycle, which is reported as an unmeasurable FAIL rather than looping.
+  const walk = (name: string, seen: Set<string>): string | undefined => {
+    const value = raw.get(name);
+    if (value === undefined) return undefined;
+    const alias = /^var\(\s*(--[\w-]+)\s*\)$/.exec(value);
+    if (!alias) return value.toLowerCase();
+    const target = alias[1]!;
+    if (seen.has(target)) return undefined;
+    seen.add(target);
+    return walk(target, seen);
+  };
+  for (const [name, declared] of raw) {
+    resolved.set(name, walk(name, new Set([name])) ?? declared.toLowerCase());
+  }
+  return resolved;
 }
 
 export function loadShippedPalette(globalsPath = join(process.cwd(), 'src/app/globals.css')): Map<string, string> {
   return parseRootTokens(readFileSync(globalsPath, 'utf8'));
 }
 
-/** Resolve a surface name (token or literal) to a hex against the palette. */
+/** Resolve a surface name (token or literal) to a value against the palette. */
 function resolveSurface(name: string, palette: Map<string, string>): string {
   if (name.startsWith('#')) return name.toLowerCase();
   const value = palette.get(name);
   if (!value) throw new Error(`Gate references unknown token ${name}`);
   return value;
 }
+
+const HEX_ONLY = /^#[0-9a-f]{6}$/;
 
 export function runGate(palette: Map<string, string>): GateResult[] {
   const results: GateResult[] = [];
@@ -124,8 +187,23 @@ export function runGate(palette: Map<string, string>): GateResult[] {
     if (!fg) throw new Error(`Gate references unknown token ${row.token}`);
     for (const surface of row.against) {
       const bg = resolveSurface(surface, palette);
-      const ratio = contrastRatio(fg, bg);
       const min = row.role === 'text' ? TEXT_MIN : NON_TEXT_MIN;
+      // An unmeasurable value is a FAIL with a reason, not an import-time
+      // throw: the first draft of the parser crashed the whole spec file on a
+      // non-hex leaf (audit entry 1 — red, but the message said nothing about
+      // *why*). Reporting it keeps the red and puts the cause in the output.
+      if (!HEX_ONLY.test(fg) || !HEX_ONLY.test(bg)) {
+        results.push({
+          label: `${row.label} [unmeasurable: ${!HEX_ONLY.test(fg) ? fg : bg}]`,
+          token: row.token,
+          surface,
+          ratio: 0,
+          min,
+          pass: false,
+        });
+        continue;
+      }
+      const ratio = contrastRatio(fg, bg);
       results.push({ label: row.label, token: row.token, surface, ratio, min, pass: ratio >= min });
     }
   }

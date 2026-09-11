@@ -32,7 +32,7 @@ interface Route {
 }
 
 const routes: ReadonlyArray<Route> = [
-  { path: '/', label: 'home', interactive: false },
+  { path: '/', label: 'home', interactive: true },
   { path: '/sign-in', label: 'sign-in', interactive: true },
 ];
 

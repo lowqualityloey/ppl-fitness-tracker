@@ -69,6 +69,13 @@ if (missing.length > 0) {
 interface TestSession {
   userId: string;
   cookie: string;
+  /**
+   * The same jar contents as `cookie`, as pairs. M3-04's E2E specs need to install
+   * these into a browser context, where a `Cookie:` header string is not accepted
+   * and re-splitting one by hand would put cookie parsing in two places — the jar
+   * already knows which names are `sb-…-auth-token.0` and which are chunk 1.
+   */
+  cookies: ReadonlyArray<{ name: string; value: string }>;
   cleanup: () => Promise<void>;
 }
 
@@ -99,9 +106,12 @@ export async function createTestSession(label: string): Promise<TestSession> {
   const { error } = await client.auth.signInWithPassword({ email, password: TEST_PASSWORD });
   if (error) throw new Error(`Could not sign in M1-16 test user: ${error.message}`);
 
+  const jarCookies = jar.getAll().map(({ name, value }) => ({ name, value }));
+
   return {
     userId,
-    cookie: jar.getAll().map(({ name, value }) => `${name}=${value}`).join('; '),
+    cookie: jarCookies.map(({ name, value }) => `${name}=${value}`).join('; '),
+    cookies: jarCookies,
     cleanup: async () => {
       const removed = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
         method: 'DELETE',

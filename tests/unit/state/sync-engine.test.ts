@@ -240,6 +240,38 @@ describe('SyncEngine — §4.3 one in-flight batch', () => {
     expect(harness.storage.rows).toHaveLength(0);
   });
 
+  it('an online event clears the window grown while the network was off', async () => {
+    // G-M3-4's tail, found by the M3-10 hang ceiling firing under suite load (audit
+    // entry 15): a batch that failed to send repeatedly while offline leaves a window
+    // up to `BACKOFF_CAP_MS` standing *after* reconnect — and the provider's
+    // `onOnline` drain, plus every 4 s poll, returns null inside it. The queue sits
+    // "60 waiting to sync" for a wait the user is no longer supposed to pay.
+    let calls = 0;
+    const harness = engineHarness(
+      () =>
+        calls++ === 0
+          ? { kind: 'retryable', reason: 'offline' }
+          : okResponse(1, { applied: [id(1)] }),
+      { random: () => 1 },
+    );
+    await harness.storage.put(stored(0, setMutation(1, 0)));
+
+    await harness.engine.drain();
+    expect(harness.sends).toHaveLength(1);
+
+    // Still inside the window: an ordinary drain must stay a no-op — the previous
+    // test's protection, which this fix must not undo.
+    await harness.engine.drain();
+    expect(harness.sends).toHaveLength(1);
+
+    // Connectivity returns. The window's premise is now false; clearing it is what
+    // makes the provider's "draining then is free" claim actually true.
+    harness.engine.notifyConnectivityRestored();
+    await harness.engine.drain();
+    expect(harness.sends, 'post-reconnect drain must not wait out an offline-grown window').toHaveLength(2);
+    expect(harness.storage.rows).toHaveLength(0);
+  });
+
   it('never drops a batch the server refused as fatal', async () => {
     const harness = engineHarness(() => ({ kind: 'fatal', reason: 'session not found' }));
     await harness.storage.put(stored(0, setMutation(1, 0)));

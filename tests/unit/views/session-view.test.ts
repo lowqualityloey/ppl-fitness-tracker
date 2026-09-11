@@ -33,7 +33,7 @@ function payload(overrides: Record<string, unknown> = {}) {
           targetReps: null,
           targetRepsRange: '6-8',
           restTime: '90s',
-          exercise: { id: UUID_A, name: 'Bench Press', kind: 'strength' },
+          exercise: { slug: 'bench-press', id: UUID_A, name: 'Bench Press', kind: 'strength' },
         },
       ],
     },

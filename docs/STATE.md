@@ -254,6 +254,23 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
     `git diff --check` clean. #63's tap gate still holds with the session clock repainting every
     second, because `paints a tap in under 50 ms` is one of the 25.
 
+- **History and progress, as built on `feat/m3-08-history-progress` (awaiting merge)**:
+  - `src/app/history/page.tsx` (cursor-paged log grouped by day, phase badges, `?cursor=` only —
+    #82), `src/app/history/[id]/page.tsx` (a **server-rendered report**: no client island, because a
+    finished session has nothing to sync and a receipt should not ship a mutation queue), and
+    `src/app/progress/[exerciseSlug]/page.tsx` (trend + PRs + the same numbers as a table).
+  - `lib/views/history-view.ts` (summary → view, `groupByDay`, `loadCoverage`) and
+    `lib/views/progress-view.ts` (`buildChartGeometry`, `toDisplayPoints`, `summarizeTrendline`).
+    The chart is **decorative SVG rendered on the server**, which deviates from the card's "the chart
+    is the only client component" and ships 0 KB of JS for the screen.
+  - Reads go through `WorkoutRepository.listSessions` / `findSession` and
+    `ProgressRepository.getExerciseProgress` — the same functions the endpoints call. **No new
+    server route was added.**
+  - Gates on this branch: lint 0 / 0, typecheck 0, `next:build` 0, unit **243 passed (22 files)**,
+    api + security **60 passed (10 files)**, Playwright **37 passed (2.2m)**, set-config and
+    `git diff --check` clean. **Lighthouse accessibility on authenticated `/history`: 100** — the
+    first authenticated audit, which #60's spec had deliberately left unbuilt.
+
 ---
 
 ## 4. Locked Technical Invariants (Do Not Undo)
@@ -357,6 +374,24 @@ The narrower claim that survived — "non-interactive shells resolve `/usr/bin/n
 - **`--accent-legs` has no assigned colour.** `DESIGN.md` offers no third accent that can be legitimately spent; `tertiary #667085` is reserved for disabled states, so reusing it would make disabled controls read as Legs day. One new hue must be added to `DESIGN.md` as a documented extension. *Blocks M3, not M1.*
 - **Package manager for the target app.** Legacy is npm. Low-stakes; decide at M1 scaffold and record it in PROMPTKIT.md §3.
 - **Dark mode deferred.** `DESIGN.md` ships no dark tokens. Light-only in v1 per ADR-0005, with tokens authored under one `:root` so adding a `.dark` block stays additive. Revisit immediately post-v1 — this app gets used in dim gyms at night.
+
+### #65's three findings, all from tests that were right
+
+- **A sets table keyed by the wrong id renders a plausible lie.** `view.routineDay.exercises[]`
+  entries are *placements* (`routine_exercises` rows with their own id); `session_sets.exerciseId`
+  references the exercise. Keying the name map by `placement.id` type-checked, ran, and labelled
+  every logged lift "Removed exercise". Caught by asserting a name that should have been present
+  (`tests/e2e/history.spec.ts`), which is the only kind of test that catches this class.
+- **Two `signInFreshUser` calls on one page silently swap identity.** The disclosure spec
+  (`/progress/<another user's exercise>`) initially "found" a leak: it seeded the exercise as user B
+  and then signed B into the same browser context it was auditing as user A, so the page correctly
+  showed B's own data. The fix is `createTestSession` for anyone who is not the visitor — an auth
+  row without cookies. Recorded because the trap is still there for the next spec.
+- **#82 — #65's own card asks for `?from=`/`?to=` paging, and the contract has no such params.**
+  `SessionsListQuerySchema` is `{ cursor? }.strict()`, so a date filter is a 400, not an ignored
+  query. The card also says "no backend work", so the screen shipped on the cursor the contract
+  offers. A client-side filter over cursor pages would skip or repeat days at every page boundary,
+  which is the failure the card's "raise a spec gap" invariant exists to prevent.
 
 ### #64's two findings, one filed
 
@@ -555,19 +590,25 @@ Carried forward, still open:
     (`fires: 'none' | 3` in `tests/unit/state/timer-controller.test.ts`). #63's own follow-ups stayed
     parked rather than being smuggled in: #76, #77, #78 untouched by this slice.
 
-18. **Review and merge #64, then take #65 (M3-08, history and per-exercise progress).** Three things
-    queue up for it:
-    - **The `archived` decision (#76) is #65's to make.** `getPrefill` already queries
-      `inArray(status, ['completed','archived'])` for a state nothing can produce, and a history
-      list has to say whether archived sessions appear in it. Decide the semantics there, with a
-      route or a retention job, instead of adding a throwaway mutation to satisfy a scenario.
-    - **The progress numbers must come from the read endpoints that already exist**
-      (`/api/progress/[exerciseSlug]`, volume aggregates). #63 established the shape of this mistake:
-      render a projection of what the server actually returns, or ship a screen that reports "No sets
-      recorded" for a live workout because no test looked.
-    - **`SessionView` now carries `startedAt`/`completedAt`.** A history row that shows a duration
-      should read them rather than re-deriving anything client-side — and it should not be tempted to
-      store a duration as a counter, which is the same defect #64 killed on the timer path.
+18. ~~**Review and merge #64, then take #65 (M3-08, history and per-exercise progress).**~~ **Done
+    2026-09-11 on `feat/m3-08-history-progress`, awaiting merge as PR #83.** All three inherited
+    constraints held: the `archived` question was answered by *rendering* every status the storage
+    layer can hold rather than by inventing a route that produces it (#76 still open, still #66's
+    neighbour); progress reads `ProgressRepository.getExerciseProgress` and never recomputes e1RM
+    (`E1rmPointSchema.strict()` means the seam has no weight or reps to recompute from); and
+    durations come from `startedAt`/`completedAt`, formatted by #64's `formatDuration`.
+
+19. **Review and merge #65, then take #66 (M3-09, settings and the legacy import UI).** What it
+    inherits from this slice:
+    - **`/history` is the destination for imported sessions, and it already renders them.** #66's
+      import flow can therefore assert "the rows appear in the log" against a screen that exists
+      instead of building its own list. `loadCoverage` is the shared answer to "did this session
+      record any load", and the report page's `—` cells are the contract for the M2-05 NULL shape.
+    - **`tests/e2e/history-fixtures.ts` seeds rows through `MIGRATION_DATABASE_URL`.** Import specs
+      will need legacy-shaped data (NULL weight, `source = 'legacy_import'`); that helper already
+      produces it, and its comment explains why the owner role is the only connection that can.
+    - **#82 is #66's or #67's to settle** if the import screen wants a date range; do not implement
+      filtering client-side over cursor pages.
 
 
 ---

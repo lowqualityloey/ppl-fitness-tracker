@@ -94,6 +94,14 @@ export const SessionViewSetSchema = z.object({
           id: z.string().uuid(),
           name: z.string(),
           /*
+           * `slug` is here for one reason: `/progress/[exerciseSlug]` is addressed by slug, not by
+           * id, because that is the shape the M2-06 endpoint has. A history report that names an
+           * exercise but cannot link to its progress chart is one field short of being useful, and
+           * the alternative — minting an id-addressed progress route — is a new endpoint, which this
+           * slice is explicitly not allowed to do.
+           */
+          slug: z.string().min(1),
+          /*
            * `kind` is not decoration: the storage rule `assertSetMutationAllowed` accepts a
            * set row only when the placement is in the `main_workout` phase *and* the
            * exercise is `strength`. A screen that cannot see the kind cannot know which rows

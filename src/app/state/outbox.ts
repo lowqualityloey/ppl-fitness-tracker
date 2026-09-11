@@ -165,6 +165,28 @@ export class Outbox {
   }
 
   /**
+   * Forget mutations the server **refused**, as distinct from the ones it acknowledged.
+   *
+   * Both delete rows, and it would be tempting to reuse `markApplied`. Resisting that
+   * is the point: they mean opposite things, and conflating them loses the one signal
+   * the user needs. An applied mutation is a success story that no longer needs
+   * mentioning; a refused one must be remembered as visible state precisely because it
+   * is the case where what the user tapped is not what happened.
+   *
+   * Why they leave the queue at all: §4.3 says rejections "surface, never vanish", and
+   * the naive reading is to keep the row. But a rejected mutation is one the server has
+   * authoritatively refused — keeping it means the next drain replays it, is refused
+   * again, refetches again, forever. That is a poison pill: a workout with one illegal
+   * tap would spend its remaining life re-sending a mutation that can never succeed, and
+   * the user would never see the other sets land. The record survives as *state* (see
+   * `SyncEngine`'s rejections), which is what "surface" is for.
+   */
+  async discardRefused(mutationIds: readonly string[]): Promise<void> {
+    if (mutationIds.length === 0) return;
+    await this.storage.delete(mutationIds);
+  }
+
+  /**
    * Record a failed attempt so backoff can grow.
    *
    * Note what this does *not* do: it never drops, reorders, or re-ids the mutation.

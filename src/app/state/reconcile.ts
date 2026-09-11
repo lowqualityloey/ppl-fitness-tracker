@@ -99,10 +99,16 @@ export interface ReconciliationOutcome {
   /** Ids that were neither applied nor rejected — still queued, still unsent. */
   stillPending: string[];
   /**
-   * True when the batch contained at least one rejection. §8.2: the *first*
-   * rejection in a batch forces a full authoritative refetch, because item-level
-   * results mean a batch is not a transaction and surgical rollback produces a
-   * client that believes a state the server never accepted.
+   * True when the batch contained at least one rejection. §8.2: the *first* rejection
+   * in a batch forces a full authoritative refetch, because item-level results mean a
+   * batch is not a transaction and surgical rollback produces a client that believes a
+   * state the server never accepted.
+   *
+   * Note which ids this pairs with: `rejected` items leave the queue (see
+   * `Outbox.discardRefused`) because the server has authoritatively refused them — a
+   * second replay can only be refused again. `stillPending` items stay, because nothing
+   * was authoritative about their absence. Refusing forever and forgetting are the two
+   * failure modes on either side of that line.
    */
   requiresRefetch: boolean;
 }

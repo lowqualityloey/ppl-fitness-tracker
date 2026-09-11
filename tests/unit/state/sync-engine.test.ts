@@ -168,11 +168,35 @@ describe('SyncEngine — §4.3 one in-flight batch', () => {
 
     expect(harness.sends).toHaveLength(1);
     expect(harness.sends[0]).toHaveLength(2);
-    // One removed, one retained: a rejection must not disappear with the batch.
-    expect(harness.storage.rows.map((row) => row.mutationId)).toEqual([id(2)]);
+    // The applied row is gone. The refused one is *also* gone from the queue — but it
+    // did not vanish: it became surfaced state, asserted on the next two lines. Keeping
+    // it queued would replay it on every poll forever (see `discardRefused`); dropping
+    // it silently would lose a set the user believes they made.
+    expect(harness.storage.rows).toHaveLength(0);
     expect(harness.rejections).toEqual(['INVALID_MUTATION']);
     // §8.2: the first rejection forces the full authoritative refetch.
     expect(harness.refetchCount()).toBe(1);
+  });
+
+  it('does not replay a refused mutation on the next drain', async () => {
+    // The poison-pill case, as a behaviour rather than a claim: one illegal tap must
+    // not spend the rest of the workout being refused again.
+    const harness = engineHarness((callIndex) =>
+      callIndex === 0
+        ? okResponse(1, { applied: [], rejected: [{ mutationId: id(1), reason: 'ILLEGAL_TRANSITION' }] })
+        : okResponse(2, { applied: [id(2)] }),
+    );
+    await harness.storage.put(stored(0, setMutation(1, 0)));
+    await harness.engine.drain();
+    expect(harness.rejections).toEqual(['ILLEGAL_TRANSITION']);
+
+    await harness.storage.put(stored(1, setMutation(2, 1)));
+    await harness.engine.drain();
+    // The second batch contains only the new mutation.
+    expect(harness.sends[1]).toHaveLength(1);
+    expect(harness.sends[1]?.[0]?.mutationId).toBe(id(2));
+    // The rejection is still surfaced even though its queue row is gone.
+    expect(harness.rejections).toEqual(['ILLEGAL_TRANSITION']);
   });
 
   it('keeps the batch queued when the send is retryable', async () => {
@@ -265,6 +289,45 @@ describe('SyncEngine — §4.3 one in-flight batch', () => {
     );
     // The tap was never accepted, so nothing may claim it is safe to close the tab.
     expect(harness.storage.rows).toHaveLength(0);
+  });
+});
+
+describe('SyncEngine — what the screen subscribes to', () => {
+  it('reports the queue length to a subscriber, before and after a drain', async () => {
+    const harness = engineHarness(() => okResponse(1, { applied: [id(1)] }));
+    const seen: number[] = [];
+    const unsubscribe = harness.engine.subscribe((snapshot) => seen.push(snapshot.pendingCount));
+
+    await harness.engine.mutate(setMutation(1, 0));
+    // 0 from the initial delivery, then 1 queued. A component that mounted to an empty
+    // queue must not have to wait for a change to learn the truth after a reload.
+    expect(seen).toEqual([0, 1]);
+
+    await harness.engine.drain();
+    expect(seen[seen.length - 1]).toBe(0);
+
+    unsubscribe();
+    await harness.engine.mutate(setMutation(2, 1));
+    // Unsubscribed: the last value is still the post-drain zero.
+    expect(seen[seen.length - 1]).toBe(0);
+  });
+
+  it('surfaces rejections through the snapshot and clears them on dismissal', async () => {
+    const harness = engineHarness(() =>
+      okResponse(1, { rejected: [{ mutationId: id(1), reason: 'SESSION_FINISHED' }] }),
+    );
+    await harness.storage.put(stored(0, setMutation(1, 0)));
+    await harness.engine.drain();
+
+    // Read by pull: `subscribe` is asserted for pushes in the test above, and a
+    // rejection test that awaited a guessed number of microtasks would be asserting on
+    // scheduling, not on whether the user is told.
+    expect((await harness.engine.snapshot()).rejections.map((item) => item.reason)).toEqual([
+      'SESSION_FINISHED',
+    ]);
+
+    await harness.engine.dismissRejections();
+    expect((await harness.engine.snapshot()).rejections).toEqual([]);
   });
 });
 

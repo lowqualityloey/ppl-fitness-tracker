@@ -152,6 +152,19 @@ describe('Outbox — RFC §4.3 invariants', () => {
     expect(remaining.map((row) => row.mutationId)).toEqual([b.mutationId]);
   });
 
+  it('discards refused mutations by id, and reports that it did', async () => {
+    const { outbox, storage } = makeOutbox();
+    const a = await outbox.enqueue(setUpsert(outbox, 0));
+    const b = await outbox.enqueue(setUpsert(outbox, 1));
+
+    await outbox.discardRefused([b.mutationId]);
+    // Named separately from `markApplied` on purpose: a refused mutation and an
+    // acknowledged one both leave the queue, and the UI has to be able to tell that
+    // this one happened *to* the user rather than *because of* them.
+    expect(storage.deletes).toEqual([[b.mutationId]]);
+    expect((await outbox.peek()).map((row) => row.mutationId)).toEqual([a.mutationId]);
+  });
+
   it('caps a batch at the contract maximum without dropping the remainder', async () => {
     const { outbox } = makeOutbox();
     for (let index = 0; index < 205; index += 1) {

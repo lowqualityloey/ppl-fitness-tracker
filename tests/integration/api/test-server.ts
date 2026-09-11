@@ -57,7 +57,30 @@ export async function startApiServer(): Promise<void> {
     }
 
     try {
-      const response = await fetch(`${apiOrigin}/`);
+      // Probed path: an unmatched route whose 404 the app router itself produces,
+      // rather than `/`.
+      //
+      // What is established: a readiness probe must not be a request through a
+      // product screen. `/` is now the dashboard (M3-04, #61), so probing it means
+      // the harness's notion of "up" depends on that route compiling and, for a
+      // signed-in visitor, on Supabase auth and three database queries. Any future
+      // work on `/` then changes what "ready" means, and a 500 from a hiccup reads as
+      // "the server never started".
+      //
+      // What is **not** established, and was measured rather than assumed: this is
+      // not a speed fix, at least not on a warm cache. Measured here with `.next`
+      // already populated — production server: probe 166 ms, `/` 162 ms (unauthenticated
+      // `/` answers 307 to sign-in and never reaches the queries). Dev server, first
+      // request after boot: probe **3115 ms**, `/` **1827 ms**; second request 70 ms and
+      // 87 ms. The probe is the *slower* one cold, because it compiles the not-found
+      // route instead. So the case for it is the dependency, not the latency, and the
+      // CI failure this followed (`Hook timed out in 10000ms` in `prefill.test.ts`) is
+      // attributed to the budget below — which was genuinely unreachable — rather than
+      // to a proven cost in `/`. A cold CI checkout, where the dashboard's route graph
+      // has to compile from nothing, remains the untested suspect.
+      //
+      // `status < 500` stays the contract: a 500 means the router is up but broken.
+      const response = await fetch(`${apiOrigin}/__readiness-probe__`);
       if (response.status < 500) return;
     } catch (error) {
       lastError = error;

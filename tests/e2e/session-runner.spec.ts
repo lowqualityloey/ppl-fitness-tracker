@@ -3,6 +3,14 @@ import AxeBuilder from '@axe-core/playwright';
 
 import { authHeaders, type TestSession } from '../integration/api/fixtures';
 import { signInFreshUser } from './auth';
+import {
+  firstTick,
+  START_DAY,
+  startPushDay,
+  waitForSynced,
+  warmUpAndStart,
+  WORKOUT_FLOW_TIMEOUT_MS,
+} from './runner-fixtures';
 
 /**
  * M3-06 (#63): the runner, and with it the first real execution of everything M3-05
@@ -15,34 +23,6 @@ import { signInFreshUser } from './auth';
  * is still there": durability that cannot survive a reload is not durable, and nothing in
  * a unit suite can tell the difference.
  */
-
-const START_DAY = 'Push Day';
-
-/**
- * Budget for the two specs that walk a whole workout.
- *
- * Measured at **31.9 s** on this machine against the production build for
- * `walks a whole workout…`, which is 17 set writes, four phase advances, three task
- * completions, and a queue drain — every one of them a real authenticated round trip
- * through `next start`, because the point of these specs is that nothing is stubbed. The
- * default 30 s was failing by two seconds, so the honest choice was between cutting the
- * scenario and stating the cost. `#61` set this precedent with `ROUTE_BUDGET_MS`: a named
- * budget with the measurement in the comment, never a loosened assertion. The assertions
- * below are unchanged.
- */
-const WORKOUT_FLOW_TIMEOUT_MS = 90_000;
-
-async function startPushDay(page: import('@playwright/test').Page) {
-  await page.goto('/');
-  await page.getByRole('button', { name: `Start ${START_DAY}` }).click();
-  await expect(page).toHaveURL(/\/session\/[0-9a-f-]{36}/);
-  await expect(page.getByRole('heading', { level: 1, name: START_DAY })).toBeVisible();
-}
-
-/** The first tick target the seeded day provides. */
-function firstTick(page: import('@playwright/test').Page) {
-  return page.locator('[data-testid^="tick-"]').first();
-}
 
 test.describe('session runner', () => {
   test('keeps an offline tick through a reload and syncs when the API returns', async ({
@@ -354,13 +334,6 @@ async function expectUnlogged(tick: import('@playwright/test').Locator) {
   await expect(tick).toHaveAttribute('aria-pressed', 'false', { timeout: 15_000 });
 }
 
-/** Wait for the queue to empty, which is the screen's own claim that it is synced. */
-async function waitForSynced(page: import('@playwright/test').Page) {
-  await expect(page.getByTestId('sync-status')).toContainText('All changes synced', {
-    timeout: 20_000,
-  });
-}
-
 async function fetchSession(
   request: import('@playwright/test').APIRequestContext,
   auth: TestSession,
@@ -396,27 +369,6 @@ async function fetchSession(
  * `stretch`, and only `post_workout` may finish. Writing this against the API instead
  * would have left the UI able to start a workout it could never end.
  */
-/**
- * Cross the first gate the way an athlete does: tick the warm-up, advance.
- *
- * This is not ceremony. `assertSetMutationAllowed` refuses every set change outside
- * `exercise`/`rest`, so a spec that ticks on arrival is refused by the server — which is
- * exactly what happened when these tests were first written, and what pinned the fact that
- * the phase machine, not the screen, decides what a tick means.
- */
-async function warmUpAndStart(page: import('@playwright/test').Page) {
-  // The hint names the gate before the server has to refuse it.
-  await expect(page.getByTestId('phase-gate')).toContainText('Warm-up done');
-  await expect(page.getByTestId('sets-locked')).toBeVisible();
-  await expect(page.locator('[data-testid^="tick-"]').first()).toBeDisabled();
-
-  await page.getByTestId('task-warm_up').click();
-  await waitForSynced(page);
-  await page.getByTestId('advance-phase').click();
-  await expect(page.getByTestId('session-subtitle')).toContainText('Working out');
-  await expect(page.locator('[data-testid^="tick-"]').first()).toBeEnabled();
-}
-
 async function completeWorkoutThroughUi(page: import('@playwright/test').Page) {
   await warmUpAndStart(page);
   await finishWorkoutThroughUi(page);

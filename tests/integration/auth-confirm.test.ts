@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Client } from 'pg';
-import { CookieJar, createClientFromCookieJar } from '../../lib/supabase/server.js';
+import { CookieJar, createClientFromCookieJar } from '../../lib/supabase/cookie-jar.js';
 import { requireUser } from '../../lib/auth/require-user.js';
 import { confirmQuerySchema } from '../../lib/auth/magic-link.js';
 import { validationError } from '../../lib/contracts/envelope.js';

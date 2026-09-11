@@ -87,13 +87,30 @@ jobs:
       # the fast lane should not depend on them. They are NOT, however, outside
       # the merge gate any more: `npm test`'s directory glob used to be the only
       # thing standing between CI and these files, which meant M2-01/M2-04's
-      # route guarantees were never executed by CI at all. Specs whose handler is
-      # still unbuilt are declared individually in
-      # tests/integration/api/pending-handlers.ts (counted as skips, attributed to
-      # an issue, and guarded by tests/unit/api/pending-handlers.test.ts) instead
-      # of being hidden by exclusion.
+      # route guarantees were never executed by CI at all. The pending-handler
+      # registry this step used to describe (tests/integration/api/pending-handlers.ts
+      # and its guard test) is **gone as of M2-06 (#53)**: the last stub was
+      # implemented, the registry emptied, and its own rule said an empty registry
+      # deletes the file with it. There are no skipped API specs to declare.
       - name: Run API route-handler suites
         run: npm run test:api
+
+      # M3-03 (#60): the browser gate, deliberately last. Every suite above proves a
+      # contract; this one proves the thing a user can see, and it is the only job
+      # that boots a **production** build (`playwright.config.ts` webServer runs
+      # `next:build && next:start` on :3001) — which is what makes its latency numbers
+      # quotable and the API suites' dev-mode numbers not.
+      #
+      # `--with-deps` is not optional. The first local run of this directory failed
+      # with `browserType.launch` exit 127 — `libnspr4.so` / `libnss3.so` missing —
+      # which is an unusable browser, not a failing test, and produced seven failures
+      # that looked like product defects. GitHub's runner image does not preinstall
+      # them either.
+      - name: Install Playwright browsers (with system libraries)
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E suite against the production build
+        run: npm run test:e2e
 
       - name: Stop Supabase
         run: npx supabase stop

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Client } from 'pg';
-import { CookieJar, createClientFromCookieJar } from '../../../lib/supabase/server.js';
+import { CookieJar, createClientFromCookieJar } from '../../../lib/supabase/cookie-jar.js';
 
 export const ids = {
   mutation: '11111111-1111-4111-8111-111111111111',

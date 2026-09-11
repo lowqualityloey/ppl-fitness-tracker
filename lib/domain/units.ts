@@ -52,6 +52,48 @@ export function formatWeight(weightKg: number | null, unit: PreferredUnit): stri
  * only — never on the value used for arithmetic or comparison — so personal
  * records and prefill maths keep the full stored precision.
  */
+/** `WeightKgSchema`'s ceiling, named so a component can say why it refused. */
+export const MAX_WEIGHT_KG = 1000;
+
+/**
+ * Parse a user-entered weight into **canonical kilograms** (ADR-0005).
+ *
+ * This is the input half of the boundary §3.2 assigns to `UnitDisplay`, and it exists
+ * here rather than in a component because the invariant it protects is a data one: "a
+ * mutation must never carry a display-unit value". A user on `lbs` who types 220 and
+ * whose tap stores `220` has not logged a bench press, they have logged 220 kg, and
+ * nothing downstream can tell. So the only place a unit can be consulted is this
+ * function, and the only thing that leaves it is kg.
+ *
+ * Returns `null` for empty or unparseable input — which is *absence* of a value, the
+ * same thing `weightKg: null` means on the wire. Out-of-range is deliberately **not**
+ * silently clamped: the caller is told by the exported maximum and decides what to
+ * print, because quietly turning 5000 into 1000 would write a number the user never
+ * entered.
+ *
+ * Rounding to the stored `numeric(6,2)` precision is not cosmetic: `WeightKgSchema` is
+ * `multipleOf(0.01)`, so an unrounded lbs→kg result can be rejected by the very
+ * contract the request must satisfy.
+ */
+export function parseWeightToKg(input: string, unit: PreferredUnit): number | null {
+  const trimmed = input.trim().replace(',', '.');
+  if (trimmed === '') return null;
+  const value = Number(trimmed);
+  if (!Number.isFinite(value) || value < 0 || value > MAX_WEIGHT_KG) return null;
+
+  const asKg = unit === 'kg' ? value : value * KG_PER_LB;
+  return Math.round(asKg * 100) / 100;
+}
+
+/** Reps are unitless and integral; the contract's 0–1000 range is the caller's check. */
+export function parseReps(input: string): number | null {
+  const trimmed = input.trim();
+  if (trimmed === '') return null;
+  const value = Number(trimmed.replace(',', '.'));
+  if (!Number.isFinite(value) || value < 0 || !Number.isInteger(value)) return null;
+  return value;
+}
+
 function trimTrailingZero(valueKg: number): string {
   return String(Number(valueKg.toFixed(2)));
 }

@@ -49,6 +49,17 @@ export interface OutboxStorage {
   delete(mutationIds: readonly string[]): Promise<void>;
   /** The whole queue for one session, oldest `seq` first. */
   list(sessionId: string): Promise<StoredMutation[]>;
+  /**
+   * The highest `seq` already stored for this session, or -1 when the queue is empty.
+   *
+   * `enqueue` used to compute this with `list()`, which read and deserialized **every
+   * queued row** on each tap. The number it produces is the same, so the difference is
+   * invisible to correctness and very visible to latency: the tap path is the one this
+   * slice's 50 ms gate measures, and an outbox that costs O(queue depth) per tap gets
+   * slower as the connection stays bad. An implementation is expected to answer this
+   * without materializing the rows.
+   */
+  lastSeq(sessionId: string): Promise<number>;
   /** Bumps `attempt` without touching anything else. */
   updateAttempt(mutationId: string, attempt: number): Promise<void>;
 }
@@ -124,8 +135,7 @@ export class Outbox {
    * is the exact defect this module exists to prevent.
    */
   async enqueue(payload: SyncMutation): Promise<StoredMutation> {
-    const queued = await this.storage.list(this.sessionId);
-    const seq = queued.reduce((highest, item) => Math.max(highest, item.seq), -1) + 1;
+    const seq = (await this.storage.lastSeq(this.sessionId)) + 1;
 
     const stored: StoredMutation = {
       mutationId: payload.mutationId,
@@ -160,6 +170,28 @@ export class Outbox {
    * a rejected set disappears from the queue without ever surfacing to the user.
    */
   async markApplied(mutationIds: readonly string[]): Promise<void> {
+    if (mutationIds.length === 0) return;
+    await this.storage.delete(mutationIds);
+  }
+
+  /**
+   * Forget mutations the server **refused**, as distinct from the ones it acknowledged.
+   *
+   * Both delete rows, and it would be tempting to reuse `markApplied`. Resisting that
+   * is the point: they mean opposite things, and conflating them loses the one signal
+   * the user needs. An applied mutation is a success story that no longer needs
+   * mentioning; a refused one must be remembered as visible state precisely because it
+   * is the case where what the user tapped is not what happened.
+   *
+   * Why they leave the queue at all: §4.3 says rejections "surface, never vanish", and
+   * the naive reading is to keep the row. But a rejected mutation is one the server has
+   * authoritatively refused — keeping it means the next drain replays it, is refused
+   * again, refetches again, forever. That is a poison pill: a workout with one illegal
+   * tap would spend its remaining life re-sending a mutation that can never succeed, and
+   * the user would never see the other sets land. The record survives as *state* (see
+   * `SyncEngine`'s rejections), which is what "surface" is for.
+   */
+  async discardRefused(mutationIds: readonly string[]): Promise<void> {
     if (mutationIds.length === 0) return;
     await this.storage.delete(mutationIds);
   }

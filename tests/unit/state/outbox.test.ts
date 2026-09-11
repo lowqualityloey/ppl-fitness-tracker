@@ -122,6 +122,26 @@ describe('Outbox — RFC §4.3 invariants', () => {
     expect(queued.map((row) => row.seq)).toEqual([0, 1, 2]);
   });
 
+  it('assigns seq without reading the whole queue', async () => {
+    // The 50 ms tap-latency gate in #63 spends its budget on this path, so the cost is
+    // part of the contract rather than an implementation detail. `enqueue` used to call
+    // `list()` first: a full read and structured-clone of every queued row, on every tap.
+    // That makes a tap cost O(queue depth), so the screen would get slower the longer the
+    // connection stayed bad — and the reload spec shows the queue can hold a workout.
+    const { outbox, storage } = makeOutbox();
+    await outbox.enqueue(setUpsert(outbox, 0));
+    await outbox.enqueue(setUpsert(outbox, 1));
+
+    const callsBefore = storage.listCalls;
+    const third = await outbox.enqueue(setUpsert(outbox, 2));
+
+    expect(storage.listCalls, 'enqueue must not read the queue to find the next seq').toBe(
+      callsBefore,
+    );
+    expect(third.seq).toBe(2);
+    expect((await outbox.peek()).map((row) => row.seq)).toEqual([0, 1, 2]);
+  });
+
   it('keeps sessions separate, so a batch can never span two (contract requirement)', async () => {
     const storage = new MemoryStorage();
     const otherSession = '44444444-4444-4444-8444-444444444444';
@@ -150,6 +170,19 @@ describe('Outbox — RFC §4.3 invariants', () => {
     expect(storage.deletes).toEqual([[a.mutationId, c.mutationId]]);
     const remaining = await outbox.peek();
     expect(remaining.map((row) => row.mutationId)).toEqual([b.mutationId]);
+  });
+
+  it('discards refused mutations by id, and reports that it did', async () => {
+    const { outbox, storage } = makeOutbox();
+    const a = await outbox.enqueue(setUpsert(outbox, 0));
+    const b = await outbox.enqueue(setUpsert(outbox, 1));
+
+    await outbox.discardRefused([b.mutationId]);
+    // Named separately from `markApplied` on purpose: a refused mutation and an
+    // acknowledged one both leave the queue, and the UI has to be able to tell that
+    // this one happened *to* the user rather than *because of* them.
+    expect(storage.deletes).toEqual([[b.mutationId]]);
+    expect((await outbox.peek()).map((row) => row.mutationId)).toEqual([a.mutationId]);
   });
 
   it('caps a batch at the contract maximum without dropping the remainder', async () => {

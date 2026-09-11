@@ -49,6 +49,19 @@ export interface SyncEngineDeps {
 }
 
 /** What `send` reports back. `retryable` distinguishes "try later" from "refused". */
+/**
+ * What a subscriber is told about the queue. Deliberately a plain snapshot rather than
+ * an observable: the app has no RxJS dependency, and §3.2's `pending$` only ever needs
+ * "how many are waiting, and what was refused" re-read on change.
+ */
+export interface SyncSnapshot {
+  /** The queued records themselves, oldest first — what `projectPending` overlays. */
+  pending: StoredMutation[];
+  pendingCount: number;
+  rejections: VisibleRejection[];
+  lastFatalReason: string | null;
+}
+
 export type SendOutcome =
   | { kind: 'ok'; data: SyncResponseData }
   | { kind: 'retryable'; reason: string }
@@ -140,6 +153,12 @@ export class SyncEngine {
   private stopped = false;
   private serverSeq = 0;
   private readonly random: () => number;
+  /**
+   * Refused mutations, retained as visible state after they leave the queue. §4.3:
+   * rejections "surface, never vanish" — the queue is not where they stay, the screen is.
+   */
+  private rejections: VisibleRejection[] = [];
+  private readonly listeners = new Set<(snapshot: SyncSnapshot) => void>();
 
   constructor(deps: SyncEngineDeps) {
     this.deps = deps;
@@ -157,6 +176,7 @@ export class SyncEngine {
    */
   async mutate(mutation: SyncMutation): Promise<StoredMutation> {
     const stored = await this.outbox.enqueue(mutation);
+    await this.emit();
     // Deliberately not awaited: the caller's promise is durability. A drain that
     // fails leaves the mutation queued, which is the correct outcome for a device
     // with no signal — and the poller will pick it up.
@@ -247,13 +267,71 @@ export class SyncEngine {
     // refused, and refetch when anything was refused.
     await this.outbox.markApplied(result.applied);
     if (result.rejected.length > 0) {
+      // Left the queue and *into* visible state: the server refused these, so
+      // replaying them is a loop, and forgetting them is a lost set. See
+      // `Outbox.discardRefused` for why both halves are required.
+      await this.outbox.discardRefused(result.rejected.map((item) => item.mutationId));
+      this.rejections.push(...result.rejected);
       this.deps.onRejected?.(result.rejected);
     }
     if (result.requiresRefetch) {
       await this.deps.refetch();
     }
+    await this.emit();
 
     return result;
+  }
+
+  /**
+   * Subscribe to queue changes. Returns an unsubscribe function.
+   *
+   * The first delivery is synchronous-ish (awaited) rather than waiting for a change,
+   * so a component that mounts with three mutations already queued — the reload case
+   * §4.3 Scenario 2 is about — renders "3 waiting to sync" immediately instead of
+   * claiming the queue is empty until the next write.
+   */
+  subscribe(listener: (snapshot: SyncSnapshot) => void): () => void {
+    this.listeners.add(listener);
+    void this.emit();
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  /**
+   * Read the current queue state directly.
+   *
+   * A pull alongside `subscribe`'s push, for two reasons: a component mounting needs
+   * today's value before the next change arrives, and a test that has to await some
+   * number of microtasks to observe an async emit is asserting on scheduling rather
+   * than behaviour. (That is exactly what the first draft of the rejection test did.)
+   */
+  async snapshot(): Promise<SyncSnapshot> {
+    // One read serves both fields: `pendingCount` is `pending.length`, and reading the
+    // queue twice could produce a snapshot where the badge and the projection disagree.
+    const pending = await this.outbox.peek();
+    return {
+      pending,
+      pendingCount: pending.length,
+      rejections: [...this.rejections],
+      lastFatalReason: this.fatalReason,
+    };
+  }
+
+  private async emit(): Promise<void> {
+    if (this.listeners.size === 0) return;
+    const snapshot = await this.snapshot();
+    for (const listener of this.listeners) listener(snapshot);
+  }
+
+  /**
+   * Clear surfaced rejections once the caller has shown them or the user dismissed
+   * them. Awaitable so a caller (and a test) can observe the new state rather than
+   * guess how many microtasks an emit needs.
+   */
+  async dismissRejections(): Promise<void> {
+    this.rejections = [];
+    await this.emit();
   }
 
   /**

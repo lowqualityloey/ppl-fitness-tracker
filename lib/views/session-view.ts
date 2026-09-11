@@ -1,9 +1,25 @@
 import { z } from 'zod';
 import {
+  IsoDateTimeSchema,
   LocalDateSchema,
   SessionPhaseSchema,
   SessionStatusSchema,
+  TaskKeySchema,
 } from '../contracts/common';
+
+/**
+ * A task's completion timestamp, from either of the two sources this view is built from.
+ *
+ * The screen reads it from the repository in-process, where `SessionTaskState.completedAt`
+ * is a `Date`, and re-reads it over HTTP after a sync rejection, where the same column
+ * arrives as an ISO string. Asserting one of the two would make the other throw on the
+ * client's *second* fetch of the session — the worst possible time, immediately after the
+ * server refused a change. So both are accepted, and exactly one type leaves this schema.
+ */
+const TaskCompletedAtSchema = z.preprocess(
+  (value) => (value instanceof Date ? value.toISOString() : value),
+  IsoDateTimeSchema.nullable(),
+);
 
 /**
  * What the read-only session screen requires of a `SessionState` payload.
@@ -56,6 +72,14 @@ export const SessionViewSetSchema = z.object({
         exercise: z.object({
           id: z.string().uuid(),
           name: z.string(),
+          /*
+           * `kind` is not decoration: the storage rule `assertSetMutationAllowed` accepts a
+           * set row only when the placement is in the `main_workout` phase *and* the
+           * exercise is `strength`. A screen that cannot see the kind cannot know which rows
+           * are legal to offer, and would hand the athlete a tick that is refused every
+           * time. The enum is spelled as `exercise_kind` in db/schema/index.ts spells it.
+           */
+          kind: z.enum(['strength', 'stretch']),
         }),
       }),
     ),
@@ -69,6 +93,25 @@ export const SessionViewSetSchema = z.object({
       isCompleted: z.boolean(),
       weightKg: z.number().nullable(),
       reps: z.number().int().nullable(),
+    }),
+  ),
+  /*
+   * Added for `#63`. This screen used to render no tasks because it had no tasks in its
+   * view — and the phase machine turns out to be gated on them: `warm_up` blocks the move
+   * into `exercise`, `main_workout` blocks `stretch`, `stretch` blocks `post_workout`, and
+   * only `post_workout` may finish. A workout screen that cannot show them cannot finish a
+   * workout, which is the entire point of the product.
+   *
+   * `label` is deliberately absent: `SessionTaskState` has none, and inventing one here
+   * would put a string on the screen that no storage column backs. The labels live in the
+   * client, next to the checkboxes that render them.
+   */
+  tasks: z.array(
+    z.object({
+      id: z.string().uuid(),
+      sessionId: z.string().uuid(),
+      taskKey: TaskKeySchema,
+      completedAt: TaskCompletedAtSchema,
     }),
   ),
 });

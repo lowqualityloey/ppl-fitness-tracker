@@ -60,15 +60,14 @@ test.describe('settings', () => {
     }
   });
 
-  // NOT a passing gate. The control is built, and `router.refresh()` + push does not land on
-  // /sign-in — the leading suspect is that the POST itself is failing (which would also explain the
-  // earlier form version rendering JSON), but diagnosing it needs a run I did not have time for.
-  // Shipping this as green would claim a sign-out nobody has watched work, so it is skipped and
-  // named in the PR instead.
-  test.skip('signs out for the whole account, not just this tab', async ({ page }) => {
+  test('signs out for the whole account, not just this tab', async ({ page }) => {
     const auth = await signInFreshUser(page, 'e2e-settings-signout');
     try {
       await page.goto('/settings');
+      // Read out loud because it was the bug: the button used to sit on this page and do nothing
+      // visible, since the endpoint answers 400 to a bodyless POST. If the guard ever trips again,
+      // this line names it instead of leaving a silent failure to chase.
+      await expect(page.getByTestId('sign-out-error')).toHaveCount(0);
       await page.getByTestId('sign-out').click();
       await expect(page).toHaveURL(/\/sign-in/);
       // The cookie is really gone: a direct hit on a per-user route redirects rather than rendering

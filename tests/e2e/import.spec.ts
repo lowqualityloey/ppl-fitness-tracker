@@ -137,3 +137,56 @@ test.describe('legacy import', () => {
     }
   });
 });
+
+test.describe('legacy import — the branches the card names', () => {
+  test('surfaces the collapsed-key warning the importer emits', async ({ page }) => {
+    const auth = await signInFreshUser(page, 'e2e-import-collapsed');
+    // A real legacy shape, not a constructed one: the old pull page rendered set checkboxes without
+    // ids, so every entry collapsed onto the empty string. The importer cannot attribute such a
+    // completion to a set and says so — the dialog has to keep saying it.
+    await seedSlots(page, {
+      pullDayProgress: JSON.stringify({
+        currentPhase: 'workout',
+        completedSets: 1,
+        completedExercises: 1,
+        workoutStartTime: Date.parse('2026-07-15T18:00:00.000Z'),
+        cardioTimeLeft: 0,
+        cooldownTimeLeft: 300,
+        checkboxStates: { '': true },
+        stretchStates: {},
+      }),
+    });
+    try {
+      await page.goto('/settings');
+      await page.getByTestId('import-run').click();
+      const warnings = page.getByTestId('import-warnings');
+      await expect(warnings).toContainText('collapsed key');
+      await expect(warnings).toContainText('aggregate counts only');
+      await expect(page.getByTestId('import-not-recovered')).toContainText('per-set completion');
+    } finally {
+      await auth.cleanup();
+    }
+  });
+
+  test('says when a session was filed under a guessed date', async ({ page }) => {
+    const auth = await signInFreshUser(page, 'e2e-import-lowdate');
+    // No `timestamp` at all, which is what the oldest records look like: the importer falls back to
+    // the import date and records `dateConfidence: 'low'`. The UI claim is that the athlete is told
+    // the day may be wrong, because a silently-misdated log is the quiet history rewrite this card
+    // exists to prevent.
+    await seedSlots(page, {
+      pushWorkoutProgress: JSON.stringify({
+        currentPhase: 'main-workout',
+        state: { mainWorkoutSets: { 'ex1-set1': true } },
+      }),
+    });
+    try {
+      await page.goto('/settings');
+      await page.getByTestId('import-run').click();
+      await expect(page.getByTestId('import-date-low')).toBeVisible();
+      await expect(page.getByTestId('import-report')).toContainText('may not be the day you trained');
+    } finally {
+      await auth.cleanup();
+    }
+  });
+});

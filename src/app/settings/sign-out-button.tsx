@@ -26,6 +26,16 @@ export function SignOutButton() {
     try {
       const response = await fetch('/auth/signout', {
         method: 'POST',
+        /*
+         * `SignoutRequestSchema` is `z.object({}).strict()` — the endpoint demands a body that is
+         * an empty JSON object, and a bodyless POST is a 400. That is not fussiness: it is the
+         * CSRF posture in RFC §5.1. A cross-site form can only send `form-urlencoded` or a simple
+         * text type, so a route that insists on parsed JSON cannot be driven from another origin
+         * with the user's cookie. Omitting the body here looked like a broken button while the
+         * session survived, which is the dangerous direction for a guard to fail.
+         */
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
         credentials: 'same-origin',
       });
       if (!response.ok) throw new Error(String(response.status));
@@ -38,9 +48,12 @@ export function SignOutButton() {
        * tree away and lets the server answer the next request with no session at all — which is the
        * behaviour this control exists to produce.
        */
-      // NOTE (unverified): this navigation is asserted by a spec that is currently skipped. The
-      // soft route change also has to clear the server-component cache, which `router.refresh()`
-      // does not achieve reliably before the push; the diagnosis is on the next slice.
+      // Refresh first, then replace: the client router holds a cache of every server component it
+      // has rendered, and after sign-out that cache is a signed-in tree waiting to be painted from
+      // memory while the cookie that authorised it is gone. `refresh()` re-runs the renders against
+      // the dead session so the next frame is answered by the server, not by what the browser
+      // remembered.
+      router.refresh();
       router.replace('/sign-in');
     } catch {
       setError('Could not reach the server, so you are still signed in.');

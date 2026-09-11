@@ -254,3 +254,44 @@ Buttons are the primary interactive element. Primary buttons use backgroundColor
 - Don't use opacity or transparency for primary interactive elements; keep buttons and CTAs fully opaque to signal clickability.
 - Don't apply animations longer than 300ms or use easing functions other than ease-in-out; avoid attention-grabbing motion that distracts from data.
 - Don't use the secondary orange (#fb6514) for primary CTAs; reserve it for secondary actions, success states, and alternative highlights only.
+
+---
+
+## Project extensions (this repo — measured, M3-02 / #59)
+
+TailAdmin's palette above is used **unchanged** everywhere except the four
+entries below. Every ratio is WCAG 2.2, computed by `scripts/check-contrast.ts`
+against the two surfaces this app paints — `#ffffff` (card) and `#f9fafb`
+(page). That script is a gate wired into the unit suite
+(`tests/unit/design/contrast.test.ts`), so a value that regresses turns CI red;
+these numbers are true as of the run that wrote them.
+
+| Token | Value | vs `#ffffff` | vs `#f9fafb` | Bar | Status |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `--accent-push` (day) | `#465fff` | 4.84:1 | 4.63:1 | 3:1 border / 4.5:1 badge text | passes |
+| `--accent-pull` (day) | **`#c2410c`** | 5.18:1 | 4.96:1 | 3:1 border / 4.5:1 badge text | passes — redefined, see below |
+| `--accent-pull-bright` | `#fb6514` | 3.01:1 | 2.88:1 | — | **fails both bars; decorative only** |
+| `--accent-legs` (day) | `#7a3ff2` | 5.50:1 | 5.26:1 | 3:1 border / 4.5:1 badge text | passes — new, see below |
+| focus ring | `#465fff` (2px + 2px offset) | 4.84:1 | 4.63:1 | 3:1 non-text | passes — replaces `primary-container` glow |
+
+1. **`--accent-legs` `#7a3ff2` is a documented extension** (master RFC §4.7):
+   the third Push/Pull/Legs day accent needs a hue, and `tertiary #667085` is
+   reserved for disabled states and secondary labels. Violet at 5.50:1/5.26:1
+   clears every bar and is hue-distant from both the blue and the orange.
+2. **`secondary #fb6514 does not become `--accent-pull` as written.** Used as
+   a 2px day badge border it measures 2.88:1 on `#f9fafb` — under the 3:1
+   non-text bar. It is therefore **redefined to `#c2410c`** (measured 5.18:1 /
+   4.96:1, same warm orange identity, darkened until it passes) and `#fb6514`
+   survives renamed as **`--accent-pull-bright`, decorative only**: gradients
+   and large fills, never a border, badge text, or focus target. This
+   supersedes the TailAdmin rule quoted above more strictly than it reads: in
+   this project the bright orange never carries an action at all.
+3. **The `input-field-focus` glow (`0 0 0 3px primary-container #ecf3ff`) is
+   not implemented.** `#ecf3ff` on `#ffffff` measures ≈1.12:1; ADR-0004
+   replaces it with a 2px `#465fff` outline plus 2px offset, and `#ecf3ff`
+   appears nowhere in the app's styles or components — the design spec asserts
+   that structurally.
+
+Day accents are used **only** for the day badge and a 2px card border
+(never buttons, backgrounds, or body text); primary blue stays the CTA color
+on every page; no accent or state travels without an icon and a text label.

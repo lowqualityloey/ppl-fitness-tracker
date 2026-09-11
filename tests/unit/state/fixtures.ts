@@ -78,6 +78,9 @@ export function serverView(): SessionView {
     },
     // Empty by default: like `sets`, task rows only exist once completed, so a session
   // that has done nothing has none. Tests that need one pass it explicitly.
+  // #64: the view now carries the session clock's endpoints, so the fixture must too.
+  startedAt: '2026-09-11T17:00:00.000Z',
+  completedAt: null as string | null,
   tasks: [] as {
     id: string;
     sessionId: string;

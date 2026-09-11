@@ -423,9 +423,11 @@ refuses to ship. The loud skip alone would still leave M3's headline parity clai
 one environment that gates merges, so `test.yml`'s checkout gains `fetch-depth: 0` with a comment
 naming this run as its reason: CI now *executes* the gate rather than skipping it honestly.
 Verified: locally the three parity tests pass on the real `origin/main` diff (22 ms — the check
-that matters most is the cheapest), the full suite re-ran **61 passed / 0 failed**, and the next CI
-run on this head is the first time this gate will have ever fired on a runner — it is being watched
-for that, not merely hoped.
+that matters most is the cheapest), the full suite re-ran **61 passed / 0 failed**, and CI run 34635840011
+on this head went **61 passed / 0 failed in 6.2 m with the parity gate executed, not skipped** (✓
+`legacy-parity.spec.ts:61` untouched-modules 11 ms, :80 keys-owned 30 ms, :99 never-written 7.1 s) —
+the first time this gate has fired on a runner. `fetch-depth: 0` earned its keep: the gate is now
+real on both machines, which is the entire standard this milestone held itself to.
 
 ## What the numbers said on the final recorded runs (2026-09-12, this branch, production build)
 

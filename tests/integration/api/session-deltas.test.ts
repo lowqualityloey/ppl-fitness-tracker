@@ -124,6 +124,20 @@ describe('GET /api/sessions/:id?since= — real deltas', () => {
     await stopApiServer();
   });
 
+  /*
+   * `ROUTE_BUDGET_MS` below is a *timing* budget, not a weakened assertion: every
+   * expectation in this file is unchanged. The harness serves these requests from
+   * `next dev`, so the first call into a route pays for on-demand compilation before
+   * answering, and this test then makes two calls. Observed once on a loaded 4-core
+   * box at 5021 ms against vitest's 5 s default (and green in isolation on the same
+   * tree, twice); the same suite's `beforeAll` already allows 30 s for the same
+   * reason, per the `hookTimeout` note in `vitest.config.ts`.
+   *
+   * Leaving a byte-comparison assertion to fail because a laptop was busy is not a
+   * stricter gate — it is a flake that teaches everyone to re-run CI.
+   */
+  const ROUTE_BUDGET_MS = 20_000;
+
   it('answers since === server_seq with no session body — measured bytes', async () => {
     const full = await get('', owner);
     expect(full.status).toBe(200);
@@ -141,7 +155,7 @@ describe('GET /api/sessions/:id?since= — real deltas', () => {
     // are logged so the PR description cites numbers from this run, not hope.
     console.info(`delta bytes: full=${fullBody.length} notModified=${freshBody.length}`);
     expect(freshBody.length * 10).toBeLessThan(fullBody.length);
-  });
+  }, ROUTE_BUDGET_MS);
 
   it('answers since < server_seq with the full session at the current seq', async () => {
     const response = await get(`?since=${SERVER_SEQ - 1}`, owner);

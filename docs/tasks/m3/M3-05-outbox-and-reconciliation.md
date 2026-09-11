@@ -63,3 +63,40 @@ is not.
 node --env-file-if-exists=.env.local node_modules/vitest/vitest.mjs run tests/unit/state/
 npx playwright test tests/e2e/offline-session.spec.ts   # lands in M3-06; the plumbing is here
 ```
+
+## Shipped note (2026-09-11) — what landed, and what this card's wording does not license
+
+Landed on `feat/m3-05-outbox`, four files and one seam:
+
+- **`src/app/state/outbox.ts`** — `Outbox`, constructor-shaped as
+  `(sessionId, { storage, now, newId })`. `enqueue` assigns `seq` as *max per session + 1* and
+  resolves only after `storage.put` resolves; `OutboxQuotaExceededError` is thrown rather than
+  swallowed. It is per-session because `SyncRequestSchema` itself refuses a multi-session batch,
+  so the partition is structural instead of remembered.
+- **`src/app/state/indexeddb-outbox-storage.ts`** — the browser half of the seam: one store keyed
+  by `mutationId`, one `bySessionSeq` index, `OUTBOX_DB_VERSION = 1`. `transact` resolves on
+  `transaction.oncomplete`, **not** `request.onsuccess`: the request event fires before the data
+  is durable, and a `QuotaExceededError` arrives on the transaction. Resolving early would let a
+  tap be reported saved for bytes the browser then refused. The connection is memoised and evicted
+  on `versionchange`.
+- **`src/app/state/reconcile.ts`** — `reconcile(sent, response)` (item-level `applied`/`rejected`,
+  `stillPending` for anything the server did not mention, `requiresRefetch` on the first rejection)
+  and `projectPending(serverView, pending)` (pure overlay in `seq` order; never mutates its input;
+  reports a mutation referencing a set the server does not have as `unprojectable` instead of
+  inventing a row; `session.finish`/`phase.advance` stay queued without faking a completed
+  session).
+- **`src/app/state/sync-engine.ts`** — `mutate` (durable enqueue, then an unawaited drain),
+  `drain` (one in-flight promise, coalesced rather than rejected), `pollOnce`,
+  `backoffDelayMs` (full jitter, capped), and the §8.3 budget arithmetic as exported numbers.
+
+Three things this card does **not** license a reader to believe, stated here because the
+invariant list is easy to quote and hard to satisfy:
+
+1. **Nothing is user-reachable.** No provider, no runner, no component imports any of this. The
+   offline goal (G-M3-*) is not met by this PR; the mechanism that has to make it true is.
+2. **`IndexedDBOutboxStorage` has never executed.** Every invariant above is proven against a
+   memory store — that is the seam's purpose — which also means the browser half is unproven. Its
+   first run must be M3-06's `offline-session.spec.ts`, as this card's own verification block says.
+3. **`deviceId` has no owner.** The contract requires one; nothing mints or persists it, so the
+   engine accepts it as injected config. The decision (likely a `meta` store in the same database,
+   consistent with §8.5) belongs to #63, where a caller exists to force the choice.

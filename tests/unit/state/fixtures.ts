@@ -19,6 +19,8 @@ import { Outbox } from '../../../src/app/state/outbox';
 
 export const SESSION = '11111111-1111-4111-8111-111111111111';
 export const EXERCISE = '22222222-2222-4222-8222-222222222222';
+/** A stretch placement's exercise id: legal to display, impossible to store a set on. */
+export const STRETCH_EXERCISE = '44444444-4444-4444-8444-444444444444';
 export const DEVICE = '33333333-3333-4333-8333-333333333333';
 
 /** Deterministic uuid-shaped ids, so a test can assert on identity precisely. */
@@ -62,11 +64,27 @@ export function serverView(): SessionView {
           orderIndex: 0,
           targetSets: 3,
           targetReps: null,
-          exercise: { id: EXERCISE, name: 'Bench Press' },
+          exercise: { id: EXERCISE, name: 'Bench Press', kind: 'strength' },
+        },
+        {
+          id: '55555555-5555-5555-8555-555555555555',
+          phase: 'stretch',
+          orderIndex: 1,
+          targetSets: 2,
+          targetReps: null,
+          exercise: { id: STRETCH_EXERCISE, name: 'Overhead Stretch', kind: 'stretch' },
         },
       ],
     },
-    sets: [0, 1, 2].map((setIndex) => ({
+    // Empty by default: like `sets`, task rows only exist once completed, so a session
+  // that has done nothing has none. Tests that need one pass it explicitly.
+  tasks: [] as {
+    id: string;
+    sessionId: string;
+    taskKey: 'warm_up' | 'main_workout' | 'stretch';
+    completedAt: string | null;
+  }[],
+  sets: [0, 1, 2].map((setIndex) => ({
       id: id(50 + setIndex),
       sessionId: SESSION,
       exerciseId: EXERCISE,
@@ -94,7 +112,20 @@ export class MemoryStorage implements OutboxStorage {
     this.rows = this.rows.filter((row) => !mutationIds.includes(row.mutationId));
   }
 
+  /**
+   * Counted so a test can say something about cost, not just results: `enqueue` must not
+   * read the whole queue to find the next `seq`.
+   */
+  listCalls = 0;
+
+  async lastSeq(sessionId: string): Promise<number> {
+    return this.rows
+      .filter((row) => row.sessionId === sessionId)
+      .reduce((highest, row) => Math.max(highest, row.seq), -1);
+  }
+
   async list(sessionId: string): Promise<StoredMutation[]> {
+    this.listCalls += 1;
     return this.rows.filter((row) => row.sessionId === sessionId).sort((a, b) => a.seq - b.seq);
   }
 

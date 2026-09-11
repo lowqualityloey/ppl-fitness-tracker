@@ -49,6 +49,17 @@ export interface OutboxStorage {
   delete(mutationIds: readonly string[]): Promise<void>;
   /** The whole queue for one session, oldest `seq` first. */
   list(sessionId: string): Promise<StoredMutation[]>;
+  /**
+   * The highest `seq` already stored for this session, or -1 when the queue is empty.
+   *
+   * `enqueue` used to compute this with `list()`, which read and deserialized **every
+   * queued row** on each tap. The number it produces is the same, so the difference is
+   * invisible to correctness and very visible to latency: the tap path is the one this
+   * slice's 50 ms gate measures, and an outbox that costs O(queue depth) per tap gets
+   * slower as the connection stays bad. An implementation is expected to answer this
+   * without materializing the rows.
+   */
+  lastSeq(sessionId: string): Promise<number>;
   /** Bumps `attempt` without touching anything else. */
   updateAttempt(mutationId: string, attempt: number): Promise<void>;
 }
@@ -124,8 +135,7 @@ export class Outbox {
    * is the exact defect this module exists to prevent.
    */
   async enqueue(payload: SyncMutation): Promise<StoredMutation> {
-    const queued = await this.storage.list(this.sessionId);
-    const seq = queued.reduce((highest, item) => Math.max(highest, item.seq), -1) + 1;
+    const seq = (await this.storage.lastSeq(this.sessionId)) + 1;
 
     const stored: StoredMutation = {
       mutationId: payload.mutationId,

@@ -189,4 +189,27 @@ export class IndexedDBOutboxStorage implements OutboxStorage {
       };
     });
   }
+
+  /**
+   * The last `seq` in this session's range, without reading the queue.
+   *
+   * `bySessionSeq` is keyed `[sessionId, seq]`, so the session's rows are contiguous and
+   * sorted; a reverse key cursor on the range gets the highest seq in one step. `getAll`
+   * would return up to 200 fully structured-cloned records to compute the same integer.
+   */
+  async lastSeq(sessionId: string): Promise<number> {
+    const db = await openTrackerDatabase();
+    const cursor = await readTransaction(db, STORE, (store) =>
+      store
+        .index('bySessionSeq')
+        .openKeyCursor(
+          IDBKeyRange.bound([sessionId, -1], [sessionId, Number.MAX_SAFE_INTEGER]),
+          'prev',
+        ),
+    );
+    // `bySessionSeq` is keyed `[sessionId, seq]`, so the cursor lands on the highest seq
+    // in this session's range in one step. `getAll` would structured-clone up to 200
+    // records to derive the same integer.
+    return cursor ? (cursor.key as [string, number])[1] : -1;
+  }
 }

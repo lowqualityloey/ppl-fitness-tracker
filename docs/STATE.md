@@ -6,10 +6,10 @@
 - **Current Milestone / Epic**: **M2: Core Domain Engine — COMPLETE.** M2-00 → M2-06 all merged to `main` (PRs #43–#47, #51, #53; issue #42 closed). The milestone's last slice, M2-06 route hardening, merged as **PR #53 (`ce1c5d9`)**. **M3: Presentation** is in flight: RFC grilled and decomposed (2026-09-11) into `docs/tasks/m3/`, published as milestone #3, issues #57–#67. The first slice (#57 profile + prefill, #58 real `since` deltas) merged as **PR #69 (`8d2b696`)** with CI green; #59 (M3-02, design tokens) is next.
 - **Overall Status**: ACTIVE <!-- Options: ACTIVE | PAUSED | STABILIZING | RELEASE_CANDIDATE -->
 - **Target Release**: v1.0.0, no date committed
-- **Current Working Branch**: `feat/m3-05-outbox` — #62 (M3-05, the durable outbox) implemented on top of the merged dashboard. `main` is at `33d1eb7` (PR #74 = #61 M3-04 merged). History for this pass, not a pin — see the rule below.
+- **Current Working Branch**: none in flight — `main` at `0adf233` (PR #83 merged). The next slice starts its own branch; **#66 (M3-09, settings + legacy-import UI) is the card to take**, and this file's own checkpoint commit is the first thing on it.
 
 > **Do not pin the current `main` SHA in this field.** It was tried three times and went stale three times, because the merge commit that lands the correction advances `main` past the value being recorded. Describe the state, not the hash. Run `git log --oneline -1` if you need the exact commit.
-- **Last Updated**: 2026-09-11 (post-PR-#69 sync: #57/#58 merged as `8d2b696`, CI green, issues closed, milestone #2 closed. Gate numbers below were measured on the merged branch and confirmed green by the PR's own CI run, not inherited from any earlier table.)
+- **Last Updated**: 2026-09-11 (`pk:checkpoint` after #83 merged: the M3 ledger in §2 is closed through M3-08, §3 describes the merged surface rather than a branch awaiting merge, §7 points at #66). Numbers below are measured, not carried forward from an earlier run.
 - **Gate status**: #48 (D5 route-handler coverage + D1 lint enforcement) and #49 (this intake
   record) are **merged to `main`**, and `main`'s own Actions runs are green (4m32s and 4m40s).
   `npm run lint` exits 0 there. Consequence for the text below: the gates are no longer pending
@@ -99,10 +99,10 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
 - [x] `#59` `M3-02`: Tailwind/shadcn foundation + contrast-gated tokens, incl. the `--accent-pull` failure fix (p0) — **implemented** on `feat/m3-02-design-tokens`, PR pending (never merge your own). `--accent-pull` redefined by measurement: `#c2410c` (5.18:1 white / 4.96:1 page) replaces `#fb6514` (3.01/2.88 — fails both bars), which survives as decorative-only `--accent-pull-bright`; `--accent-legs #7a3ff2` ships as the documented DESIGN.md extension. The gate is `scripts/check-contrast.ts` reading the hexes **out of `globals.css`** (26 measured pairs, all pass) with the regression to 2.88:1 kept failing permanently as a spec'd negative control — Scenario 2 observed red, then green at the real value. Day accents are structurally confined to `badge.tsx` + border utilities; `#ecf3ff` and `outline-none` are banned by test, not by promise.
 - [x] `#60` `M3-03`: Playwright + axe harness with a deliberately-failing control first — **implemented on `feat/m3-03-e2e-harness`: 9 specs green against the production build, the axe control observed firing, the first prod-mode latency numbers taken. PR pending** (p0, closes D7)
 - [x] `#61` `M3-04`: dashboard `/` (p1) — **merged as PR #74 (`33d1eb7`)**: server-aggregated day cards, keyboard-reachable start, `/session/[id]` as a read-only target, `/` flipped to an interactive route in the a11y gate. It also closed a gap it inherited by surfacing it: the Lighthouse gate had been printing a score for `/` while auditing the page `/` redirects to.
-- [ ] `#62` `M3-05`: durable IndexedDB outbox + reconciliation (p0) — **implemented on `feat/m3-05-outbox`: `Outbox` over an injected storage seam, pure `reconcile`/`projectPending`, `SyncEngine` with the single-in-flight guard, jittered backoff that gates sends, and rejection → full refetch. 37 unit tests on the §4.3 invariants. **Nothing user-reachable yet**: no provider, no runner, no browser run of the IndexedDB adapter — all of that is #63.**
-- [ ] `#63` `M3-06`: session runner with optimistic tap and prefill (p0)
-- [ ] `#64` `M3-07`: `TimerController` absolute deadlines, background-tab recovery (p1)
-- [ ] `#65` `M3-08`: history + progress views on existing endpoints (p1)
+- [x] `#62` `M3-05`: durable IndexedDB outbox + reconciliation (p0) — **merged as PR #75 (`df6db14`)** — — **implemented on `feat/m3-05-outbox`: `Outbox` over an injected storage seam, pure `reconcile`/`projectPending`, `SyncEngine` with the single-in-flight guard, jittered backoff that gates sends, and rejection → full refetch. 37 unit tests on the §4.3 invariants. **Nothing user-reachable yet**: no provider, no runner, no browser run of the IndexedDB adapter — all of that is #63.**
+- [x] `#63` `M3-06`: session runner with optimistic tap and prefill (p0) — **merged as PR #79 (`5cf3b7e`)** —
+- [x] `#64` `M3-07`: `TimerController` absolute deadlines, background-tab recovery (p1) — **merged as PR #81 (`0278634`)** —
+- [x] `#65` `M3-08`: history + progress views on existing endpoints (p1) — **merged as PR #83 (`0adf233`)** —
 - [ ] `#66` `M3-09`: settings, `UnitDisplay`, legacy-import report surfaced in full (p1)
 - [ ] `#67` `M3-10`: M3 verification gate — SLAs measured on a production build, then M4 handoff (p0)
 
@@ -219,7 +219,7 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
   tracked `tsconfig.json`** (appends a generated-types include and reformats arrays). Revert
   before committing — it is formatter noise, not your change. See D6.
 
-- **Runner + client sync state, as built on `feat/m3-06-runner` (awaiting merge)**:
+- **Runner + client sync state (merged in #79):**
   - `src/app/state/`: `outbox.ts` (durable-before-ack queue, applied vs refused split, `lastSeq`
     so a tap costs O(1) reads instead of O(queue depth)), `indexeddb-outbox-storage.ts`
     (`meta` store at v2 carries the device id), `reconcile.ts` (plan-based projection, refusal
@@ -237,7 +237,7 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
     connection `median 15.2–16.5 ms, p95 23.7–26.4 ms` (gate: p95 < 50 ms, enforced); `POST /api/sync`
     p50 200.5–258.1 / p95 364.5–413.9 ms against the documented 200 ms budget, still a **miss** (§5).
 
-- **Timer surface, as built on `feat/m3-07-timers` (awaiting merge)**:
+- **Timer surface (merged in #81):**
   - `src/app/state/timer-controller.ts` — absolute anchors only (`createCountdownTimer`,
     `createElapsedTimer`, `browserTimerClock`, `formatDuration`), `TimerClock` as the whole seam,
     completion fired once per anchor, the last repaint clamped to the deadline, and an overrun that
@@ -254,7 +254,7 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
     `git diff --check` clean. #63's tap gate still holds with the session clock repainting every
     second, because `paints a tap in under 50 ms` is one of the 25.
 
-- **History and progress, as built on `feat/m3-08-history-progress` (awaiting merge)**:
+- **History and progress (merged in #83):**
   - `src/app/history/page.tsx` (cursor-paged log grouped by day, phase badges, `?cursor=` only —
     #82), `src/app/history/[id]/page.tsx` (a **server-rendered report**: no client island, because a
     finished session has nothing to sync and a receipt should not ship a mutation queue), and
@@ -598,8 +598,8 @@ Carried forward, still open:
     (`E1rmPointSchema.strict()` means the seam has no weight or reps to recompute from); and
     durations come from `startedAt`/`completedAt`, formatted by #64's `formatDuration`.
 
-19. **Review and merge #65, then take #66 (M3-09, settings and the legacy import UI).** What it
-    inherits from this slice:
+19. ~~**Review and merge #65, then take #66 (M3-09, settings and the legacy import UI).**~~ **Done —
+    merged as PR #83 (`0adf233`), CI green (9m25s).** #66 is now the active card. What it inherits:
     - **`/history` is the destination for imported sessions, and it already renders them.** #66's
       import flow can therefore assert "the rows appear in the log" against a screen that exists
       instead of building its own list. `loadCoverage` is the shared answer to "did this session
@@ -660,3 +660,4 @@ Carried forward, still open:
 | 2026-09-11 | Agent (DSH) | PR #74 merged — post-merge sync | Owner merged **#74 (`33d1eb7`)** = #61 (M3-04 dashboard). #61 closed; its 14 E2E specs, the interactive `/` a11y entry, and the Lighthouse relabelling landed as actual gates rather than local claims. Milestone #3 now carries #57–#61. |
 | 2026-09-11 | Agent (DSH) | M3-05 (#62) outbox implemented | The milestone's risk centre, built as three files plus a seam: `Outbox` over an injected `OutboxStorage` (durability, per-session `seq`, idempotency-key lifetime, quota failure as a typed error), pure `reconcile` + `projectPending` (§8.2 partial application, and the refusal to drop an unconfirmed mutation), and `SyncEngine` (single in-flight drain, jittered backoff that gates *sends*, rejection → full refetch, §8.3 cadence arithmetic asserted as numbers rather than prose). 37 unit tests, no browser, no timers. Two claims withheld deliberately: `IndexedDBOutboxStorage` has never executed (the seam means the unit suite proves `Outbox`, not the adapter — #63's E2E is its first run), and `deviceId` has no owner yet, so the engine takes it as config. See §7 item 16. |
 | 2026-09-11 | Agent (DSH) | API byte test given a real timing budget | `session-deltas.test.ts`'s byte comparison failed at **5021 ms** once under a loaded box (green twice in isolation, ports free). It sits behind `next dev`'s on-demand route compile and makes two requests, so vitest's 5 s default coupled a *size* assertion to machine load. One test now carries `ROUTE_BUDGET_MS = 20_000`; **no assertion changed**; suite re-run twice at 10 files / 60 tests. Same class as #61's `hookTimeout` fix, recorded for the same reason: a flake's real cost is that people stop trusting red. |
+| 2026-09-11 | Agent (DSH) | `pk:checkpoint` after #83 (M3-08) merged | Closed the M3 ledger in §2 through M3-08 (#62 `df6db14`/PR #75, #63 `5cf3b7e`/PR #79, #64 `0278634`/PR #81, #65 `0adf233`/PR #83 — all CI green) and turned §3 from branch-awaiting-merge prose into merged fact. **Measured baseline right now, on `main`: lint 0/0, typecheck 0, `next:build` 0, unit 243 passed / 22 files, api + security 60 passed / 10 files, Playwright 37 passed (2.2m), Lighthouse accessibility 100 on authenticated `/history` and on `/sign-in`, `check-set-config.sh` and `git diff --check` clean.** Nothing is in flight; #66 (settings + legacy-import UI) is the next card and starts its own branch. Three things that must not be re-litigated by the next session: the timer seam stores absolute anchors and re-derives on read (no counter, ever — #64 killed `push-day-workout/app.js:311`); the progress screen never recomputes e1RM because its input type has no weight or reps field (`.strict()` enforces it, tests assert it); and history pages are cursor-paged because `SessionsListQuerySchema` has no date params — the `?from=`/`?to=` the #65 card assumed are **#82**, not a UI workaround. Open findings to respect: #76 (nothing produces `archived`), #77 (rejection code with no message), #78 (same-ms writes decided by a random UUID), #80 (one hardcoded fixture id set colliding under `fullyParallel`), #82. Housekeeping the owner still owes a yes/no: ~36 merged local branches, `/tmp/sync-latency.bak`, the unfiled doc-debt items D2/D3/D4/D6, and the missing `.promptkit/workflows/grill.md`. |

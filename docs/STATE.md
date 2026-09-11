@@ -237,6 +237,23 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
     connection `median 15.2–16.5 ms, p95 23.7–26.4 ms` (gate: p95 < 50 ms, enforced); `POST /api/sync`
     p50 200.5–258.1 / p95 364.5–413.9 ms against the documented 200 ms budget, still a **miss** (§5).
 
+- **Timer surface, as built on `feat/m3-07-timers` (awaiting merge)**:
+  - `src/app/state/timer-controller.ts` — absolute anchors only (`createCountdownTimer`,
+    `createElapsedTimer`, `browserTimerClock`, `formatDuration`), `TimerClock` as the whole seam,
+    completion fired once per anchor, the last repaint clamped to the deadline, and an overrun that
+    keeps growing instead of freezing at `0:00`. `src/app/state/audio-cue.ts` — gesture-armed chime
+    where silence is a supported state; `browserChime` keeps the synthesis.
+  - The runner shows a `RestTimer` only while `phase === 'rest'` (mount *is* the cancellation) with
+    90 s inherited from `push-day-workout/app.js:245`, `+15 s` and `Skip`, and a session clock under
+    the subtitle that becomes a static length once `completedAt` exists. `SessionView` gained
+    `startedAt` (non-null) and `completedAt`.
+  - `role="timer"` with `aria-live="off"` for the digits; milestones (last ten seconds, finish once)
+    go through `#63`'s polite region.
+  - Gates on this branch: lint 0 / 0, typecheck 0, `next:build` 0, unit **219 passed (20 files)**,
+    api + security **60 passed (10 files)**, Playwright **25 passed** (20 before #64), set-config and
+    `git diff --check` clean. #63's tap gate still holds with the session clock repainting every
+    second, because `paints a tap in under 50 ms` is one of the 25.
+
 ---
 
 ## 4. Locked Technical Invariants (Do Not Undo)
@@ -340,6 +357,25 @@ The narrower claim that survived — "non-interactive shells resolve `/usr/bin/n
 - **`--accent-legs` has no assigned colour.** `DESIGN.md` offers no third accent that can be legitimately spent; `tertiary #667085` is reserved for disabled states, so reusing it would make disabled controls read as Legs day. One new hue must be added to `DESIGN.md` as a documented extension. *Blocks M3, not M1.*
 - **Package manager for the target app.** Legacy is npm. Low-stakes; decide at M1 scaffold and record it in PROMPTKIT.md §3.
 - **Dark mode deferred.** `DESIGN.md` ships no dark tokens. Light-only in v1 per ADR-0005, with tokens authored under one `:root` so adding a `.dark` block stays additive. Revisit immediately post-v1 — this app gets used in dim gyms at night.
+
+### #64's two findings, one filed
+
+- **#80 — the API/E2E fixture layer shares one hardcoded id set.** `ids.session` is literally
+  `22222222-…` (`tests/integration/api/fixtures.ts:5`), `seedSessionFixtures` deletes those rows in
+  `cleanup()`, and `playwright.config.ts` is `fullyParallel: true` with no worker cap. Observed as a
+  `404 NOT_FOUND` mid-measurement in `#60`'s spec: another worker had deleted the session it was
+  writing to. That file is now `mode: 'serial'` — which also stops a benchmark from measuring
+  itself under a sibling's load — but the cross-file exposure stands, and the real fix is per-run
+  ids rather than more scheduling.
+- **Unexplained: a `window`-bubble `pointerdown` listener with `{ once: true }` that never fired**
+  while four pointerdowns in the same document were seen by a `document`-capture listener and by a
+  spy on `window`, with no cleanup having run. Diagnosed by instrumentation, not inference — and the
+  apparent conclusion (the app's listener was at fault) was *wrong*: the probe's own spy assigned an
+  arrow function as `window.AudioContext`, `new` on it threw, and the chime's silent fallback
+  swallowed the error. What remains true is that the listener route was not demonstrably working,
+  so the chime is now armed from inside the interaction handlers *and* by a document-capture
+  listener. The unexplained residue is recorded here rather than deleted, because "a window listener
+  that does not receive window events" is not a thing I know how to dismiss.
 
 ### Unmerged findings from #63 (all filed, none absorbed)
 
@@ -512,15 +548,27 @@ Carried forward, still open:
      the production build was slow enough to push every timestamp outside the skew window (#78).
 
 
-17. **Review and merge #63, then take #64 (M3-07, rest and elapsed timers).** The runner now owns
-    the clock's *display* problems: `phase.advance` is wired, and rest timing must read an absolute
-    deadline rather than count intervals, because a backgrounded tab throttles timers and a rest
-    period counted in `setInterval` silently understates rest. The engine already has `now` and
-    `sleep` seams and the poller already adapts its cadence to `isVisible`; #64 should reuse both
-    rather than opening a second timer path. Three findings from #63 are parked and must not be
-    absorbed silently: #76 (no reachable `archived` state), #77 (rejections carry a code, not a
-    message — which is why the runner mirrors the phase rules locally for its hint), #78
-    (same-millisecond writes to one entity are ordered by a random UUID).
+17. ~~**Review and merge #63, then take #64 (M3-07, rest and elapsed timers).**~~ **Done 2026-09-11
+    on `feat/m3-07-timers` (seven commits, `ab47ac2..1c08dc3`), awaiting merge as PR #81.** The three
+    inherited constraints all held: absolute anchors with no counter anywhere, `visibilitychange`
+    recomputing from `now()`, and the clock injected so the background-tab case is a unit test
+    (`fires: 'none' | 3` in `tests/unit/state/timer-controller.test.ts`). #63's own follow-ups stayed
+    parked rather than being smuggled in: #76, #77, #78 untouched by this slice.
+
+18. **Review and merge #64, then take #65 (M3-08, history and per-exercise progress).** Three things
+    queue up for it:
+    - **The `archived` decision (#76) is #65's to make.** `getPrefill` already queries
+      `inArray(status, ['completed','archived'])` for a state nothing can produce, and a history
+      list has to say whether archived sessions appear in it. Decide the semantics there, with a
+      route or a retention job, instead of adding a throwaway mutation to satisfy a scenario.
+    - **The progress numbers must come from the read endpoints that already exist**
+      (`/api/progress/[exerciseSlug]`, volume aggregates). #63 established the shape of this mistake:
+      render a projection of what the server actually returns, or ship a screen that reports "No sets
+      recorded" for a live workout because no test looked.
+    - **`SessionView` now carries `startedAt`/`completedAt`.** A history row that shows a duration
+      should read them rather than re-deriving anything client-side — and it should not be tempted to
+      store a duration as a counter, which is the same defect #64 killed on the timer path.
+
 
 ---
 

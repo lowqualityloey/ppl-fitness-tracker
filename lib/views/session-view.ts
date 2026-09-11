@@ -16,10 +16,14 @@ import {
  * client's *second* fetch of the session — the worst possible time, immediately after the
  * server refused a change. So both are accepted, and exactly one type leaves this schema.
  */
-const TaskCompletedAtSchema = z.preprocess(
-  (value) => (value instanceof Date ? value.toISOString() : value),
-  IsoDateTimeSchema.nullable(),
-);
+/** The one coercion both timestamp shapes need; see the comment above. */
+const toIsoString = (value: unknown): unknown =>
+  value instanceof Date ? value.toISOString() : value;
+
+const TimestampSchema = z.preprocess(toIsoString, IsoDateTimeSchema.nullable());
+
+/** For a column the schema marks `notNull`, so the view must not hand back a `null` to render. */
+const RequiredTimestampSchema = z.preprocess(toIsoString, IsoDateTimeSchema);
 
 /**
  * What the read-only session screen requires of a `SessionState` payload.
@@ -56,6 +60,23 @@ export const SessionViewSetSchema = z.object({
   status: SessionStatusSchema,
   phase: SessionPhaseSchema,
   localDate: LocalDateSchema,
+  /*
+   * The session clock's two endpoints, both absolute instants, both already in the state the
+   * mapper builds (`lib/domain/sessions/mappers.ts:38-39`) and both dropped by the view until #64
+   * needed them.
+   *
+   * `startedAt` is the elapsed timer's origin. It is *not* derived from a counter that ticks up on
+   * the client, which is the same defect the rest timer exists to kill: an elapsed time built by
+   * adding a second per repaint understates a workout every time the tab is backgrounded, so a
+   * 40-minute session reports 22. Reading `now - startedAt` cannot drift, because there is nothing
+   * to drift.
+   *
+   * `completedAt` exists so the clock can stop. A finished session whose elapsed time keeps
+   * counting is a number that is not about anything, and the screen would have to be lying about
+   * the workout it is showing.
+   */
+  startedAt: RequiredTimestampSchema,
+  completedAt: TimestampSchema,
   routineDay: z.object({
     id: z.string().uuid(),
     name: z.string(),
@@ -111,7 +132,7 @@ export const SessionViewSetSchema = z.object({
       id: z.string().uuid(),
       sessionId: z.string().uuid(),
       taskKey: TaskKeySchema,
-      completedAt: TaskCompletedAtSchema,
+      completedAt: TimestampSchema,
     }),
   ),
 });

@@ -235,6 +235,11 @@ describe('reconcile — when the screen must re-read the server', () => {
           sessionId: SESSION,
           taskKey: 'warm_up' as const,
           completedAt: '2026-09-11T09:00:00.000Z',
+          // Required since #73: `SessionView` is the full contract, and a task row always
+          // carries the two timestamps the sync engine compares — even in a test about
+          // `completedAt`.
+          clientTs: '2026-09-11T09:00:00.000Z',
+          updatedAt: '2026-09-11T09:00:00.000Z',
         },
       ],
     };

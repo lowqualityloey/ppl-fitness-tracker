@@ -1,151 +1,32 @@
-import { z } from 'zod';
-import {
-  IsoDateTimeSchema,
-  LocalDateSchema,
-  SessionPhaseSchema,
-  SessionStatusSchema,
-  TaskKeySchema,
-} from '../contracts/common';
+import { SessionStateSchema, type SessionState } from '../contracts/sessions';
 
 /**
- * A task's completion timestamp, from either of the two sources this view is built from.
+ * The session screen's shape assertion, which as of #73 **is** the wire contract.
  *
- * The screen reads it from the repository in-process, where `SessionTaskState.completedAt`
- * is a `Date`, and re-reads it over HTTP after a sync rejection, where the same column
- * arrives as an ISO string. Asserting one of the two would make the other throw on the
- * client's *second* fetch of the session — the worst possible time, immediately after the
- * server refused a change. So both are accepted, and exactly one type leaves this schema.
+ * This file used to state its own subset of the session graph, and it did so for a
+ * defensible reason: `SessionStateSchema` was `z.object({}).passthrough()` — an M2-01
+ * placeholder — so `lib/views/` was the only place in the repo that could tell a page
+ * "this payload is not a session". That made the view a second source of truth for a
+ * shape that has one authoritative producer (`mapSessionState`) and three consumers
+ * (`/api/sessions`, `/api/sessions/[id]`, `/api/sync`). Two sources of truth drift, and
+ * the draft of the original file proves what that costs: written from memory it invented
+ * `['in_progress','archived','abandoned']` and `phase: ['strength','stretch']`, neither of
+ * which the database has ever contained.
+ *
+ * #73 closed the placeholder, so the duplicate is gone and this is a re-export. What did
+ * *not* move is `parseSessionView` itself, and that is not sentiment:
+ *
+ * - `src/app/session/[id]/page.tsx` and `src/app/history/[id]/page.tsx` are server
+ *   components. They read the session **in-process** through the repository and never
+ *   touch the routes, so route-level validation cannot see them. This call is their only
+ *   boundary.
+ * - A shape mismatch has to *throw*. A workout screen that quietly drops the sets it could
+ *   not read presents missing work as work that was never done, which is worse than an
+ *   error page — hence `SessionViewShapeError` with the offending paths named.
  */
-/** The one coercion both timestamp shapes need; see the comment above. */
-const toIsoString = (value: unknown): unknown =>
-  value instanceof Date ? value.toISOString() : value;
+export const SessionViewSetSchema = SessionStateSchema;
 
-const TimestampSchema = z.preprocess(toIsoString, IsoDateTimeSchema.nullable());
-
-/** For a column the schema marks `notNull`, so the view must not hand back a `null` to render. */
-const RequiredTimestampSchema = z.preprocess(toIsoString, IsoDateTimeSchema);
-
-/**
- * What the read-only session screen requires of a `SessionState` payload.
- *
- * This schema exists because the API contract cannot be trusted to describe it.
- * `SessionStateSchema` (lib/contracts/sessions.ts) is `z.object({}).passthrough()`
- * — an M2-01 placeholder that was never closed — so `GET /api/sessions/[id]`
- * validates the session graph's *envelope* and nothing about its contents, and
- * `z.infer` of it is `Record<string, unknown>`. A page written against that type
- * would compile while reading `undefined` weights, which is how a screen ends up
- * printing "— kg" for a set that recorded 100.
- *
- * The enums come from `lib/contracts/common.ts` rather than being restated here.
- * That is not tidiness: writing this file against memory produced
- * `['in_progress','archived','abandoned']` and `['strength','stretch']`, and the
- * database enums are `['in_progress','completed','archived']` and five phases
- * (`pre_workout`, `exercise`, `rest`, `stretch`, `post_workout`). A hand-copied
- * enum is a second source of truth that is wrong from birth, and `.strict()`-free
- * parsing would have made `/session/[id]` a 500 on the first real workout.
- *
- * So the shape this screen depends on is stated here, once, and parsed at the
- * boundary. Two things follow honestly:
- *
- * 1. A mismatch throws rather than rendering partial data. A workout screen that
- *    quietly drops sets is worse than an error page, because the missing sets
- *    look like ones that were never done.
- * 2. This is a *view* requirement, not the wire contract. Tightening
- *    `SessionStateSchema` itself is the real fix and is tracked as a finding;
- *    once that happens, this file should shrink to a re-export.
- */
-export const SessionViewSetSchema = z.object({
-  id: z.string().uuid(),
-  routineDayId: z.string().uuid(),
-  status: SessionStatusSchema,
-  phase: SessionPhaseSchema,
-  localDate: LocalDateSchema,
-  /*
-   * The session clock's two endpoints, both absolute instants, both already in the state the
-   * mapper builds (`lib/domain/sessions/mappers.ts:38-39`) and both dropped by the view until #64
-   * needed them.
-   *
-   * `startedAt` is the elapsed timer's origin. It is *not* derived from a counter that ticks up on
-   * the client, which is the same defect the rest timer exists to kill: an elapsed time built by
-   * adding a second per repaint understates a workout every time the tab is backgrounded, so a
-   * 40-minute session reports 22. Reading `now - startedAt` cannot drift, because there is nothing
-   * to drift.
-   *
-   * `completedAt` exists so the clock can stop. A finished session whose elapsed time keeps
-   * counting is a number that is not about anything, and the screen would have to be lying about
-   * the workout it is showing.
-   */
-  startedAt: RequiredTimestampSchema,
-  completedAt: TimestampSchema,
-  routineDay: z.object({
-    id: z.string().uuid(),
-    name: z.string(),
-    description: z.string().nullable().optional(),
-    exercises: z.array(
-      z.object({
-        id: z.string().uuid(),
-        phase: z.enum(['main_workout', 'stretch']),
-        orderIndex: z.number(),
-        targetSets: z.number().nullable(),
-        targetReps: z.number().nullable().optional(),
-        targetRepsRange: z.string().nullable().optional(),
-        restTime: z.string().nullable().optional(),
-        exercise: z.object({
-          id: z.string().uuid(),
-          name: z.string(),
-          /*
-           * `slug` is here for one reason: `/progress/[exerciseSlug]` is addressed by slug, not by
-           * id, because that is the shape the M2-06 endpoint has. A history report that names an
-           * exercise but cannot link to its progress chart is one field short of being useful, and
-           * the alternative — minting an id-addressed progress route — is a new endpoint, which this
-           * slice is explicitly not allowed to do.
-           */
-          slug: z.string().min(1),
-          /*
-           * `kind` is not decoration: the storage rule `assertSetMutationAllowed` accepts a
-           * set row only when the placement is in the `main_workout` phase *and* the
-           * exercise is `strength`. A screen that cannot see the kind cannot know which rows
-           * are legal to offer, and would hand the athlete a tick that is refused every
-           * time. The enum is spelled as `exercise_kind` in db/schema/index.ts spells it.
-           */
-          kind: z.enum(['strength', 'stretch']),
-        }),
-      }),
-    ),
-  }),
-  sets: z.array(
-    z.object({
-      id: z.string().uuid(),
-      sessionId: z.string().uuid(),
-      exerciseId: z.string().uuid(),
-      setIndex: z.number().int(),
-      isCompleted: z.boolean(),
-      weightKg: z.number().nullable(),
-      reps: z.number().int().nullable(),
-    }),
-  ),
-  /*
-   * Added for `#63`. This screen used to render no tasks because it had no tasks in its
-   * view — and the phase machine turns out to be gated on them: `warm_up` blocks the move
-   * into `exercise`, `main_workout` blocks `stretch`, `stretch` blocks `post_workout`, and
-   * only `post_workout` may finish. A workout screen that cannot show them cannot finish a
-   * workout, which is the entire point of the product.
-   *
-   * `label` is deliberately absent: `SessionTaskState` has none, and inventing one here
-   * would put a string on the screen that no storage column backs. The labels live in the
-   * client, next to the checkboxes that render them.
-   */
-  tasks: z.array(
-    z.object({
-      id: z.string().uuid(),
-      sessionId: z.string().uuid(),
-      taskKey: TaskKeySchema,
-      completedAt: TimestampSchema,
-    }),
-  ),
-});
-
-export type SessionView = z.infer<typeof SessionViewSetSchema>;
+export type SessionView = SessionState;
 
 export class SessionViewShapeError extends Error {
   constructor(issues: string) {

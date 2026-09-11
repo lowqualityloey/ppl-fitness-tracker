@@ -55,6 +55,8 @@ export interface SyncEngineDeps {
  * "how many are waiting, and what was refused" re-read on change.
  */
 export interface SyncSnapshot {
+  /** The queued records themselves, oldest first — what `projectPending` overlays. */
+  pending: StoredMutation[];
   pendingCount: number;
   rejections: VisibleRejection[];
   lastFatalReason: string | null;
@@ -305,8 +307,12 @@ export class SyncEngine {
    * than behaviour. (That is exactly what the first draft of the rejection test did.)
    */
   async snapshot(): Promise<SyncSnapshot> {
+    // One read serves both fields: `pendingCount` is `pending.length`, and reading the
+    // queue twice could produce a snapshot where the badge and the projection disagree.
+    const pending = await this.outbox.peek();
     return {
-      pendingCount: await this.outbox.pendingCount(),
+      pending,
+      pendingCount: pending.length,
       rejections: [...this.rejections],
       lastFatalReason: this.fatalReason,
     };

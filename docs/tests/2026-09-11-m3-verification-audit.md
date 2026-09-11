@@ -393,10 +393,45 @@ telemetry/50-rps work decide whether any of these tails is real. A flake's true 
 people stop trusting red — which is why these two are written here rather than quietly retried
 away.
 
+## 18. The parity gate itself went red on CI — the gate was the broken thing (incidental, CI)
+
+Nine breakages and two flakes later, PR #86's first CI run went red 11 minutes in, on exactly one
+test — `legacy-parity.spec.ts:36`, the *untouched-legacy-modules* check, the one whose whole job is
+refusing to let M3's claim rest on vibes:
+
+```
+  ✘  28 tests/e2e/legacy-parity.spec.ts:36:1 › the four legacy modules are untouched on this branch (7ms)
+    Error: Command failed: git diff --name-only origin/main...HEAD -- push-day-workout …
+    fatal: bad revision 'origin/main...HEAD'
+  60 passed, 1 failed (5.2m)
+```
+
+No injection, no contention: the assertion was right and its **environment assumption** was wrong.
+`actions/checkout@v4` defaults to a single-commit shallow fetch — in the runner there is no
+`origin/main` ref and no merge base to diff against, so a test that passed on every local run
+**cannot run at all in CI**. The honest framing: for its entire life on this branch, the legacy
+parity gate has only ever been observed on one machine, and the milestone's own invariant — *a
+control that has not been watched to fail has not been disarmed* — extends one step further than I
+applied it: a gate that only runs where it happens to pass is not running.
+
+Fix (one commit, two files, verified before and after): `resolveBaseRef()` tries `origin/main` →
+`main` → `$GITHUB_BASE_REF` via `git rev-parse --verify --quiet <ref>^{commit}`, and the test
+**skips loudly** when none resolves — *"no base ref to compare against (shallow clone): the
+legacy-parity diff is NOT being checked"* — because an empty diff from a historyless clone is a
+vacuous pass, and the failure mode of a vacuous pass is precisely the false green this milestone
+refuses to ship. The loud skip alone would still leave M3's headline parity claim unchecked in the
+one environment that gates merges, so `test.yml`'s checkout gains `fetch-depth: 0` with a comment
+naming this run as its reason: CI now *executes* the gate rather than skipping it honestly.
+Verified: locally the three parity tests pass on the real `origin/main` diff (22 ms — the check
+that matters most is the cheapest), the full suite re-ran **61 passed / 0 failed**, and the next CI
+run on this head is the first time this gate will have ever fired on a runner — it is being watched
+for that, not merely hoped.
+
 ## What the numbers said on the final recorded runs (2026-09-12, this branch, production build)
 
-Four full `npx playwright test` runs on the fixed tree: **61 passed / 0 failed** on the final
-three (3.1 m, 3.5 m, 3.6 m); the first carried the one flake recorded in entry 17 (60/1).
+Five full `npx playwright test` runs on the fixed tree: **61 passed / 0 failed** on the last four
+(3.1 m, 3.5 m, 3.6 m, 3.2 m — the fourth is the CI-parity fix of entry 18); the first carried the
+one flake recorded in entry 17 (60/1).
 Measurements below span the three green runs plus the standalone re-checks, plus the other
 suites:
 

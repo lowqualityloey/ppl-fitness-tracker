@@ -35,6 +35,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
+          # Full history, deliberately. `tests/e2e/legacy-parity.spec.ts` diffs the
+          # branch against `origin/main` to prove M3 touched no legacy module — and
+          # checkout's default `fetch-depth: 1` leaves no `origin/main` ref and no
+          # merge base in the runner at all. That is how CI proved (run 34633596241)
+          # the gate as first written only ran on one machine. The spec now skips
+          # loudly when no base resolves, but a *skipped* parity gate is still an
+          # unwatched claim — fetch the history so it actually executes here too.
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

@@ -33,8 +33,45 @@ const LEGACY_MODULES = [
   'ppl-workout-dashboard',
 ] as const;
 
+/**
+ * The first ref that git can actually resolve, or null.
+ *
+ * `origin/main` is what a developer's clone has. CI's `actions/checkout@v4` defaults to a
+ * **single-commit shallow clone**, where neither `origin/main` nor a merge base exists — and the
+ * first version of this test called `git diff origin/main...HEAD` unconditionally, so it failed in
+ * CI with `Command failed` while passing locally. That asymmetry is the reason for the resolver
+ * rather than a bare call: a parity gate that only works on one machine is a gate that is quietly
+ * not running.
+ */
+function resolveBaseRef(): string | null {
+  for (const candidate of ['origin/main', 'main', process.env.GITHUB_BASE_REF ?? '']) {
+    if (!candidate) continue;
+    try {
+      execFileSync('git', ['rev-parse', '--verify', '--quiet', `${candidate}^{commit}`], {
+        stdio: 'ignore',
+      });
+      return candidate;
+    } catch {
+      // Not resolvable in this checkout; try the next candidate.
+    }
+  }
+  return null;
+}
+
 test('the four legacy modules are untouched on this branch', () => {
-  const changed = execFileSync('git', ['diff', '--name-only', 'origin/main...HEAD', '--', ...LEGACY_MODULES], {
+  const base = resolveBaseRef();
+  /*
+   * Skipped loudly, never passed vacuously. An empty `git diff` from a repository with no history
+   * is not evidence that the legacy modules are untouched — reporting it as such would be the exact
+   * shape of a false green this milestone exists to refuse. The workflow fetches full history so
+   * this path is not normally taken; it stays as the honest fallback for a shallow checkout.
+   */
+  test.skip(
+    base === null,
+    'no base ref to compare against (shallow clone): the legacy-parity diff is NOT being checked',
+  );
+
+  const changed = execFileSync('git', ['diff', '--name-only', `${base}...HEAD`, '--', ...LEGACY_MODULES], {
     encoding: 'utf8',
   }).trim();
   expect(changed, `M3 must not modify legacy sources:\n${changed}`).toBe('');

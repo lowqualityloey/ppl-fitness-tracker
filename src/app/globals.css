@@ -1,26 +1,183 @@
 /*
- * Minimal reset for the M1 scaffold. Design tokens from DESIGN.md land in
- * M3 (ADR-0004, ADR-0005) — light-only v1, so no prefers-color-scheme dark
- * block is added here to avoid it becoming stale before dark mode exists.
+ * M3-02 (#59): one token set, one `:root`, every visual decision made here
+ * and nowhere else (master RFC §4.7). The three legacy vanilla-app
+ * stylesheets are NOT merged into this file — this is the Next app's
+ * identity, derived from DESIGN.md (TailAdmin) with three recorded
+ * deviations:
+ *
+ *  1. Focus ring: 2px solid primary + 2px offset (ADR-0004), not DESIGN.md's
+ *     3px `#ecf3ff` glow — that pair measures ≈1.1:1 and keyboard users
+ *     could not see focus. `#ecf3ff` appears nowhere in this app's styles,
+ *     and tests/unit/design/contrast.test.ts enforces that structurally
+ *     rather than as a promise.
+ *  2. `--accent-pull` is the RFC §8.4 REDEFINITION, not TailAdmin's
+ *     `secondary`. The original `#fb6514` fails 3:1 on both app surfaces as
+ *     a border and far more as badge text, so the §4.4 gate ("a gate, not a
+ *     note") would ship red the hour it was written. `#fb6514` survives as
+ *     `--accent-pull-bright`: gradients and large fills only, never a
+ *     border, badge text, or focus target.
+ *  3. `--accent-legs` is a documented DESIGN.md extension, added because
+ *     `tertiary #667085` is reserved for disabled/secondary labels and must
+ *     not double as a day accent (RFC §4.7).
+ *
+ * Every ratio is MEASURED against this file at test time by
+ * scripts/check-contrast.ts — no number is quoted here, because a quoted
+ * number is a number that can go stale. Day accents are usable ONLY for the
+ * day badge and a 2px card border; primary stays the CTA on every page.
+ *
+ * Light-only in v1 (ADR-0005); every token sits under the single `:root`
+ * scope so a later `.dark` block is additive, not a refactor.
  */
 
-html,
-body {
-  max-width: 100vw;
-  overflow-x: hidden;
+@import 'tailwindcss';
+
+:root {
+  /* Surfaces — page, card, raised containers (DESIGN.md surface stack). */
+  --surface: #f9fafb;
+  --surface-bright: #ffffff;
+  --surface-container-low: #f9fafb;
+  --surface-container: #f2f4f7;
+  --surface-container-high: #e4e7ec;
+  --surface-container-highest: #d0d5dd;
+
+  /* Text */
+  --on-surface: #101828;
+  --on-surface-variant: #475467;
+  --inverse-surface: #1d2939;
+  --inverse-on-surface: #f9fafb;
+
+  /* Borders / dividers */
+  --outline: #d0d5dd;
+  --outline-variant: #98a2b3;
+
+  /* Primary interactive. CTA on every page, on every training day. */
+  --primary: #465fff;
+  --on-primary: #ffffff;
+
+  /* Semantic states. Error never travels by colour alone: icon + text ship
+   * with it wherever it is used (RFC §4.7). */
+  --error: #d42c0e;
+  --on-error: #ffffff;
+  --tertiary: #667085; /* disabled states, secondary labels — NOT a day accent */
+
+  /* Day accents (RFC §4.7): the ONLY sanctioned uses are the day badge and a
+   * 2px card border. push aliases primary by design. */
+  --accent-push: #465fff;
+  --accent-pull: #c2410c; /* §8.4 redefinition; value is gate-measured, see header */
+  --accent-pull-bright: #fb6514; /* decorative only: gradients, large fills */
+  --accent-legs: #7a3ff2; /* documented DESIGN.md extension */
+
+  /* ADR-0004 focus ring: 2px solid --focus-ring + 2px offset, no glow. */
+  --focus-ring: #465fff;
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+
+  /* Shape (DESIGN.md rounded): 16px buttons/cards, 12px inputs. */
+  --radius-button: 1rem;
+  --radius-card: 1rem;
+  --radius-input: 0.75rem;
+  --radius-badge: 9999px;
+
+  /* Three-level elevation stack (DESIGN.md elevation). */
+  --elevation-sm: 0 1px 2px rgb(0 0 0 / 0.05);
+  --elevation-md: 0 4px 12px rgb(0 0 0 / 0.08);
+  --elevation-lg: 0 16px 40px rgb(0 0 0 / 0.12);
+
+  /* Type: Outfit, self-hosted via next/font in layout.tsx — no font CDN. */
+  --font-display: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+
+  /* shadcn/ui semantic aliases, mapped onto the tokens above — never onto
+   * raw values. `secondary` here is the NEUTRAL raised-surface pair, not the
+   * TailAdmin orange: the day accents deliberately have no slot in this
+   * mapping, so no component can reach for one as a CTA by name. */
+  --background: var(--surface);
+  --foreground: var(--on-surface);
+  --card: var(--surface-bright);
+  --card-foreground: var(--on-surface);
+  --popover: var(--surface-bright);
+  --popover-foreground: var(--on-surface);
+  --primary-foreground: var(--on-primary);
+  --secondary: var(--surface-container-high);
+  --secondary-foreground: var(--on-surface);
+  --muted: var(--surface-container);
+  --muted-foreground: var(--on-surface-variant);
+  --accent: var(--surface-container-high);
+  --accent-foreground: var(--on-surface);
+  --destructive: var(--error);
+  --destructive-foreground: var(--on-error);
+  --border: var(--outline);
+  --input: var(--outline);
+  --ring: var(--focus-ring);
 }
 
-body {
-  min-height: 100%;
+/* Tailwind v4: expose the aliases as utilities. Inline means they stay
+ * var() references, so :root remains the only place a literal lives. */
+@theme inline {
+  --font-sans: var(--font-display);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius-input) - 4px);
+  --radius-md: var(--radius-input);
+  --radius-lg: var(--radius-button);
+  --radius-xl: calc(var(--radius-button) + 4px);
+  --radius-badge: var(--radius-badge);
+
+  --shadow-elevation-sm: var(--elevation-sm);
+  --shadow-elevation-md: var(--elevation-md);
+  --shadow-elevation-lg: var(--elevation-lg);
 }
 
-* {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
+@layer base {
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-display);
+    min-height: 100%;
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  /* ADR-0004, verbatim: 2px solid primary + 2px offset. No 3px glow. */
+  :focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
+/* The design workflow's compositor-motion gate, applied app-wide so every
+ * screen inherits the fallback instead of re-declaring it: 150ms color
+ * transitions are the only motion shipped by the foundation, and none of it
+ * may pulse for users who asked their OS to stop it. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

@@ -31,13 +31,22 @@
     "db:seed:stretches": "tsx db/seed/stretches.ts"
   },
   "dependencies": {
+    "@radix-ui/react-slot": "1.3.3",
     "@supabase/ssr": "0.12.6",
     "@supabase/supabase-js": "2.116.0",
+    "@tailwindcss/postcss": "4.3.3",
+    "@tanstack/react-query": "5.102.8",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
     "drizzle-orm": "^0.36.4",
-    "pg": "8.23.0",
+    "lucide-react": "1.44.0",
     "next": "16.3.4",
+    "pg": "8.23.0",
+    "postcss": "8.5.28",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "tailwind-merge": "3.6.0",
+    "tailwindcss": "4.3.3",
     "zod": "4.5.4"
   },
   "devDependencies": {

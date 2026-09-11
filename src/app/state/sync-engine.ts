@@ -222,6 +222,27 @@ export class SyncEngine {
     return run;
   }
 
+  /**
+   * The browser just reported connectivity restored: clear the backoff window.
+   *
+   * A retryable failure schedules `nextSendAt` because "the network just said
+   * not now" — and full jitter means the windows grown across a multi-minute
+   * outage can reach 30 s. An `online` event that left the window standing is
+   * a no-op inside it: the provider's own comment ("the browser says the moment
+   * connectivity returns; draining then is free") was only true when the last
+   * window happened to have expired. That gap is the mechanism behind the
+   * bimodal G-M3-4 numbers (4.7–9.7 s, and once past the 15 s hang ceiling
+   * under suite load) — audit entries 4 and 15 of
+   * `docs/tests/2026-09-11-m3-verification-audit.md`. Reconnect is precisely
+   * the event the backoff exists to wait for; it falsifies the premise, so the
+   * window goes away. Attempt counts are untouched: if the browser lied about
+   * coming online, the next failure regrows a *larger* window from the worst
+   * attempt plus one, and the 120/min limiter still bounds the noise.
+   */
+  notifyConnectivityRestored(): void {
+    this.nextSendAt = null;
+  }
+
   private async drainOnce(): Promise<ReconciliationOutcome | null> {
     const batch = await this.outbox.peek(MAX_BATCH);
     if (batch.length === 0) return null;

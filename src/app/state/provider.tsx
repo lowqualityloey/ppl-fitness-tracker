@@ -170,6 +170,11 @@ export function SessionSyncProvider(props: {
     if (engine === null || !props.enablePolling) return;
     engine.startPolling();
     const onOnline = () => {
+      // The browser falsified the window's premise ("unreachable right now");
+      // clear it, then drain. Without the clear this call is a no-op inside a
+      // window grown while offline — the mechanism behind the G-M3-4 tail
+      // (sync-engine.ts `notifyConnectivityRestored`, audit entry 15).
+      engine.notifyConnectivityRestored();
       void engine.drain();
     };
     window.addEventListener('online', onOnline);

@@ -225,3 +225,71 @@ test.describe('Lighthouse accessibility', () => {
     }
   });
 });
+
+/**
+ * G-M3-5 names three routes: `/`, `/session/[id]`, `/history`. Two of them were scored, which is a
+ * gate over 2/3 of its own claim. Both additions assert 100 outright — the pattern was established
+ * with `/history`, so "we could not get 100" is not available as an excuse here.
+ */
+test('scores 100 on the authenticated dashboard', async () => {
+  const auth = await createTestSession('lh-dashboard');
+  const db = await openHistoryDb();
+  try {
+    // A day plan on deck, so the dashboard renders its real cards rather than an empty state.
+    await seedSession(db, { userId: auth.userId, localDate: '2026-09-10' });
+    const profileDir = mkdtempSync(`${tmpdir()}/lh-profile-`);
+    let report: LighthouseReport;
+    try {
+      report = runLighthouse(
+        'http://localhost:3001/',
+        profileDir,
+        auth.cookies.map((c) => `${c.name}=${c.value}`).join('; '),
+      );
+    } finally {
+      rmSync(profileDir, { recursive: true, force: true });
+    }
+    expect(report.runtimeError?.message ?? '', 'lighthouse runtime error').toBe('');
+    const score = Math.round((report.categories?.accessibility?.score ?? -1) * 100);
+    const failures = Object.entries(report.audits ?? {})
+      .filter(([, audit]) => typeof audit.score === 'number' && audit.score < 1)
+      .map(([id, audit]) => `${id}=${audit.score}`);
+    console.log(`[lighthouse /] score=${score} failingAudits=[${failures.join(', ')}]`);
+    expect(score, `dashboard scored ${score}; failing audits: ${failures.join(', ') || 'none named'}`).toBe(100);
+  } finally {
+    await db.end();
+    await auth.cleanup();
+  }
+});
+
+test('scores 100 on a session runner', async () => {
+  const auth = await createTestSession('lh-session');
+  const db = await openHistoryDb();
+  try {
+    const sessionId = await seedSession(db, {
+      userId: auth.userId,
+      localDate: '2026-09-10',
+      sets: [{ weightKg: 80, reps: 5 }, { weightKg: 80, reps: 6 }],
+    });
+    const profileDir = mkdtempSync(`${tmpdir()}/lh-profile-`);
+    let report: LighthouseReport;
+    try {
+      report = runLighthouse(
+        `http://localhost:3001/session/${sessionId}`,
+        profileDir,
+        auth.cookies.map((c) => `${c.name}=${c.value}`).join('; '),
+      );
+    } finally {
+      rmSync(profileDir, { recursive: true, force: true });
+    }
+    expect(report.runtimeError?.message ?? '', 'lighthouse runtime error').toBe('');
+    const score = Math.round((report.categories?.accessibility?.score ?? -1) * 100);
+    const failures = Object.entries(report.audits ?? {})
+      .filter(([, audit]) => typeof audit.score === 'number' && audit.score < 1)
+      .map(([id, audit]) => `${id}=${audit.score}`);
+    console.log(`[lighthouse /session] score=${score} failingAudits=[${failures.join(', ')}]`);
+    expect(score, `session runner scored ${score}; failing audits: ${failures.join(', ') || 'none named'}`).toBe(100);
+  } finally {
+    await db.end();
+    await auth.cleanup();
+  }
+});

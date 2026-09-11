@@ -3,13 +3,13 @@
 ## 1. Executive Summary & Current Position
 
 - **Project Name**: PPL Fitness Tracker
-- **Current Milestone / Epic**: **M2: Core Domain Engine — COMPLETE.** M2-00 → M2-06 all merged to `main` (PRs #43–#47, #51, #53; issue #42 closed). The milestone's last slice, M2-06 route hardening, merged as **PR #53 (`ce1c5d9`)**. **M3: Presentation** is in flight: RFC grilled and decomposed (2026-09-11) into `docs/tasks/m3/`, published as milestone #3, issues #57–#67. The first slice (#57 profile + prefill, #58 real `since` deltas) merged as **PR #69 (`8d2b696`)** with CI green; #59 (M3-02, design tokens) is next.
+- **Current Milestone / Epic**: **M3: Presentation — verification complete, exit PR in review.** M2 remains as it was: M2-00 → M2-06 merged (PRs #43–#47, #51, #53). All of M3's build slices merged 2026-09-11 — #57/#58 (PR #69), #59 (PR #71), #60 (PR #72), #61 (PR #74), #62 (PR #75), #63 (PR #79), #64 (PR #81), #65 (PR #83), #66 (PR #85). **#67 (M3-10, the verification gate) is in review with this commit**; its exit report and M4 handoff are `docs/releases/2026-09-12-m3-exit-report-and-m4-handoff.md`, and the break-each-gate evidence is `docs/tests/2026-09-11-m3-verification-audit.md` (entries 9–18).
 - **Overall Status**: ACTIVE <!-- Options: ACTIVE | PAUSED | STABILIZING | RELEASE_CANDIDATE -->
 - **Target Release**: v1.0.0, no date committed
-- **Current Working Branch**: `feat/m3-09-settings-import` — **PR #85 open, awaiting merge** (M3-09 / #66: `UnitDisplay`, the settings screen, and the legacy-import dialog). Base is the post-#83 `main`; do not branch from `main` for anything else in M3 until #85 lands.
+- **Current Working Branch**: `feat/m3-10-verification-gate` — **#67 (M3-10) PR OPENED, awaiting owner merge.** Everything §7 item 21 demanded is done, with evidence; when this PR merges, **M4 is the next milestone and its handoff is already written** (§3's release-report pointer). Do not start M4 work on this branch.
 
 > **Do not pin the current `main` SHA in this field.** It was tried three times and went stale three times, because the merge commit that lands the correction advances `main` past the value being recorded. Describe the state, not the hash. Run `git log --oneline -1` if you need the exact commit.
-- **Last Updated**: 2026-09-11 (`UnitDisplay` + settings + import dialog implemented as #66; PR #85 opened with 50 Playwright / 254 unit / 60 integration tests measured green. Two findings filed or pinned rather than absorbed: #84 and the sign-out body requirement.)
+- **Last Updated**: 2026-09-12 (**M3-10 complete**: break-each-gate audit done — nine deliberate breakages captured and restored, two permanent gate controls kept, one real defect found and fixed by the suite's own hang ceiling. Final battery: `npm test` **37 files / 380 tests**, api **10 files / 60 tests**, Playwright **61 passed / 0 failed on three consecutive final runs** (one earlier post-fix run carried the timing flake §5 and audit entry 17 record), Lighthouse 100 ×4. G-M3-4 measured **1643–1838 ms post-fix — PASSES**; its earlier MISS was real and is kept in the record.)
 - **Gate status**: #48 (D5 route-handler coverage + D1 lint enforcement) and #49 (this intake
   record) are **merged to `main`**, and `main`'s own Actions runs are green (4m32s and 4m40s).
   `npm run lint` exits 0 there. Consequence for the text below: the gates are no longer pending
@@ -17,11 +17,12 @@
   pending-handler entry now fails in CI, so claims marked closed are backed by a gate.
   #51 (M2-05 importer) is merged on top of them, so the importer's 5 route specs are now
   gate-enforced on the default branch rather than only on a branch that claimed to pass.
-  Still open as debt: D2, D3 (docs half closed), D4, D6, D7.
+  Still open as debt: D2, D4, D6, D7 (D3 closed: the E2E suite exists, is CI-gated,
+  and `PROMPTKIT.md` §3 now describes the real harness, traps included).
 
 **Where things actually stand.** M1 schema, RLS, auth, contracts, exercise/stretch seeds, and the M1-16 route baseline are on `main`. M2-00 adds the runtime app-role Drizzle client, verified auth-to-RLS context, session domain mappers, and user-scoped repository; M2-01 adds the sessions API; M2-02 adds the pure lifecycle transition table, transaction-scoped set/task/phase/finish mutations, and rollback coverage; M2-03 adds pure Epley e1RM calculation and transaction-scoped personal-record recomputation with app-role ownership/rollback coverage; M2-04 adds bounded transactional sync, replay-safe mutation metadata, per-session sequencing/change rows, deterministic clock/device conflict resolution, and the authenticated `/api/sync` adapter.
 
-**What does not exist yet, stated plainly**: any real UI (only a placeholder home page and the sign-in form — Tailwind/shadcn/tokens land in M3), the any E2E spec (`playwright.config.ts` names `tests/e2e`, which is absent), and production email delivery (issue #16, deferred). The legacy vanilla-JS app still runs unchanged alongside the target stack, and `npm run build` still emits zero JavaScript — re-verified 2026-09-11, not inherited from the old note.
+**What does not exist yet, stated plainly (2026-09-12)**: production email delivery (issue #16, deferred since M1); telemetry, Sentry, correlation ids, and the 50 rps load test (all M4, per spec §2.2); Realtime (deferred by owner decision — §5's poll-margin note says what that costs); a service worker, which means G-M3-1's "reopen with no network" is proven with the *API* dead rather than the document unfetchable (handoff §3.4 owns the difference); volume/streak analytics, body-measurement import, and export (named non-goals, each on a card). What does exist now: the full UI — dashboard, runner, history, progress, settings — with its measured claims in `docs/releases/2026-09-12-m3-exit-report-and-m4-handoff.md` §1. The legacy vanilla-JS app still runs unchanged alongside the target stack (M4's decommission, guarded meanwhile by `tests/e2e/legacy-parity.spec.ts`), and `npm run build` still emits zero JavaScript — re-verified 2026-09-11, not inherited from the old note.
 
 ---
 
@@ -33,8 +34,12 @@
 - [x] **M0**: De-risk spike — RLS enforcement proven through Drizzle (Complete — 2026-09-08, **gate lifted**)
 - [/] **M1**: Contracts & Seams — code, contracts, seeds, RLS, auth, and RED baseline complete; production SMTP/delivery remains deferred under issue #16
 - [x] **M2**: Core Domain Engine — issues #36–#42 all merged (PRs #43–#47, #51, #53). **Complete 2026-09-11.**
-- [ ] **M3**: Presentation — shadcn + tokens, session runner, offline outbox, WCAG audit (Queued)
-- [ ] **M4**: Hardening, telemetry, decommission the legacy static app (Queued)
+- [/] **M3**: Presentation — all ten slices built; **#67 (M3-10, the verification gate) is the
+  open exit PR**. M3-00…M3-09 merged 2026-09-11 as PRs #69, #71, #72, #74, #75, #79, #81, #83, #85.
+  The gate's own verdict: seven goals measured, two documented misses kept rather than relabelled,
+  and every gate in the suite watched to fail (audit entries 9–15).
+- [ ] **M4**: Hardening, telemetry, decommission the legacy static app (Queued — **the handoff is
+  already written**: `docs/releases/2026-09-12-m3-exit-report-and-m4-handoff.md`)
 
 ### Completed Milestone Task Breakdown (M0)
 
@@ -103,8 +108,8 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
 - [x] `#63` `M3-06`: session runner with optimistic tap and prefill (p0) — **merged as PR #79 (`5cf3b7e`)** —
 - [x] `#64` `M3-07`: `TimerController` absolute deadlines, background-tab recovery (p1) — **merged as PR #81 (`0278634`)** —
 - [x] `#65` `M3-08`: history + progress views on existing endpoints (p1) — **merged as PR #83 (`0adf233`)** —
-- [x] `#66` `M3-09`: settings, `UnitDisplay`, legacy-import report surfaced in full (p1) — **in review as PR #85**
-- [ ] `#67` `M3-10`: M3 verification gate — SLAs measured on a production build, then M4 handoff (p0)
+- [x] `#66` `M3-09`: settings, `UnitDisplay`, legacy-import report surfaced in full (p1) — **merged as PR #85 (`6420e5a`)**
+- [/] `#67` `M3-10`: M3 verification gate — **in review**, exit report and M4 handoff written; see §7 item 21 for what it proved
 
 **Process note, so this stops recurring**: issues `#6`, `#7`, `#9`, `#10` were done on `main` well before they were closed, because the branches that shipped them were stacked on each other instead of on `main`, and none of the PR bodies said "Closes #N". Going forward: branch from `main`, not from a feature branch, unless there's a real dependency; and every PR body must name the issue it closes.
 
@@ -145,7 +150,7 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
 
 - **Target Workspace / Package**: N/A (standalone repo)
 - **Active RFC / Spec**: `docs/specs/2026-09-08-spec-fullstack-migration.md`
-- **Active Task Spec**: `docs/specs/2026-09-11-spec-m3-presentation.md` (M3 — grilled, §8 amendments binding; §8.7 added by the #57 implementation), decomposed into `docs/tasks/m3/README.md` with eleven slice cards `M3-00`…`M3-10` published as issues #57–#67 under milestone #3. #57/#58 merged as PR #69; the next slice is **#59 (M3-02: Tailwind/shadcn foundation, contrast-gated tokens)**. The completed M2 record is `docs/specs/2026-09-08-m2-core-domain-engine.md` with `docs/tasks/m2/`.
+- **Active Task Spec**: `docs/specs/2026-09-11-spec-m3-presentation.md` (M3 — grilled, §8 amendments binding; §8.7 added by the #57 implementation), decomposed into `docs/tasks/m3/README.md` with eleven slice cards `M3-00`…`M3-10` published as issues #57–#67 under milestone #3. #57–#66 all merged (PRs #69–#85); #67 is in review and M3's spec work is finished — the next spec to write is M4's, from `docs/releases/2026-09-12-m3-exit-report-and-m4-handoff.md`. The completed M2 record is `docs/specs/2026-09-08-m2-core-domain-engine.md` with `docs/tasks/m2/`.
 - **M3-00/M3-01 surface, as built** (merged PR #69): `lib/repositories/profile-repository.ts` (ADR-0003-compliant, no conversion anywhere — ADR-0005), `src/app/api/profile/route.ts` (GET/PATCH, `no-store` incl. 404 via `appErrorResponse`'s new optional headers), `src/app/api/sessions/prefill/route.ts` + `WorkoutRepository.getPrefill` (`('completed','archived')` source, `desc(localDate), desc(id)`, both-null omitted, `excludeSessionId`), `WorkoutRepository.getSessionServerSeq` + the delta short-circuit in `src/app/api/sessions/[id]/route.ts` (seq read **before** `findSession`, user-scoped, stale comment deleted), `lib/contracts/profile.ts` enum corrected to the DB literal `('kg','lbs')`, specs `tests/integration/api/{profile,prefill,session-deltas}.test.ts` + `tests/unit/api/contract-graph.test.ts` (routes-as-adapters guard; bans local `z.` shapes and the deleted comment's return), plus the new blocks in `contracts.test.ts`. The M3 spec carries the §4.1 erratum and §8.7. No migration shipped — the index decision is on measured `EXPLAIN` evidence (PR #69 §4). D6 (`next dev` rewriting `tsconfig.json`) fired twice during the work and was reverted twice — it remains open.
 - **M2-05 surface, as built**: `lib/domain/import/legacy-importer.ts` (pure parse→plan:
   per-key isolation, `legacySlotToOrderIndex` as the single 1-based→0-based seam,
@@ -270,6 +275,26 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
     api + security **60 passed (10 files)**, Playwright **37 passed (2.2m)**, set-config and
     `git diff --check` clean. **Lighthouse accessibility on authenticated `/history`: 100** — the
     first authenticated audit, which #60's spec had deliberately left unbuilt.
+- **M3-10 surface, as built** (this branch, in review as the #67 PR): mostly a branch that
+  *measured* — `9591fd4`/`f8a7242`/`7454585`/`7d17b87` added the production-build SLA specs, the
+  keyboard-only + colour audits, the legacy-parity scan, and Lighthouse on `/` and `/session/[id]`.
+  The break-each-gate pass then changed three products, each because an injection or an
+  un-asked-for breach proved the old behaviour wrong: **`96b5202`** contrast gate follows `var()`
+  indirection + measures the alias layer + unmeasurable values FAIL with a reason (never a crash)
+  + two permanent negative controls; **`4ca87e5`** the G-M3-6 gate asserts the *word* carrier
+  separately from the glyph (a differential text check is satisfiable by `○→✓` alone — measured,
+  not theorized); **`9ca17cc`** `notifyConnectivityRestored()` clears the offline-grown backoff
+  window on `online`, which is what G-M3-4's "miss" actually was. The evidence lives in
+  `docs/tests/2026-09-11-m3-verification-audit.md` (entries 9–18: nine captured breakages, two
+  honest non-observations, one real defect, two recorded timing flakes, one reproduction
+  sequence); the exit verdict and M4 scope live in
+  `docs/releases/2026-09-12-m3-exit-report-and-m4-handoff.md`. Gates on the final tree: lint 0/0,
+  typecheck 0, unit 37 files/380, api+security 10/60, mutation exit 0, contrast 35/35,
+  Playwright 61/0 on four consecutive final runs (one earlier post-fix run flaked a timing gate —
+  recorded in audit 17, budgets unmoved), Lighthouse 100 ×4 on each. The last red this slice
+  produced was its own parity gate failing on CI's shallow checkout — entry 18, fixed so CI really
+  executes it (`f37813e`). `tsconfig.json` churned (D6) and is, as always,
+  unstaged.
 
 ---
 
@@ -502,6 +527,56 @@ Carried forward, still open:
 - **The magic-link flow is still unproven.** M0 used the password grant to obtain real JWTs cheaply. The `sub` claim is identical either way, so the RLS conclusion is unaffected, but no part of the actual sign-in path has been exercised.
 - **`node_modules` present but installed for verification only.** Installed 2026-09-08 inside WSL to confirm the build defect. Gitignored, safe to delete.
 
+
+- **G-M3-4 (60-mutation outbox drain < 5 s): MISSED through M3, and the MISS turned out to be a
+  defect, not a ceiling. Measured 2026-09-11, root-caused and fixed 2026-09-12; budget never
+  moved.** The original six-run distribution — **4693 / 5051 / 5084 / 5326 / 5334 / 9086 /
+  9660 ms**, always one `POST /api/sync` HTTP 200 — was recorded as a miss with a 15 s *hang*
+  guard, on the theory that the server applied a 60-mutation batch slowly. Half right: the batch
+  applies in well under a second (node→empty lands ~150 ms behind online→empty). The missing
+  time was the **client refusing to send**: full-jitter backoff (cap 30 s) grew windows while the
+  context was offline, and nothing cleared `nextSendAt` when the browser reported `online` — so
+  the reconnect drain, and every 4 s poll, returned null inside a window whose premise the
+  reconnect had just falsified. The bimodality I had called cold-start variance was this wait.
+  Found by the hang guard itself firing during a full-suite battery run (34 polls, same badge
+  string, 15 s — "never drains" is a different bug from "slow", and the guard told them apart).
+  Fix `9ca17cc`: `SyncEngine.notifyConnectivityRestored()` + provider wiring + a permanent unit
+  control that asserts both directions (ordinary drain inside a window still no-ops; post-`online`
+  drain sends). Post-fix, same production build, same 5 s budget: **online→empty 1643 / 1701 /
+  1711 / 1783 / 1838 ms across five runs, PASSES.** Audit entries 4, 12, 15 hold the captures.
+  What M4 still owns: this is a solo-machine number — re-measure the drain under the 50 rps load
+  test, where server-side batch application has competition.
+- **G-M3-3 passes for a reason worth saying out loud.** Cross-device p95 measured **4.42 s** against
+  a 5 s budget — but `POLL_INTERVAL_VISIBLE_MS` is 4 000 ms, so the goal is met by the poll period,
+  not by a fast propagation path. Any increase to the poll interval eats that margin completely.
+- **The latency gates are load-sensitive, and M3-10 watched that happen rather than hiding it.**
+  Two measurement-gate failures were observed across the ~ten suite executions of M3-10 on this
+  machine (post-fix run record: 60/1, then 61/0 four times consecutively), both under 4-worker
+  contention, both green on every less-contended run:
+  `a11y.spec.ts:102` (keyboard-only) hit the 30 s default test timeout while the finish-status
+  poll was still within its own 20 s allowance (baseline duration 15.1 s), and
+  `sla.spec.ts:69` (G-M3-2) printed `p95 64.8ms exceeds the 50ms goal` once in a deliberately
+  contended reproduction loop (four full runs otherwise: p95 16.8–22.1 ms). Neither budget was
+  moved. These are the same family as the `session-deltas.test.ts` 5 s-coupling fix and the
+  `hookTimeout` fix recorded above — the honest statement is that the gates measure the *box*,
+  and CI has headroom this WSL box sometimes does not: the E2E job is green on every merged M3
+  PR, most recently #85's `test` SUCCESS. If a timing gate goes red in review, re-run the suite alone before
+  believing it — that is the documented protocol now, not a rationalization: see audit entry 17.
+- **An unexplained ordering observation (not filed as a bug, because it is not substantiated).** A
+  set tick flips to `Logged`, `aria-pressed=true` is asserted, and the queue reports "All changes
+  synced" — yet a snapshot taken *after* that reconciliation can show the same row back as
+  `Not logged` in one specific flow. The click path is proven to persist (session-runner's own
+  server-side `completedSetCount` assertions pass in the same suite), so this is not "the app loses
+  sets" — it is the reconciled view disagreeing under a race the test itself can sit in. The colour
+  gate was decoupled from persistence rather than papered over; if it resurfaces, it is a
+  reconciliation question, not an accessibility one.
+- **G-M3-6 measured, not assumed: `hueCarriesState=false`.** Completion carries **no** colour signal
+  at all — word (`Logged`/`Not logged`), glyph (`✓`/`○`) and `aria-pressed` only; the button's
+  background is `rgba(0,0,0,0)` in both states. The first draft of that gate asserted "all four
+  channels must move", which is a *stronger* claim than the goal makes and was falsified by a
+  control that is in fact compliant. G-M3-6 forbids colour as the **only** carrier; it does not
+  require colour to participate.
+
 ---
 
 ## 6. Recent Architectural Decisions (ADR Log)
@@ -689,3 +764,37 @@ Carried forward, still open:
 | 2026-09-11 | Agent (DSH) | M3-05 (#62) outbox implemented | The milestone's risk centre, built as three files plus a seam: `Outbox` over an injected `OutboxStorage` (durability, per-session `seq`, idempotency-key lifetime, quota failure as a typed error), pure `reconcile` + `projectPending` (§8.2 partial application, and the refusal to drop an unconfirmed mutation), and `SyncEngine` (single in-flight drain, jittered backoff that gates *sends*, rejection → full refetch, §8.3 cadence arithmetic asserted as numbers rather than prose). 37 unit tests, no browser, no timers. Two claims withheld deliberately: `IndexedDBOutboxStorage` has never executed (the seam means the unit suite proves `Outbox`, not the adapter — #63's E2E is its first run), and `deviceId` has no owner yet, so the engine takes it as config. See §7 item 16. |
 | 2026-09-11 | Agent (DSH) | API byte test given a real timing budget | `session-deltas.test.ts`'s byte comparison failed at **5021 ms** once under a loaded box (green twice in isolation, ports free). It sits behind `next dev`'s on-demand route compile and makes two requests, so vitest's 5 s default coupled a *size* assertion to machine load. One test now carries `ROUTE_BUDGET_MS = 20_000`; **no assertion changed**; suite re-run twice at 10 files / 60 tests. Same class as #61's `hookTimeout` fix, recorded for the same reason: a flake's real cost is that people stop trusting red. |
 | 2026-09-11 | Agent (DSH) | `pk:checkpoint` after #83 (M3-08) merged | Closed the M3 ledger in §2 through M3-08 (#62 `df6db14`/PR #75, #63 `5cf3b7e`/PR #79, #64 `0278634`/PR #81, #65 `0adf233`/PR #83 — all CI green) and turned §3 from branch-awaiting-merge prose into merged fact. **Measured baseline right now, on `main`: lint 0/0, typecheck 0, `next:build` 0, unit 243 passed / 22 files, api + security 60 passed / 10 files, Playwright 37 passed (2.2m), Lighthouse accessibility 100 on authenticated `/history` and on `/sign-in`, `check-set-config.sh` and `git diff --check` clean.** Nothing is in flight; #66 (settings + legacy-import UI) is the next card and starts its own branch. Three things that must not be re-litigated by the next session: the timer seam stores absolute anchors and re-derives on read (no counter, ever — #64 killed `push-day-workout/app.js:311`); the progress screen never recomputes e1RM because its input type has no weight or reps field (`.strict()` enforces it, tests assert it); and history pages are cursor-paged because `SessionsListQuerySchema` has no date params — the `?from=`/`?to=` the #65 card assumed are **#82**, not a UI workaround. Open findings to respect: #76 (nothing produces `archived`), #77 (rejection code with no message), #78 (same-ms writes decided by a random UUID), #80 (one hardcoded fixture id set colliding under `fullyParallel`), #82. Housekeeping the owner still owes a yes/no: ~36 merged local branches, `/tmp/sync-latency.bak`, the unfiled doc-debt items D2/D3/D4/D6, and the missing `.promptkit/workflows/grill.md`. |
+| 2026-09-11 | M3-10 (partial) | #67 SLA + keyboard + colour gates. Suite 61/0. G-M3-4 MISS recorded (see §5). Two races fixed in my own assertions. 5 items open (§7 item 21). |
+| 2026-09-12 | Agent (DSH) | M3-10 finished: break-each-gate, the defect it caught, the exit record | Completed #67's five open items with evidence. Nine deliberate gate breakages fired and were restored (audit 9–14): 90 ms in the tap handler → G-M3-2 red at `p95 104.0ms`; one `page.mouse.click` in the keyboard flow → the guard threw at `runner-fixtures.ts:141` in 2.9 s; an empty `<Link>` → Lighthouse 95 + `link-name` (and the zero-width-space version scored **100** — recorded as a non-observation, Lighthouse accepts ZWSP as a name); `drain()` refusing at depth → the 15 s hang guard red with 34 identical badge polls; the alias re-point `var(--outline)` → the unit gate measured 1.47:1/1.41:1. Two injections found **holes** rather than confirmations, and both were fixed rather than filed: the colour-alone gate's differential text check passed a glyph-only build (`4ca87e5` added word-carrier assertions), and the contrast gate could not see alias re-points at all (`96b5202` made it resolve `var()` indirection, measure the alias layer — 35 pairs — and fail unmeasurable values with reasons; two permanent negative controls keep both behaviours honest). **Then the suite caught something unasked**: a full battery run breached G-M3-4's 15 s hang ceiling with the badge frozen at "60 waiting to sync" — root-caused via `pk:debug` to full-jitter backoff windows grown during the offline phase surviving reconnect (nothing cleared `nextSendAt` on `online`; the provider comment's "draining then is free" was conditional, not true), which re-explains the 4.7–9.7 s bimodality previously recorded as a server-side MISS. Fix + two-direction unit control in `9ca17cc`; **budget never moved**, and post-fix G-M3-4 measures 1643–1838 ms and prints PASSES. **And the audit trail closes on its own gate**: PR #86's first CI run went red on `legacy-parity.spec.ts` — not the app, not the assertion: the *test* assumed git history the runner's default shallow checkout does not have (`fatal: bad revision 'origin/main...HEAD'`). A parity gate that only executes on one machine had been 'green' on a half-truth. Fixed with ref resolution + a loud never-vacuous skip + `fetch-depth: 0` so CI really runs it (audit entry 18); full suite 61/0 locally after, CI re-watch is the final proof. Two load-induced timing flakes recorded with captures, budgets untouched (audit 17). Battery: preflight 0, lint 0/0, typecheck 0, unit 37/380, api 10/60, mutation 0, contrast 35/35, Playwright 61/0 on three consecutive final runs, Lighthouse 100 ×4 each. Wrote `docs/releases/2026-09-12-m3-exit-report-and-m4-handoff.md` (every deferral named with its file/measurement, including #73 sitting under a closing milestone — owner call) and refreshed PROMPTKIT §2/§3 to merged reality. `tsconfig.json` churned (D6), unstaged as ever.
+
+21. **#67 (M3-10) — CLOSED by this branch; the evidence is external to this file, as it should be.**
+    All five items done, each with a captured artifact: **(1)** legacy parity — four module dirs
+    untouched on `main...HEAD`, five keys never written (audit table; the scan caught its own
+    author's bug first, entry 3). **(2)** Lighthouse on `/` and `/session/[id]` — both added, both
+    100, all four routes re-scored on both final runs. **(3)** break-each-gate — nine deliberate
+    breakages captured and restored (audit 9–14: G-M3-2 delay → red; mouse guard throw → red;
+    Lighthouse empty-name → 95 + `link-name`; never-drain → hang guard red at :225; colour-alone →
+    the gate *missed* it and was strengthened, then red; alias re-point → red) plus two
+    zero-width-space non-observations recorded honestly because Lighthouse scores them 100
+    (entry 11). **(4)** audit record with the one reproduction sequence (entry 16). **(5)** M4
+    handoff: `docs/releases/2026-09-12-m3-exit-report-and-m4-handoff.md` names every item the
+    bullet above lists, with numbers and file references — #73's placement under a closing
+    milestone is in §3.4/§3.5 of it and needs the owner's call, not mine.
+    - **What the gate audit left in the tree permanently:** the G-M3-6 word-carrier assertions
+      (`4ca87e5`), the contrast gate's `var()` resolution + alias rows + two permanent negative
+      controls (`96b5202`), the connectivity-clears-backoff fix + its two-direction unit control
+      (`9ca17cc`). Every *injection* was removed; every *hole an injection found* was fixed
+      instead of kept as a passing test — Scenario 2 honoured, and the alias hole is closed here
+      rather than handed off, with entry 14 as its proof.
+    - **Locked by measurement, do not re-litigate:** G-M3-4's budget stayed 5 s through the whole
+      investigation and the ceiling — not the budget — is what caught the defect; a red *timing*
+      gate on this machine gets a solo re-run before anyone believes it (audit 17), and no budget
+      moves without a re-run proving the reality, not the wish, changed.
+    - **Known commands:** unchanged (reproduction sequence now in audit entry 16 verbatim).
+22. **M4 — START HERE, not here.** Read §1, the handoff doc named in item 21, and audit entry 16's
+    sequence. The branch you are on belongs to #67; M4 opens its own cards the way M3 did
+    (`pk:tasks` against a `pk:plan` spec — M4 is hardening + telemetry + decommission per the master
+    RFC, and §3 of the handoff is its raw material, including the four things whose measured
+    reality differs from their prose today: the 200 ms documented p95 miss, the process-local
+    limiter, G-M3-3's poll-interval margin, and the service-worker hole under G-M3-1's "reopen with
+    no network").

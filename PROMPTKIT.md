@@ -31,17 +31,17 @@
 - No tests, no backend, no auth
 - **Known broken**: `npm run build` exits 0 but emits **zero JavaScript**. All four `<script>` tags are classic scripts, so Vite neither transforms nor copies them and leaves the original `src` in the output HTML. Every page in `dist/` 404s on its script and is inert. Do not treat a successful `build` exit code as evidence of a working build.
 
-### Target stack (v1 — **M2 complete**: backend through M2-06 merged (`main` at `ce1c5d9`, PRs #43–#47, #51, #53); re-verified by intake scan 2026-09-11)
+### Target stack (v1 — **M3 merged except its verification slice**: M3-00…M3-09 landed 2026-09-11 as PRs #69–#85; #67 (M3-10) in review; re-verified on `feat/m3-10-verification-gate` 2026-09-12)
 
 - **Language & Runtime**: TypeScript `strict`, Node.js **≥ 20.9** (required by Next.js 16 — Node 18 is unsupported). nvm default is v24.20.0 LTS; see the shell footgun in §3.
-- **Framework**: Next.js 16 (App Router), React 19 — ADR-0001. Live: `src/app/` with placeholder home + `sign-in/`, route handlers under `src/app/api/{sessions,sessions/[id],sync}` and `src/app/auth/{signin,confirm}`, `src/middleware.ts` refreshing sessions. Runs on port 3001 alongside the legacy Vite server on 3000.
-- **Domain layer**: `lib/domain/{sessions,progression,sync}` (pure transition table, Epley e1RM, sync reducer), `lib/repositories/workout-repository.ts` (user-scoped, transactional), `lib/db/{client,with-user,auth-context}`, `lib/http/route-error.ts`, `lib/auth/`, `lib/supabase/server.ts`.
-- **Styling & Design System**: Tailwind CSS v4, shadcn/ui, tokens derived from `DESIGN.md` — ADR-0005. **Not yet added** — this lands in M3, not the M1 scaffold; `src/app/globals.css` is currently a bare reset.
-- **State & Data Fetching**: Route Handlers are what exists (`src/app/api/*`). **Server Actions, `useOptimistic` set-tap, and the IndexedDB client outbox are all unimplemented** — zero occurrences of `"use server"`, `useOptimistic`, or `indexedDB`/outbox anywhere in `src/` or `lib/` (measured 2026-09-11). They are M3/M4 work.
+- **Framework**: Next.js 16 (App Router), React 19 — ADR-0001. Live screens: `/` (dashboard), `/sign-in`, `/session/[id]` (the runner), `/history` + one-session report + per-exercise progress, `/settings` (+ import dialog). Route handlers: `src/app/api/{sessions,sessions/[id],sync,import/legacy,exercises,profile,progress}`; `src/middleware.ts` refreshes sessions. Runs on port 3001 alongside the legacy Vite server on 3000 (untouched until M4; `tests/e2e/legacy-parity.spec.ts` guards that no M3 code writes legacy keys).
+- **Domain layer**: `lib/domain/{sessions,progression,sync,import,units}` (pure transition table, Epley e1RM, sync reducer, legacy planner, weight parse/ceiling), `lib/repositories/` (user-scoped, transactional), `lib/views/` (the read-side the screens render — no screen invents its own fetch shape), `lib/db/{client,with-user,auth-context}`, `lib/http/route-error.ts`, `lib/auth/`, `lib/supabase/server.ts`.
+- **Styling & Design System** (M3-02, PR #71): Tailwind CSS v4 + shadcn primitives **vendored** under `src/components/ui/` (the CLI is not in the loop — copy-in, then the contrast gate owns them). Token layer in `src/app/globals.css`: `:root` literals from `DESIGN.md`, the shadcn alias block, and the `@theme inline` mapping. `scripts/check-contrast.ts` + `tests/unit/design/contrast.test.ts` measure every matrix pair (35 as of M3-10), **following `var()` indirection to the leaf** and failing on anything unmeasurable — the alias hole closed in `96b5202`, see audit entries 2/14.
+- **State & Data Fetching**: client sync island under `src/app/state/` (M3-05, PR #75; wired through M3-06/07): IndexedDB-backed `outbox.ts`, `sync-engine.ts` (one in-flight batch, jittered backoff, visibility-aware polling at 4 s visible / 30 s hidden, reconnect drain — `notifyConnectivityRestored()` clears offline-grown windows, `9ca17cc`), `provider.tsx`, `reconcile.ts`, `timer-controller.ts` (absolute-deadline arithmetic), `unit-display.ts`, `device-identity.ts`, `audio-cue.ts`. Set-taps are optimistic with the server as sole truth; Server Actions remain unused (deliberate, spec §3.2).
 - **Backend & Database**: Supabase — PostgreSQL **17.6** (measured on the local stack 2026-09-08; earlier drafts said 16), Supabase Auth (email magic link) — ADR-0002. **Realtime is not in use**: zero `.channel(`/realtime references in application code, and `npm run db:up` starts the stack with `-x realtime,...`, so the local stack does not even run it.
 - **ORM**: Drizzle (`db/schema/index.ts`), connecting as a non-owner `app_authenticated` role — ADR-0003. `db/seed/` loads exercise and stretch content.
 - **Validation**: Zod at every boundary (`lib/contracts/` — envelope, auth, sessions, sync, progress, exercises, legacy import)
-- **Testing**: Vitest — **31 spec files in place** (counted with `find` on 2026-09-11, not inherited from the last edit): 11 unit, 14 DB-backed integration, 6 route-handler API suites (`tests/integration/api/`). Playwright E2E is **configured but does not exist yet** — `playwright.config.ts` points at `./tests/e2e`, which is absent, and there are zero spec files; the offline-session flow arrives with M3/M4. See `docs/tasks/2026-09-11-intake-debt-index.md` D3.
+- **Testing**: Vitest — **47 `.test.ts` files** (counted with `find` 2026-09-12, not inherited from the last edit): 23 unit files (`npm test` runs 37 files / 380 tests with the stack up; the API directory is excluded because those suites boot servers), 10 route-handler API files (`test:api`: 60 tests). **Playwright E2E exists and is the merge gate for anything user-visible** — 13 spec files / 61 tests (M3-03 harness, PR #72; grown by M3-06…10), run by `npm run test:e2e` in CI against a **production** build, including `lighthouse.spec.ts` (Lighthouse is a devDependency; the CI job installs browsers `--with-deps` for exactly this). Every latency claim this repo makes is quoted from these logs — see `docs/tests/2026-09-11-m3-verification-audit.md` for what each gate prints and how it was proven capable of failing. D3 is resolved.
 
 ---
 
@@ -80,7 +80,7 @@ for any automation that might not inherit the nvm `PATH`:
 
 Verify before trusting a result: `node --version` must report ≥ 20.9. v18 means nvm was not sourced.
 
-### Target (backend merged; commands re-verified 2026-09-11 by intake scan)
+### Target (M3 merged bar #67; commands and counts re-verified 2026-09-12 on `feat/m3-10-verification-gate`)
 
 Next.js 16 lives at the repo root alongside the legacy app (`PROMPTKIT.md` §4: no
 monorepo, single `package.json`). It runs on **port 3001**, not 3000 — the legacy
@@ -93,12 +93,13 @@ each serving correctly, zero collision.
   legacy `npm run build`, which is verified zero-JS (see the note above) and stays
   that way until M4
 - **Start (production)**: `npm run next:start`
-- **Test files that exist today**: 27 spec files — 9 under `tests/unit/`, 13 under
-  `tests/integration/`, 6 under `tests/integration/api/` (plus `fixtures.ts` and
-  `test-server.ts` helpers). Unit layer measured 2026-09-11: **67 passed, 6 failed** —
-  and the 6 failures are environmental, not a regression:
-  `tests/unit/with-user.test.ts` opens a real socket to Postgres `:54322`, so it is an
-  integration test filed in the unit layer. See D2.
+- **Test files that exist today** (re-counted 2026-09-12): **47 `.test.ts` files** — 23 unit, 10
+  under `tests/integration/` (DB-backed), 10 route-handler API suites under
+  `tests/integration/api/` (plus `fixtures.ts` and `test-server.ts` helpers) — plus **13
+  `.spec.ts` files** under `tests/e2e/`. `npm test` (unit + DB integration) runs 37 files / 380
+  tests **with the stack up** and fails `ECONNREFUSED` without it. The unit-layer split includes
+  `tests/unit/with-user.test.ts`, which opens a real socket to Postgres — still an integration
+  test filed in the unit layer (D2, unchanged, listed so the failure mode stays recognizable).
 - **Unit + Integration Tests**: `npm test`
   (`vitest run --exclude 'tests/integration/api/**'`). **Requires the stack up**: run
   `npm run db:up` first, or every DB-touching file fails with `ECONNREFUSED`.
@@ -110,7 +111,7 @@ each serving correctly, zero collision.
   a route behind a skip, bring that registry and its guard back together — skips are counted and
   issue-attributed and self-expiring, never hidden by a glob. Run `npm run test:api:preflight` first:
   when results look impossible it separates a broken environment from broken code.
-  Measured 2026-09-11 **on merged `main` (`ce1c5d9`, PR #53 merged)**: **7 files / 40 passed / 0 skipped** — no declared skips remain.
+  Measured 2026-09-12 **on `feat/m3-10-verification-gate`**: **10 files / 60 passed / 0 skipped**.
   `tests/integration/api/import-legacy.test.ts` calls `seedExercises()` in `beforeAll`, and why:
   **CI has no seed step**, and the importer resolves legacy `ex1`…`ex6` against seeded routine
   content, so without that call the suite fails for a reason unrelated to the code under test. Any
@@ -122,9 +123,19 @@ each serving correctly, zero collision.
   `MIGRATION_DATABASE_URL environment variable required`, so source the env first
   (`set -a; . ./.env.local; set +a`). Verified exit 0 on 2026-09-11 — every control removed made the
   drift test go red, and restoring it made the suite pass again.
-- **E2E Tests**: `npm run test:e2e` — **no specs exist.** `playwright.config.ts` points at
-  `./tests/e2e`, which is not present. Treat E2E as absent until M3/M4, not as a gap to
-  paper over. See D3.
+- **E2E Tests**: `npm run test:e2e` (`playwright test`) — **13 spec files, 61 tests, and they are
+  the CI merge gate.** `playwright.config.ts` boots its own **production** server
+  (`npm run next:build && npm run next:start` on :3001; `reuseExistingServer: !process.env.CI`),
+  so a leftover `next dev` on 3001 silently makes "production-build" latency numbers dev-mode
+  fictions — that is what `harness.spec.ts` detects, and why a stale-server check is step zero of
+  any measurement run. Two environment traps, both in
+  `docs/tests/2026-09-11-m3-verification-audit.md` entry 16's preamble: the specs import
+  `tests/integration/api/fixtures.ts`, so a missing `.env.local` kills the *whole run at
+  collection*, and on a box without system libs Chromium needs
+  `LD_LIBRARY_PATH=/tmp/pwlibs/ext/usr/lib/x86_64-linux-gnu` (CI: `--with-deps`). Lighthouse is a
+  devDependency; `lighthouse.spec.ts` asserts **100** on four routes and prints each score line.
+  Playwright writes its summary to **stderr** — capture `> log 2>&1`. Run the suite **twice**
+  before declaring green: the 15 s hang ceilings in `sla.spec.ts` are load-sensitive by design.
 - **Typecheck**: `npm run typecheck` (runs `next typegen` first, then
   `tsc --noEmit`; **verified exit 0 on 2026-09-11**, and verified to reject implicit `any`
   — strict mode is enforced, not just declared, with `noUncheckedIndexedAccess: true`

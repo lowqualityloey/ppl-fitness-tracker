@@ -8,10 +8,7 @@ import { requireUserContext } from '../../../../lib/auth/require-user';
 import { getDb } from '../../../../lib/db/client';
 import { routeErrorResponse } from '../../../../lib/http/route-error';
 import { WorkoutRepository } from '../../../../lib/repositories/workout-repository';
-
-function currentUtcDate(): string {
-  return new Date().toISOString().slice(0, 10);
-}
+import { currentUtcDate } from '../../../../lib/domain/local-date';
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const parsed = SessionsListQuerySchema.safeParse(

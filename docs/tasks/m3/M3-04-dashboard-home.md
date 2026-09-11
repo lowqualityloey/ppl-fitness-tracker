@@ -59,3 +59,26 @@ first screen that has to beat it measurably, and the first route in the Lighthou
 npx playwright test tests/e2e/dashboard.spec.ts
 npm run lint && npm run typecheck && npm test
 ```
+
+## Shipped note (2026-09-11)
+
+Implemented on `feat/m3-04-dashboard`. Two things the card did not anticipate, both
+recorded here because the card is the specification a future reader trusts:
+
+1. **A second route came along with it.** The card's acceptance criterion "Enter on a
+   card reaches the start flow" has nowhere to arrive: `/session/[id]` did not exist,
+   and #63 (the runner) owns it. So #61 ships `/session/[id]` as a **read-only**
+   session view — no ticking, no timer, no controls, and deliberately no disabled
+   ones, because a greyed-out checkbox advertises a capability the app does not have.
+   #63 replaces that route rather than sitting beside it; the path is reserved now so
+   the card's link has a permanent target.
+2. **`interactive: false` for `/` was flipped to `true`** in
+   `tests/e2e/a11y.spec.ts`, which is the gate M3-03 (#60) left armed for this slice:
+   the dashboard must now expose a focusable control and the first Tab must land on a
+   real one.
+
+Also surfaced while building it: `schema-constraints.test.ts` inserted a system
+routine day (`owner_user_id IS NULL`, slug `test-push`) and never deleted it, so the
+dashboard rendered a fourth card called "Test Push". Fixed in the same branch — the
+leak had been present since M1 and was only visible once something displayed the
+system-day list.

@@ -13,6 +13,27 @@ describe('M1-03: Schema Constraints & Verification', () => {
   });
 
   afterAll(async () => {
+    // The fixtures below are keyed to literal `00000000-…` ids and inserted with
+    // `ON CONFLICT DO NOTHING`, so they also have to be removed unconditionally
+    // here. The per-test cleanups deleted the sessions and sets that referenced the
+    // `routine_days` row but never the row itself, which left a **system** day
+    // (`owner_user_id IS NULL`, slug `test-push`, name "Test Push") in the shared
+    // development database after every run of this file. M3-04's dashboard was the
+    // first reader of system routine days and immediately grew a fourth card called
+    // "Test Push": the leak had been invisible until something displayed what it
+    // left behind. Deleting in `afterAll` rather than per-test also covers the path
+    // where a test throws before reaching its own cleanup.
+    await client.query(
+      `DELETE FROM session_sets WHERE session_id IN
+         (SELECT id FROM workout_sessions WHERE routine_day_id = $1::uuid)`,
+      ['00000000-0000-0000-0000-000000000002'],
+    );
+    await client.query('DELETE FROM workout_sessions WHERE routine_day_id = $1::uuid', [
+      '00000000-0000-0000-0000-000000000002',
+    ]);
+    await client.query('DELETE FROM routine_days WHERE id = $1::uuid', [
+      '00000000-0000-0000-0000-000000000002',
+    ]);
     await client.end();
   });
 

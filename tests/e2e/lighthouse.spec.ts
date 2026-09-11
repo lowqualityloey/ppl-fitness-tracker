@@ -2,6 +2,8 @@ import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { chromium, expect, test } from '@playwright/test';
+import { createTestSession } from '../integration/api/fixtures';
+import { openHistoryDb, seedSession } from './history-fixtures';
 
 /**
  * M3-03 (#60), task item 3: make the Lighthouse accessibility score **measurable**
@@ -29,7 +31,17 @@ interface LighthouseReport {
   runtimeError?: { message?: string };
 }
 
-function runLighthouse(url: string, profileDir: string): LighthouseReport {
+function runLighthouse(
+  url: string,
+  profileDir: string,
+  /**
+   * A `Cookie` header for an authenticated audit (#65). Lighthouse drives its own browser instance,
+   * so it cannot borrow a Playwright context's jar; `--extra-headers` is the supported way in, and
+   * the value is the real chunked `sb-…-auth-token` pair the app wrote — the same bytes
+   * `tests/e2e/auth.ts` installs into a browser.
+   */
+  cookie?: string,
+): LighthouseReport {
   const run = spawnSync(
     'npx',
     [
@@ -37,6 +49,7 @@ function runLighthouse(url: string, profileDir: string): LighthouseReport {
       'lighthouse',
       url,
       '--only-categories=accessibility',
+      ...(cookie ? [`--extra-headers=${JSON.stringify({ Cookie: cookie })}`] : []),
       '--output=json',
       '--quiet',
       // An explicit profile directory, because leaving it to chrome-launcher is what
@@ -156,6 +169,59 @@ test.describe('Lighthouse accessibility', () => {
     ).toBeGreaterThanOrEqual(90);
     if (failedAudits.length > 0) {
       console.info(`[measurement] lighthouse audits below 0.9 on /: ${failedAudits.join(', ')}`);
+    }
+  });
+
+  /**
+   * The authenticated audit #60 deferred, now that there is a screen worth scoring.
+   *
+   * `/history` is the first route where a 100 means something: it renders a list built from real
+   * rows, with headings, links, badges, and a pagination control — markup that can be wrong in the
+   * ways axe does not fully cover (an `aria-hidden` container with a focusable child, a heading
+   * level that skips, a link whose accessible name is its href). #65's task 4 asks for exactly this
+   * number, and the harness's own note said to build it "not faked by pointing the gate at a page
+   * that happens to answer", so the request carries a real session cookie and the page is seeded
+   * with real history rather than an empty state.
+   */
+  test('scores 100 on the authenticated history screen', async () => {
+    const auth = await createTestSession('lh-history');
+    const db = await openHistoryDb();
+    try {
+      for (const localDate of ['2026-09-08', '2026-09-09', '2026-09-10']) {
+        await seedSession(db, { userId: auth.userId, localDate });
+      }
+
+      const profileDir = mkdtempSync(`${tmpdir()}/lh-profile-`);
+      let report: LighthouseReport;
+      try {
+        report = runLighthouse(
+          'http://localhost:3001/history',
+          profileDir,
+          auth.cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join('; '),
+        );
+      } finally {
+        rmSync(profileDir, { recursive: true, force: true });
+      }
+
+      expect(report.runtimeError?.message ?? '', 'lighthouse runtime error').toBe('');
+      const score = Math.round((report.categories?.accessibility?.score ?? -1) * 100);
+      const failedAudits = Object.entries(report.audits ?? {})
+        .filter(([, audit]) => audit.score !== null && audit.score !== undefined && audit.score < 0.9)
+        .map(([id]) => id);
+
+      console.info(`[measurement] lighthouse accessibility score for /history: ${score}`);
+      test.info().annotations.push({
+        type: 'measurement',
+        description: `lighthouse accessibility score for /history (authenticated, 3 seeded sessions): ${score}`,
+      });
+
+      // Asserted at 100, not floored: this is the route the card names, it has real content to get
+      // wrong, and a floor here would be the placeholder-era reasoning carried over into a screen
+      // that has outgrown it. If a future regression lands, `failedAudits` says which one.
+      expect(score, `audits below 0.9: ${failedAudits.join(', ') || 'none'}`).toBe(100);
+    } finally {
+      await db.end();
+      await auth.cleanup();
     }
   });
 });

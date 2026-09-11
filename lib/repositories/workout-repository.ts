@@ -201,6 +201,27 @@ export class WorkoutRepository {
   }
 
   /**
+   * M3-01 (#58): the `since` version token, read without loading the session
+   * graph. The delta contract (lib/contracts/sessions.ts) compares `since` to
+   * `workout_sessions.server_seq` and nothing else, so this returns exactly
+   * that number — null only when the session does not exist for this user,
+   * which the route answers 404 regardless of `since`.
+   */
+  async getSessionServerSeq(userId: string, sessionId: string): Promise<number | null> {
+    return this.forUser(userId, async (tx) => {
+      const [session] = await tx
+        .select({ serverSeq: workoutSessions.serverSeq })
+        .from(workoutSessions)
+        .where(and(
+          eq(workoutSessions.id, sessionId),
+          eq(workoutSessions.userId, userId),
+        ))
+        .limit(1);
+      return session ? session.serverSeq : null;
+    });
+  }
+
+  /**
    * M3-00 (#57): "what did I lift last time" for this routine day, resolved by
    * one indexed read instead of a client downloading its history.
    *

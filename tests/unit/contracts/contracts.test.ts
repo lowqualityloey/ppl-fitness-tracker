@@ -29,6 +29,8 @@ import {
   SessionDetailParamsSchema,
   SessionDetailQuerySchema,
   SessionDetailResponseSchema,
+  SessionNotModifiedResponseSchema,
+  SessionNotModifiedSchema,
   SessionPrefillQuerySchema,
   SessionPrefillResponseSchema,
   SessionStartRequestSchema,
@@ -337,6 +339,34 @@ describe('M3-00 prefill contracts', () => {
     expect(PrefillDataSchema.safeParse({ entries: [], sourceSessionId: null, sourceLocalDate: null }).success).toBe(true);
     expect(PrefillDataSchema.safeParse({ ...data, unexpected: 1 }).success).toBe(false);
     expect(SessionPrefillResponseSchema.safeParse({ ok: true, data }).success).toBe(true);
+  });
+});
+
+describe('M3-01 session detail delta contracts', () => {
+  it('accepts since as a numeric string or number and normalizes both to a number', () => {
+    expect(SessionDetailQuerySchema.safeParse({}).success).toBe(true);
+    expect(SessionDetailQuerySchema.parse({ since: '12' })).toEqual({ since: 12 });
+    expect(SessionDetailQuerySchema.parse({ since: 0 })).toEqual({ since: 0 });
+    expect(SessionDetailQuerySchema.safeParse({ since: 'not-a-number' }).success).toBe(false);
+    expect(SessionDetailQuerySchema.safeParse({ since: '-1' }).success).toBe(false);
+    expect(SessionDetailQuerySchema.safeParse({ since: '1.5' }).success).toBe(false);
+    expect(SessionDetailQuerySchema.safeParse({ updatedAfter: '2026-09-08' }).success).toBe(false);
+  });
+
+  it('answers unchanged with the seq only — a session body cannot be attached', () => {
+    expect(SessionNotModifiedSchema.safeParse({ notModified: true, serverSeq: 7 }).success).toBe(true);
+    expect(SessionNotModifiedSchema.parse({ notModified: true, serverSeq: '7' })).toEqual({
+      notModified: true, serverSeq: 7,
+    });
+    expect(SessionNotModifiedSchema.safeParse({ notModified: false, serverSeq: 7 }).success).toBe(false);
+    expect(SessionNotModifiedSchema.safeParse({ notModified: true }).success).toBe(false);
+    // The whole point of "a poll costs almost nothing": extra payload keys are rejected.
+    expect(SessionNotModifiedSchema.safeParse({
+      notModified: true, serverSeq: 7, session: { any: 'state' },
+    }).success).toBe(false);
+    expect(SessionNotModifiedResponseSchema.safeParse({
+      ok: true, data: { notModified: true, serverSeq: 7 },
+    }).success).toBe(true);
   });
 });
 

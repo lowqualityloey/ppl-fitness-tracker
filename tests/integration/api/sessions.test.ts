@@ -131,7 +131,11 @@ describe('M2-01: /api/sessions', () => {
     await expectAppError(create, 401, 'UNAUTHENTICATED');
   });
 
-  it('returns full session state when since is accepted for compatibility', async () => {
+  it('returns the full session when since is ahead of the server seq (M3-01 rule)', async () => {
+    // The fixture session sits at server_seq = 0, so ?since=10 is a client
+    // claiming to be ahead. Under M2 this assertion passed because `since` was
+    // discarded; under M3-01 it passes because a ahead-of-server client is
+    // corrected with full state, never a "no change" answer.
     const response = await apiRequest(`/api/sessions/${ids.session}?since=10`, { headers: authHeaders(owner) });
     expect(response.status).toBe(200);
     const body = await responseBody(response);

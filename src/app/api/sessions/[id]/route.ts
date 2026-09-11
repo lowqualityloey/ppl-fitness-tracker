@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   SessionDetailParamsSchema,
   SessionDetailQuerySchema,
+  type SessionNotModified,
 } from '../../../../../lib/contracts/sessions';
 import { appSuccess, notFoundError } from '../../../../../lib/contracts/envelope';
 import { requireUserContext } from '../../../../../lib/auth/require-user';
@@ -11,6 +12,27 @@ import { WorkoutRepository } from '../../../../../lib/repositories/workout-repos
 
 type RouteContext = { params: Promise<{ id: string }> };
 
+const NO_STORE = { 'Cache-Control': 'no-store' };
+
+/**
+ * M2-01 (#21) shipped the read; M3-01 (#58) made `since` real. Between them
+ * this file *discarded* the parsed value behind a comment claiming deltas
+ * belonged to M2-04 — a claim no code ever honored (contract-graph.test.ts
+ * now forbids that discard and that comment from coming back). The semantics
+ * live in `SessionDetailQuerySchema` (lib/contracts/sessions.ts), where a
+ * client generating from the contract cannot miss them:
+ *
+ * - `since === server_seq` → `{ notModified: true, serverSeq }`, **no session
+ *   body** — the poll the M3-05 <5 s SLA depends on.
+ * - `since < server_seq` or `since > server_seq` → the full session. A client
+ *   claiming to be ahead of the server gets corrected by data, not by an
+ *   error it might retry into oblivion.
+ *
+ * The seq is read **before** the session graph: a short-circuited poll costs
+ * one indexed single-column lookup, so the cost has to actually stop there.
+ * The token is `workout_sessions.server_seq` — never `updated_at`, never a
+ * client clock.
+ */
 export async function GET(
   request: NextRequest,
   { params }: RouteContext,
@@ -25,12 +47,22 @@ export async function GET(
   try {
     const context = await requireUserContext();
     const repository = new WorkoutRepository(getDb(), context.claims);
-    const data = await repository.findSession(context.userId, parsedParams.data.id);
-    if (!data) return appErrorResponse(notFoundError());
+    const sessionId = parsedParams.data.id;
+    const { since } = parsedQuery.data;
 
-    // M2-01 accepts since for contract compatibility. M2-04 owns true deltas.
-    void parsedQuery.data.since;
-    return NextResponse.json(appSuccess(data), { status: 200 });
+    if (since !== undefined) {
+      const serverSeq = await repository.getSessionServerSeq(context.userId, sessionId);
+      if (serverSeq === null) return appErrorResponse(notFoundError(), NO_STORE);
+
+      if (since === serverSeq) {
+        const data: SessionNotModified = { notModified: true, serverSeq };
+        return NextResponse.json(appSuccess(data), { status: 200, headers: NO_STORE });
+      }
+    }
+
+    const data = await repository.findSession(context.userId, sessionId);
+    if (!data) return appErrorResponse(notFoundError(), NO_STORE);
+    return NextResponse.json(appSuccess(data), { status: 200, headers: NO_STORE });
   } catch (error) {
     return routeErrorResponse(error);
   }

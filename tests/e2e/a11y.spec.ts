@@ -8,7 +8,6 @@ import {
   startPushDayByKeyboard,
   firstTick,
   startPushDay,
-  waitForSynced,
   warmUpAndStart,
 } from './runner-fixtures';
 

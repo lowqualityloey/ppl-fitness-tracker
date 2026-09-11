@@ -244,7 +244,7 @@ test.describe('M3 latency goals (production build)', () => {
         `[G-M3-4] ${verdict} — online→empty=${drainMs.toFixed(0)}ms ` +
           `node→empty=${wallMs.toFixed(0)}ms superseded=${refused} ` +
           `/api/sync POSTs=${syncPosts.length} [${syncPosts.join(',')}] (one batch: MAX_BATCH=200)`,
-        
+
       );
       // The regression guard, not the SLA — see G_M3_4_REGRESSION_CEILING_MS. A hang, a batch that
       // never forms, or a drain waiting on the 4 s poll instead of the `online` event would all

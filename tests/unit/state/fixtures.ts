@@ -64,7 +64,7 @@ export function serverView(): SessionView {
           orderIndex: 0,
           targetSets: 3,
           targetReps: null,
-          exercise: { id: EXERCISE, name: 'Bench Press', kind: 'strength' },
+          exercise: { id: EXERCISE, slug: 'bench-press', name: 'Bench Press', kind: 'strength' },
         },
         {
           id: '55555555-5555-5555-8555-555555555555',
@@ -72,7 +72,7 @@ export function serverView(): SessionView {
           orderIndex: 1,
           targetSets: 2,
           targetReps: null,
-          exercise: { id: STRETCH_EXERCISE, name: 'Overhead Stretch', kind: 'stretch' },
+          exercise: { id: STRETCH_EXERCISE, slug: 'overhead-stretch', name: 'Overhead Stretch', kind: 'stretch' },
         },
       ],
     },

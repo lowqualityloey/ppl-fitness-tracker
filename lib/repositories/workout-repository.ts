@@ -4,7 +4,7 @@ import { assertUserContext } from '../db/auth-context';
 import { withUser } from '../db/with-user';
 import type { Db, Tx, JwtClaims } from '../db/with-user';
 import type { SyncMutation, SyncRequest } from '../contracts/sync';
-import type { PrefillData } from '../contracts/sessions';
+import type { PrefillData, SessionSummary } from '../contracts/sessions';
 import { SyncEngine, ZERO_UUID } from '../domain/sync/sync-engine';
 import type {
   SyncEntityType,
@@ -156,6 +156,20 @@ function orderPlan(plan: RoutineExercisePlan[]): RoutineExercisePlan[] {
   });
 }
 
+/**
+ * M3-04 (#61): one day's state for the dashboard. Deliberately narrow — it answers
+ * "has this day been started, and how far did it get", nothing else. The full
+ * session graph stays behind `findSession`, which the runner owns.
+ */
+export interface DaySessionSnapshot {
+  routineDayId: string;
+  sessionId: string;
+  status: SessionSummary['status'];
+  phase: SessionSummary['phase'];
+  setsCompleted: number;
+  setsTotal: number;
+}
+
 export class WorkoutRepository {
   constructor(
     private readonly db: Db,
@@ -207,6 +221,68 @@ export class WorkoutRepository {
    * that number — null only when the session does not exist for this user,
    * which the route answers 404 regardless of `since`.
    */
+  /**
+   * M3-04 (#61): every session this user has on one local date, with its set
+   * counts — the three numbers a day card needs to say Start / Resume / Done.
+   *
+   * `workout_sessions` is unique on (user_id, routine_day_id, local_date), so a day
+   * yields at most one row here. The return type is still a list, because that
+   * uniqueness is a fact about today's schema and not a promise about tomorrow's: a
+   * caller written against "at most one" would degrade silently into showing the
+   * wrong session if the constraint ever moved, whereas a list makes the last-write
+   * decision visible in the view layer where it can be asserted.
+   *
+   * Counts are aggregated in SQL rather than by loading `session_sets` rows. The
+   * card displays two integers; shipping the rows to compute them client-side would
+   * be the same mistake as counting routine exercises in the browser, and it would
+   * also grow with workout length instead of staying constant.
+   */
+  async getSessionsOnDate(
+    userId: string,
+    localDate: string,
+  ): Promise<DaySessionSnapshot[]> {
+    return this.forUser(userId, async (tx) => {
+      const sessions = await tx
+        .select({
+          routineDayId: workoutSessions.routineDayId,
+          sessionId: workoutSessions.id,
+          status: workoutSessions.status,
+          phase: workoutSessions.phase,
+        })
+        .from(workoutSessions)
+        .where(and(
+          eq(workoutSessions.userId, userId),
+          eq(workoutSessions.localDate, localDate),
+        ))
+        .orderBy(asc(workoutSessions.startedAt));
+
+      if (sessions.length === 0) return [];
+
+      const counts = await tx
+        .select({
+          sessionId: sessionSets.sessionId,
+          setsCompleted: sql<number>`count(*) filter (where ${sessionSets.isCompleted})::int`,
+          setsTotal: sql<number>`count(*)::int`,
+        })
+        .from(sessionSets)
+        .where(and(
+          eq(sessionSets.userId, userId),
+          inArray(sessionSets.sessionId, sessions.map((row) => row.sessionId)),
+        ))
+        .groupBy(sessionSets.sessionId);
+
+      const bySession = new Map(counts.map((row) => [row.sessionId, row]));
+      return sessions.map((row) => ({
+        routineDayId: row.routineDayId,
+        sessionId: row.sessionId,
+        status: row.status,
+        phase: row.phase,
+        setsCompleted: bySession.get(row.sessionId)?.setsCompleted ?? 0,
+        setsTotal: bySession.get(row.sessionId)?.setsTotal ?? 0,
+      }));
+    });
+  }
+
   async getSessionServerSeq(userId: string, sessionId: string): Promise<number | null> {
     return this.forUser(userId, async (tx) => {
       const [session] = await tx

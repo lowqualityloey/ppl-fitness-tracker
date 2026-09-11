@@ -70,6 +70,27 @@ function verdict(result: { p95: number }, summary: string): string {
 }
 
 test.describe('production-mode measurements — POST /api/sync', () => {
+  /*
+   * One worker for this file, for two reasons that are the same reason.
+   *
+   * `tests/integration/api/fixtures.ts` exports a **fixed** id set — `session: 2222…`,
+   * `exercise: 3333…` — and `seedSessionFixtures` creates rows for exactly those ids, then
+   * deletes them in `cleanup()`. This project's Playwright config runs `fullyParallel: true`, so
+   * the file's two tests can land in two processes: one is measuring its 50 writes while the
+   * other's cleanup deletes the session underneath it. #64 saw exactly that as
+   * `request 18: status=404 … "code":"NOT_FOUND"`, with the spec passing in isolation and on a
+   * quieter re-run — and a shared row can also mean a shared lock, which is the same collision
+   * wearing a different mask.
+   *
+   * The second reason is the reason the file exists: these are *latency measurements*. Another
+   * worker's 50 sequential writes against the same local server is load, and load is the thing
+   * this spec is trying to characterise, not introduce. Serialising the file is a scheduling fact
+   * about a benchmark, not a weakened assertion: every threshold and every expectation below is
+   * unchanged. The underlying fixture hazard is filed separately.
+   */
+  // `serial` is Playwright's one-worker mode for a file: its tests run in sequence, in a single
+  // process. (`singleWorker` is not a member of `configure`'s `mode` union in 1.63.)
+  test.describe.configure({ mode: 'serial' });
   test.setTimeout(180_000);
 
   test(`p95 over ${REQUESTS} single-mutation batches, against the ${documentedBudgetMs} ms documented budget`, async ({

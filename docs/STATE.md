@@ -272,7 +272,10 @@ build give **p50 188.3 ms / p95 272.8 ms / max 609.9 ms**, against a 30-request 
 `GET /api/exercises` baseline on the same server of p50 8.7 / p95 16.9 / max 24.2. That ~16x p95 gap
 attributes the cost to the authenticated write path (two `getUser()` round trips plus the per-user
 transaction), not to Next's prod server or to Postgres being slow that day. The enforced 800 ms ceiling
-holds and the miss is printed on every E2E run, so it cannot be quietly forgotten; **the 50 rps condition
+holds and the miss is printed on every E2E run, so it cannot be quietly forgotten. **PR #72's CI run
+reproduced it independently**: p50 117.8 ms / p95 222.0 ms against a no-auth p95 of 7.2 ms on a clean GitHub
+runner (vs 272.8 / 16.9 here) — so the miss is not an artifact of this dev box, and the authenticated-path
+attribution holds on both machines (a ~19x p95 gap on CI, ~16x locally). The 50 rps condition
 §3 actually specifies is still untested** — that is M4's load test, and nothing here satisfies it),
 and the **rate limiters are process-local**, so N instances multiply the budget by N. A production-mode
 measurement (`next:build` + `next:start`) is the natural M4/telemetry task. See the remediation list

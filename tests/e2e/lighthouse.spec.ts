@@ -84,11 +84,33 @@ function runLighthouse(url: string, profileDir: string): LighthouseReport {
 
 test.describe('Lighthouse accessibility', () => {
   test.setTimeout(240_000);
+  /**
+   * Paths an unauthenticated visit to `/` may resolve to. `#/` is here because it is
+   * the intent of #61's screen for a signed-in visitor and belongs in this list the
+   * moment an authenticated audit exists — which needs `--extra-headers` with a real
+   * session and is deliberately left to #67, not faked by pointing the gate at a
+   * page that happens to answer.
+   */
+  const ENTRY_ALLOWLIST = ['/', '/sign-in'];
 
-  test('produces an accessibility score for /', async ({ request }) => {
-    // Warm the server: `webServer` has already built and started it, but the first
-    // request pays for route compilation of nothing (prod) and TLS-free init paths.
-    await request.get('/');
+  test('produces an accessibility score for the unauthenticated entry point', async ({
+    page,
+  }) => {
+    // Resolve where the entry point actually takes an unauthenticated visitor, and
+    // audit *that*, under that label.
+    //
+    // This spec was written when `/` was a page. M3-04 (#61) made `/` a per-user
+    // screen, so an unauthenticated request is now served a redirect to `/sign-in`
+    // and Lighthouse audited the sign-in form while the test line said "score for
+    // /" — a true number attached to the wrong subject. Asserting the resolved
+    // pathname against a small allow-list is what keeps that from recurring: if the
+    // entry point ever moves again, this spec says so in its own words instead of
+    // quietly changing what it measures.
+    await page.goto('http://localhost:3001/');
+    const target = page.url();
+    const pathname = new URL(target).pathname;
+    expect(ENTRY_ALLOWLIST, `unauthenticated / resolved to ${pathname}, which this spec has not been ` +
+      `reviewed against; update the allow-list deliberately, with the measurement re-recorded`).toContain(pathname);
 
     const profileDir = mkdtempSync(`${tmpdir()}/lh-profile-`);
     const repoRoot = new URL('../../', import.meta.url).pathname;
@@ -96,7 +118,7 @@ test.describe('Lighthouse accessibility', () => {
 
     let report: LighthouseReport;
     try {
-      report = runLighthouse('http://localhost:3001/', profileDir);
+      report = runLighthouse(target, profileDir);
     } finally {
       rmSync(profileDir, { recursive: true, force: true });
       // Tripwire for the pollution described above: if anything appears at the repo
@@ -108,23 +130,30 @@ test.describe('Lighthouse accessibility', () => {
     expect(report.runtimeError?.message ?? '', 'lighthouse runtime error').toBe('');
 
     const score = Math.round((report.categories?.accessibility?.score ?? -1) * 100);
-    console.info(`[measurement] lighthouse accessibility score for /: ${score}`);
+    console.info(
+      `[measurement] lighthouse accessibility score for ${pathname} (reached from /): ${score}`,
+    );
     const failedAudits = Object.entries(report.audits ?? {})
       .filter(([, audit]) => audit.score !== null && audit.score !== undefined && audit.score < 0.9)
       .map(([id]) => id);
 
     test.info().annotations.push({
       type: 'measurement',
-      description: `lighthouse accessibility score for /: ${score}; audits below 0.9: ${failedAudits.join(', ') || 'none'}`,
+      description: `lighthouse accessibility score for ${pathname} (reached from /): ${score}; audits below 0.9: ${failedAudits.join(', ') || 'none'}`,
     });
 
-    // Floor, not target. Measured **100** on 2026-09-11 for the placeholder `/`.
+    // Floor, not target. Measured **100** on 2026-09-11 — for `/sign-in`, reached
+    // from `/` (the score was recorded against the placeholder `/` when this gate was
+    // written, and the same value reproduced after #61 made `/` per-user).
     // Demanding 100 here would assert nothing, because there is almost no markup on
     // this page to get wrong — the card for this slice says 100 is M3-04's problem
     // and this slice only has to make the question answerable. 90 is set below the
     // measurement on purpose: it fails if a real regression arrives, without
     // pretending to be the milestone's exit criterion. M3-10 raises it.
-    expect(score, `lighthouse accessibility score for / (measured 100 on 2026-09-11)`).toBeGreaterThanOrEqual(90);
+    expect(
+      score,
+      `lighthouse accessibility score for ${pathname} (measured 100 on 2026-09-11)`,
+    ).toBeGreaterThanOrEqual(90);
     if (failedAudits.length > 0) {
       console.info(`[measurement] lighthouse audits below 0.9 on /: ${failedAudits.join(', ')}`);
     }

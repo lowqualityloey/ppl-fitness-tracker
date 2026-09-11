@@ -307,6 +307,16 @@ The narrower claim that survived — "non-interactive shells resolve `/usr/bin/n
 
 - **`SessionStateSchema` is `z.object({}).passthrough()`, so the session graph has never been contract-validated.** It is an M2-01 placeholder that was never closed: `GET /api/sessions/[id]` checks the envelope and every response built from it passes regardless of content, and `z.infer` of it is `Record<string, unknown>` — which means a screen typed against `SessionState` compiles while reading `undefined` weights. M3-04 worked around it with a view-boundary schema (`lib/views/session-view.ts`) that parses what the session screen actually renders and throws on a mismatch; the workaround is deliberately narrow and should **shrink to a re-export** once the contract describes the graph. Tracked as issue #73.
 
+- **The Lighthouse gate audits `/sign-in`, not the dashboard, and says so.** `#60`
+  recorded a score of 100 "for `/`" when `/` was a page. Since `#61` made `/` a per-user
+  screen, an unauthenticated audit is served a redirect, so the spec now resolves the
+  entry point, asserts it against a small allow-list, and labels the measurement with
+  the pathname it audited (`score for /sign-in (reached from /): 100`). An
+  **authenticated** audit needs a session attached to Lighthouse's request
+  (`--extra-headers`, fed from the same cookie jar `tests/e2e/auth.ts` uses); that is
+  #67's work, and until it exists the milestone must not claim a Lighthouse number for
+  the screens users actually train on.
+
 ### Open Questions
 
 - **`--accent-legs` has no assigned colour.** `DESIGN.md` offers no third accent that can be legitimately spent; `tertiary #667085` is reserved for disabled states, so reusing it would make disabled controls read as Legs day. One new hue must be added to `DESIGN.md` as a documented extension. *Blocks M3, not M1.*

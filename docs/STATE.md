@@ -6,10 +6,10 @@
 - **Current Milestone / Epic**: **M2: Core Domain Engine — COMPLETE.** M2-00 → M2-06 all merged to `main` (PRs #43–#47, #51, #53; issue #42 closed). The milestone's last slice, M2-06 route hardening, merged as **PR #53 (`ce1c5d9`)**. **M3: Presentation** is in flight: RFC grilled and decomposed (2026-09-11) into `docs/tasks/m3/`, published as milestone #3, issues #57–#67. The first slice (#57 profile + prefill, #58 real `since` deltas) merged as **PR #69 (`8d2b696`)** with CI green; #59 (M3-02, design tokens) is next.
 - **Overall Status**: ACTIVE <!-- Options: ACTIVE | PAUSED | STABILIZING | RELEASE_CANDIDATE -->
 - **Target Release**: v1.0.0, no date committed
-- **Current Working Branch**: `feat/m3-09-settings-import` — **PR #85 open, awaiting merge** (M3-09 / #66: `UnitDisplay`, the settings screen, and the legacy-import dialog). Base is the post-#83 `main`; do not branch from `main` for anything else in M3 until #85 lands.
+- **Current Working Branch**: `feat/m3-10-verification-gate` — **#67 (M3-10) IN PROGRESS, NOT PR-READY**, nothing to merge. Commits `9591fd4` + `f8a7242` pushed on top of post-#85 `main`. Five items remain (see §7 item 21). Do not open a PR until the break-each-gate audit has evidence.
 
 > **Do not pin the current `main` SHA in this field.** It was tried three times and went stale three times, because the merge commit that lands the correction advances `main` past the value being recorded. Describe the state, not the hash. Run `git log --oneline -1` if you need the exact commit.
-- **Last Updated**: 2026-09-11 (`UnitDisplay` + settings + import dialog implemented as #66; PR #85 opened with 50 Playwright / 254 unit / 60 integration tests measured green. Two findings filed or pinned rather than absorbed: #84 and the sign-out body requirement.)
+- **Last Updated**: 2026-09-11 (**M3-10 partial**: G-M3-2/3/4 measured on a production build, keyboard-only completion proven server-side, G-M3-6 colour audit — full suite 61 passed / 0 failed. **G-M3-4 is a recorded MISS** (4.7–9.7 s vs a 5 s budget, always one POST): budget kept, not relabelled. #85 merged earlier today as PR #85.)
 - **Gate status**: #48 (D5 route-handler coverage + D1 lint enforcement) and #49 (this intake
   record) are **merged to `main`**, and `main`'s own Actions runs are green (4m32s and 4m40s).
   `npm run lint` exits 0 there. Consequence for the text below: the gates are no longer pending
@@ -719,3 +719,40 @@ Carried forward, still open:
 | 2026-09-11 | Agent (DSH) | M3-05 (#62) outbox implemented | The milestone's risk centre, built as three files plus a seam: `Outbox` over an injected `OutboxStorage` (durability, per-session `seq`, idempotency-key lifetime, quota failure as a typed error), pure `reconcile` + `projectPending` (§8.2 partial application, and the refusal to drop an unconfirmed mutation), and `SyncEngine` (single in-flight drain, jittered backoff that gates *sends*, rejection → full refetch, §8.3 cadence arithmetic asserted as numbers rather than prose). 37 unit tests, no browser, no timers. Two claims withheld deliberately: `IndexedDBOutboxStorage` has never executed (the seam means the unit suite proves `Outbox`, not the adapter — #63's E2E is its first run), and `deviceId` has no owner yet, so the engine takes it as config. See §7 item 16. |
 | 2026-09-11 | Agent (DSH) | API byte test given a real timing budget | `session-deltas.test.ts`'s byte comparison failed at **5021 ms** once under a loaded box (green twice in isolation, ports free). It sits behind `next dev`'s on-demand route compile and makes two requests, so vitest's 5 s default coupled a *size* assertion to machine load. One test now carries `ROUTE_BUDGET_MS = 20_000`; **no assertion changed**; suite re-run twice at 10 files / 60 tests. Same class as #61's `hookTimeout` fix, recorded for the same reason: a flake's real cost is that people stop trusting red. |
 | 2026-09-11 | Agent (DSH) | `pk:checkpoint` after #83 (M3-08) merged | Closed the M3 ledger in §2 through M3-08 (#62 `df6db14`/PR #75, #63 `5cf3b7e`/PR #79, #64 `0278634`/PR #81, #65 `0adf233`/PR #83 — all CI green) and turned §3 from branch-awaiting-merge prose into merged fact. **Measured baseline right now, on `main`: lint 0/0, typecheck 0, `next:build` 0, unit 243 passed / 22 files, api + security 60 passed / 10 files, Playwright 37 passed (2.2m), Lighthouse accessibility 100 on authenticated `/history` and on `/sign-in`, `check-set-config.sh` and `git diff --check` clean.** Nothing is in flight; #66 (settings + legacy-import UI) is the next card and starts its own branch. Three things that must not be re-litigated by the next session: the timer seam stores absolute anchors and re-derives on read (no counter, ever — #64 killed `push-day-workout/app.js:311`); the progress screen never recomputes e1RM because its input type has no weight or reps field (`.strict()` enforces it, tests assert it); and history pages are cursor-paged because `SessionsListQuerySchema` has no date params — the `?from=`/`?to=` the #65 card assumed are **#82**, not a UI workaround. Open findings to respect: #76 (nothing produces `archived`), #77 (rejection code with no message), #78 (same-ms writes decided by a random UUID), #80 (one hardcoded fixture id set colliding under `fullyParallel`), #82. Housekeeping the owner still owes a yes/no: ~36 merged local branches, `/tmp/sync-latency.bak`, the unfiled doc-debt items D2/D3/D4/D6, and the missing `.promptkit/workflows/grill.md`. |
+| 2026-09-11 | M3-10 (partial) | #67 SLA + keyboard + colour gates. Suite 61/0. G-M3-4 MISS recorded (see §5). Two races fixed in my own assertions. 5 items open (§7 item 21). |
+
+21. **#67 (M3-10) — RESUME HERE. Five items open, and the card is the exit gate for the milestone.**
+    - **Do not open a PR until all five are done.** A verification slice that ships unverified is the
+      one failure mode this card exists to prevent.
+    - 1. **Legacy parity**: the four module directories (`push-day-workout`, `pull-day-workout`,
+      `legs-day-workout`, `ppl-workout-dashboard`) are untouched — assert via
+      `git diff --name-only main...HEAD -- <dirs>` being empty; and the **five** legacy localStorage
+      keys are never *written* by the new app (list already derived into
+      `runner-fixtures.ts` → `LEGACY_LOCALSTORAGE_KEYS`: the importer's four plus `guest_mode`, which
+      came from grepping the legacy JS — it belongs in the list because the invariant is about the
+      namespace, not about what the importer reads).
+    - 2. **Lighthouse on `/` and `/session/[id]`** (only `/history` + `/sign-in` score today).
+      Reuse `runLighthouse(url, profileDir, cookie)` in `lighthouse.spec.ts`; `/session/[id]` needs a
+      live session, so build one via `runner-fixtures`.
+    - 3. **Task 2 — break each gate on purpose and capture the red output** (standing protocol: a
+      control that never fired is not a disarmed one). Needs several suite runs. Break at minimum:
+      G-M3-2 (inject a delay into the tick handler), G-M3-6 (remove the `Logged` word so only the
+      glyph remains — note colour is already absent, so a glyph-only control is the real violation),
+      the keyboard guard (add one `.click()` and watch `armNoMouseGuard` throw), the drain hang guard
+      (never-drain), and the axe gate.
+    - 4. **`docs/tests/` audit record** holding #3's evidence + the reproducibility sequence (Scenario
+      1 demands "reproducible from one documented command sequence").
+    - 5. **M4 handoff** = hardening + decommission, plus everything M3 explicitly did not do: the
+      G-M3-4 miss, the 4 s poll interval eating G-M3-3's margin, no `archived` path (#76), #77/#78/
+      #80/#82/#84, per-stretch countdowns, timer persistence, volume/streak analytics, body
+      measurements, export, telemetry/Sentry/50 rps load, and `userStats`.
+    - **Locked this session, do not re-litigate:** G-M3-4's budget stays 5 s (print the miss, assert a
+      15 s hang guard — an 8 s bound failed once and a random-red gate gets silently raised);
+      G-M3-6 forbids colour as the *only* carrier and does not require colour to move
+      (`hueCarriesState=false` measured); checkbox/task activation is **Space on the inner input**,
+      and `page.mouse` monkey-patching alone is insufficient (count pointer events page-side);
+      never assert a `waitForSynced`-gated state as proof a mutation landed — the badge can read
+      "synced" before the request leaves.
+    - **Known commands:** Playwright needs `set -a && . ./.env.local && set +a` plus
+      `LD_LIBRARY_PATH=/tmp/pwlibs/ext/usr/lib/x86_64-linux-gnu`; the suite boots its own production
+      build on :3001 (kill any stale server first); use `npm run next:build`, never `npm run build`.

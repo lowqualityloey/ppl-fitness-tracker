@@ -199,5 +199,25 @@ export async function completeWorkoutByKeyboard(
   await pressActivate(page.getByTestId('advance-phase'));
   await expect(page.getByTestId('session-subtitle')).toContainText('Finishing');
   await pressActivate(page.getByTestId('finish-session'));
-  await waitForSynced(page);
+  /*
+   * `waitForSynced` cannot prove a finish. It waits for the badge to read "All changes synced", and
+   * at this moment the badge is *already* reading that — the click handler enqueues and drains
+   * asynchronously, so the poll can pass before the `session.finish` mutation has even left. The
+   * status is then read from the server, which still says `in_progress`, and the failure looks like
+   * the keyboard not working. It was the assertion being early, not the input.
+   *
+   * So wait on the thing actually being claimed: the session's status, as the server holds it.
+   */
+  const sessionId = new URL(page.url()).pathname.split('/').pop()!;
+  await expect
+    .poll(
+      async () => {
+        const response = await page.request.get(`/api/sessions/${sessionId}`);
+        if (!response.ok()) return `http ${response.status()}`;
+        const body = (await response.json()) as { data?: { status?: string } };
+        return body.data?.status ?? 'unknown';
+      },
+      { timeout: 20_000, message: 'the session never reached `completed` after a keyboard finish' },
+    )
+    .toBe('completed');
 }

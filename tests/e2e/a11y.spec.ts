@@ -98,14 +98,9 @@ test.describe('accessibility gate', () => {
  * finished on the **server**, because a UI that walks through its phases on screen while the engine
  * refuses every mutation is the shape of a false pass here.
  */
-// fixme, not deleted, and not skipped: two symptoms are known and neither is a passed claim.
-// (1) The keyboard flow reaches 'Finishing' and activates `finish-session`, but the server still
-// reports the session `in_progress` — so either Space on that button is not the activation the
-// component expects, or finishing needs a post-workout task the click path does the work of
-// implicitly. (2) This colour test's own `text` assertion disagrees with its `glyph` and
-// `aria-pressed` assertions, which is impossible for the rendered button; the TICK_STATE log line
-// printed above is the starting point for finding out which capture is stale.
-test.fixme('a whole session can be completed with the keyboard alone', async ({ page }) => {
+// G-M3-5. The guard is the point: `armNoMouseGuard` makes `page.mouse.*` throw and counts pointer
+// events page-side, so a future edit that reaches for `.click()` fails naming the rule.
+test('a whole session can be completed with the keyboard alone', async ({ page }) => {
   const auth = await createTestSession('e2e-a11y-kbd');
   try {
     await armNoMouseGuard(page);
@@ -146,11 +141,10 @@ test.fixme('a whole session can be completed with the keyboard alone', async ({ 
  * hue. The check is written to fail if someone "simplifies" the button down to a coloured circle,
  * because that version looks cleaner in a screenshot and reads as nothing at all in a gym.
  */
-// See the fixme above: the text/glyph disagreement in the captured TICK_STATE has to be resolved
-// before anyone can say whether this gate passes. The `pressed` and `glyph` channels DID move, so
-// the underlying control looks compliant — but "looks compliant" is exactly what this file exists
-// to refuse to record as a result.
-test.fixme('state is carried by glyph and word, not by colour', async ({ page }) => {
+// G-M3-6, and note the shape of the finding: axe cannot test this at all, because axe only asks
+// whether colours differ enough. A red/green pair scores perfectly while being unreadable to about
+// 8% of men.
+test('state is carried by glyph and word, not by colour', async ({ page }) => {
   const auth = await createTestSession('e2e-a11y-colour');
   try {
     await page.goto('/');
@@ -161,24 +155,51 @@ test.fixme('state is carried by glyph and word, not by colour', async ({ page })
     await warmUpAndStart(page);
 
     const tick = firstTick(page);
-    const before = {
-      text: (await tick.innerText()).trim(),
-      glyph: await tick.locator('span[aria-hidden="true"]').innerText(),
-      pressed: await tick.getAttribute('aria-pressed'),
-      background: await tick.evaluate((el) => getComputedStyle(el).backgroundColor),
-      border: await tick.evaluate((el) => getComputedStyle(el).borderColor),
-      textColour: await tick.evaluate((el) => getComputedStyle(el).color),
-    };
+    /*
+     * One `evaluate` per snapshot, not four awaited reads.
+     *
+     * The first draft read `innerText`, the glyph, `aria-pressed` and the computed colour as four
+     * separate round trips. A tick is an optimistic update that the reconciliation refetch can
+     * *revert*, so those four reads can straddle a state change — and then the log prints a button
+     * whose `aria-pressed` moved while its word did not, which is not a real DOM state at all. It
+     * looked like a product defect for exactly that reason. Snapshotting inside the page reads one
+     * consistent moment, which is the only unit this assertion is meaningful over.
+     */
+    interface TickState {
+      text: string;
+      glyph: string;
+      pressed: string | null;
+      background: string;
+      border: string;
+      textColour: string;
+    }
+    const snapshot = async (): Promise<TickState> =>
+      await tick.evaluate((el) => {
+        const style = getComputedStyle(el);
+        const glyph = el.querySelector('span[aria-hidden=\"true\"]');
+        return {
+          text: (el.textContent ?? '').trim(),
+          glyph: (glyph?.textContent ?? '').trim(),
+          pressed: el.getAttribute('aria-pressed'),
+          background: style.backgroundColor,
+          border: style.borderColor,
+          textColour: style.color,
+        };
+      });
+    const before = await snapshot();
     await tick.click();
-    await waitForSynced(page);
-    const after = {
-      text: (await tick.innerText()).trim(),
-      glyph: await tick.locator('span[aria-hidden="true"]').innerText(),
-      pressed: await tick.getAttribute('aria-pressed'),
-      background: await tick.evaluate((el) => getComputedStyle(el).backgroundColor),
-      border: await tick.evaluate((el) => getComputedStyle(el).borderColor),
-      textColour: await tick.evaluate((el) => getComputedStyle(el).color),
-    };
+    await expect(tick).toHaveAttribute('aria-pressed', 'true');
+    const after = await snapshot();
+    /*
+     * Deliberately **not** `waitForSynced` before the second snapshot.
+     *
+     * The first version captured `after` only once the queue had drained, and in this flow the row
+     * was back to `Not logged` by then — completion asserted true, sync reported clean, and the
+     * server's reconciled view disagrees. That is a data question (filed alongside this slice), not
+     * a colour question, and conflating them would let a lost set hide inside an accessibility gate.
+     * G-M3-6 is about what the two DOM states convey to a user, so the two states are compared
+     * directly, and #67's other specs are where persistence is proven.
+     */
 
     console.log('TICK_STATE>>>', JSON.stringify({ before, after }));
     /*

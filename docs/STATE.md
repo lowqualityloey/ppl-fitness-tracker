@@ -502,6 +502,36 @@ Carried forward, still open:
 - **The magic-link flow is still unproven.** M0 used the password grant to obtain real JWTs cheaply. The `sub` claim is identical either way, so the RLS conclusion is unaffected, but no part of the actual sign-in path has been exercised.
 - **`node_modules` present but installed for verification only.** Installed 2026-09-08 inside WSL to confirm the build defect. Gitignored, safe to delete.
 
+
+- **G-M3-4 (60-mutation outbox drain < 5 s) MISSES on the production build — measured 2026-09-11,
+  not yet acted on.** Same 60-mutation queue, six runs: **4693 / 5051 / 5084 / 5326 / 5334 /
+  9086 / 9660 ms**, always **one** `POST /api/sync`, HTTP 200. So the client batches correctly
+  (`MAX_BATCH = 200` covers the burst) and the 5–10 s is server-side application of a 60-mutation
+  batch — the same sequential per-mutation path the `sync-latency` spec measures at ~270 ms for a
+  *single* mutation. Decision taken: **the budget stays at 5 s.** `tests/e2e/sla.spec.ts` prints
+  `MISSES the G-M3-4 5000ms budget by Nms` on every run and asserts a deliberately wider 15 s
+  *hang* guard, because a ceiling that fires at random (an 8 s bound failed once already) is the
+  bound someone silently raises. Same posture as M2-06's `/api/sync` p95: measure, name the miss,
+  do not relabel. M4 owns the fix (batch application, or re-measure under real load at 50 rps,
+  which is explicitly out of scope here).
+- **G-M3-3 passes for a reason worth saying out loud.** Cross-device p95 measured **4.42 s** against
+  a 5 s budget — but `POLL_INTERVAL_VISIBLE_MS` is 4 000 ms, so the goal is met by the poll period,
+  not by a fast propagation path. Any increase to the poll interval eats that margin completely.
+- **An unexplained ordering observation (not filed as a bug, because it is not substantiated).** A
+  set tick flips to `Logged`, `aria-pressed=true` is asserted, and the queue reports "All changes
+  synced" — yet a snapshot taken *after* that reconciliation can show the same row back as
+  `Not logged` in one specific flow. The click path is proven to persist (session-runner's own
+  server-side `completedSetCount` assertions pass in the same suite), so this is not "the app loses
+  sets" — it is the reconciled view disagreeing under a race the test itself can sit in. The colour
+  gate was decoupled from persistence rather than papered over; if it resurfaces, it is a
+  reconciliation question, not an accessibility one.
+- **G-M3-6 measured, not assumed: `hueCarriesState=false`.** Completion carries **no** colour signal
+  at all — word (`Logged`/`Not logged`), glyph (`✓`/`○`) and `aria-pressed` only; the button's
+  background is `rgba(0,0,0,0)` in both states. The first draft of that gate asserted "all four
+  channels must move", which is a *stronger* claim than the goal makes and was falsified by a
+  control that is in fact compliant. G-M3-6 forbids colour as the **only** carrier; it does not
+  require colour to participate.
+
 ---
 
 ## 6. Recent Architectural Decisions (ADR Log)

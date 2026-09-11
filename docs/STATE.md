@@ -219,6 +219,24 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
   tracked `tsconfig.json`** (appends a generated-types include and reformats arrays). Revert
   before committing — it is formatter noise, not your change. See D6.
 
+- **Runner + client sync state, as built on `feat/m3-06-runner` (awaiting merge)**:
+  - `src/app/state/`: `outbox.ts` (durable-before-ack queue, applied vs refused split, `lastSeq`
+    so a tap costs O(1) reads instead of O(queue depth)), `indexeddb-outbox-storage.ts`
+    (`meta` store at v2 carries the device id), `reconcile.ts` (plan-based projection, refusal
+    labels), `sync-engine.ts` (batches, backoff, cadence budget, `snapshot()`), `device-identity.ts`,
+    `provider.tsx` (engine lifetime, `/api/sync` mapping, polling + `online` drain).
+  - `src/app/session/[id]/`: `page.tsx` is the server half (auth, scoped reads,
+    `parseSessionView`, unit, prefill); `runner.tsx` is the writable screen. `src/components/ui/input.tsx`
+    is vendored (no local focus classes — ADR-0004's ring is global; `h-11`; `rounded-md` → `--radius-input`).
+  - `lib/domain/units.ts` gained `parseWeightToKg` / `parseReps`, the return trip for ADR-0005.
+  - Gates measured on this branch, stack up: `lint` 0 / 0, `typecheck` 0, `check-set-config.sh` 0,
+    `git diff --check` 0, `npx vitest run tests/unit` **199 passed (18 files)**,
+    `tests/integration/api` + `security` **60 passed (10 files)**, `npx playwright test`
+    **20 passed** (14 before this slice; the six new specs are `tests/e2e/session-runner.spec.ts`).
+  - Two numbers printed by the suite, not asserted by it: tap-to-commit over 100 taps on a live
+    connection `median 15.2–16.5 ms, p95 23.7–26.4 ms` (gate: p95 < 50 ms, enforced); `POST /api/sync`
+    p50 200.5–258.1 / p95 364.5–413.9 ms against the documented 200 ms budget, still a **miss** (§5).
+
 ---
 
 ## 4. Locked Technical Invariants (Do Not Undo)
@@ -322,6 +340,23 @@ The narrower claim that survived — "non-interactive shells resolve `/usr/bin/n
 - **`--accent-legs` has no assigned colour.** `DESIGN.md` offers no third accent that can be legitimately spent; `tertiary #667085` is reserved for disabled states, so reusing it would make disabled controls read as Legs day. One new hue must be added to `DESIGN.md` as a documented extension. *Blocks M3, not M1.*
 - **Package manager for the target app.** Legacy is npm. Low-stakes; decide at M1 scaffold and record it in PROMPTKIT.md §3.
 - **Dark mode deferred.** `DESIGN.md` ships no dark tokens. Light-only in v1 per ADR-0005, with tokens authored under one `:root` so adding a `.dark` block stays additive. Revisit immediately post-v1 — this app gets used in dim gyms at night.
+
+### Unmerged findings from #63 (all filed, none absorbed)
+
+- **#76 — no API path produces an `archived` session.** `getPrefill` already queries
+  `inArray(status, ['completed','archived'])`, so production code branches on a value nothing can
+  create, and #63's read-only assertions cover `completed` only. Archive semantics belong to #65.
+- **#77 — sync rejections carry only a code.** `rejectionReason` collapses every domain message to
+  `NOT_FOUND` / `CONFLICT` / `INVALID_MUTATION` / `MUTATION_REJECTED`, discarding sentences like
+  "The warm-up task must be completed before starting the main workout." #63's runner therefore
+  mirrors the phase gates locally to print its hint — a second copy of a rule in a second language,
+  which will drift. The requested fix is additive (`message` next to `reason`).
+- **#78 — same-millisecond writes to one entity are ordered by a random UUID.**
+  `compareEntityVersions` ties on `effectiveTs` (ms resolution) and `deviceId` break on
+  `mutationId`, so a double-tap queued in one batch can have its second half refused as
+  `STALE_CONFLICT`: the older tap wins. Reproduced by #60's spec before `7f06381`. The fix is to let
+  the client's monotonic per-session `seq` decide order, which #62 already assigns and #8.2's batch
+  contract already preserves.
 
 ### Technical Debt & Risks
 
@@ -450,6 +485,43 @@ Carried forward, still open:
     - **`deviceId` has no owner.** `SyncRequestSchema` requires one, and the engine takes it as injected config. Nothing in the app mints or persists it yet. It is *not* the queue, so §4.3's ban on `localStorage`-as-queue does not cover it — but the decision still has to be made deliberately (a `meta` store in the same IndexedDB database is the choice consistent with §8.5), not dropped into the first file that needs it.
     - **`IndexedDBOutboxStorage` has never run.** The unit suite tests `Outbox` against a memory store, which is the point of the seam — and also means the browser half is unproven. The first execution of that file must be a test, not a user's phone. The card itself assigns that proof to M3-06's `offline-session.spec.ts`.
     - **The queue is invisible until #63 renders it.** `pendingCount()`/`pending()` are the interface; the "N waiting to sync" copy and the rejection banner are the runner's job. Until then no user can observe any of §4.3 holding, which is why this PR claims plumbing and not the offline goal.
+    **Done 2026-09-11 on `feat/m3-06-runner` (nine commits, `8cd8a02..7f06381`), awaiting merge.** All
+    three inherited items landed as code, not intentions: the device id has an owner
+    (`device-identity.ts` + the `meta` store), `IndexedDBOutboxStorage` executed in a browser for the
+    first time in `tests/e2e/session-runner.spec.ts` (its reload spec is the durability proof #62
+    could not produce), and the queue renders as a badge that cannot claim "synced" over a refusal.
+    The card's tap gate is measured and passing (`p95 23.7–26.4 ms` over 100 taps).
+
+    Two deviations from the card's text are recorded rather than smoothed over: airplane mode is
+    modelled by refusing `/api/sync` (a `context.setOffline(true)` reload has no document to load,
+    and M3 ships no cached shell), and *archived* is unreachable — no route or transition produces
+    it, so the read-only branch is tested against `completed`, which is the same code path (#76).
+
+    What the slice found about the code that was already merged, in one place:
+    - `session_sets` rows are created **lazily** by the first `set.upsert`. #61's read-only screen
+     therefore rendered "No sets recorded" for a workout in progress, and `projectPending`'s
+     history-based overlay reported the user's first tick of every set as a mutation referencing a
+     row the server does not have. Both are fixed by projecting the *plan* (`3be4129`). No test
+     covered it, which is the same lesson as "a control does not exist until a test proves it runs",
+     one milestone later, on a screen instead of a button.
+    - The phase machine is gated on **tasks**, and tasks are created by completing them. A runner
+     that rendered no checklist could start a workout and never finish one — caught only when a
+     spec tried to walk a whole session through the UI.
+    - `#60`'s latency spec held one `clientTs` for fifty re-ticks of three slots, so
+     `compareEntityVersions` decided each by UUID order: a coin flip that had been passing because
+     the production build was slow enough to push every timestamp outside the skew window (#78).
+
+
+17. **Review and merge #63, then take #64 (M3-07, rest and elapsed timers).** The runner now owns
+    the clock's *display* problems: `phase.advance` is wired, and rest timing must read an absolute
+    deadline rather than count intervals, because a backgrounded tab throttles timers and a rest
+    period counted in `setInterval` silently understates rest. The engine already has `now` and
+    `sleep` seams and the poller already adapts its cadence to `isVisible`; #64 should reuse both
+    rather than opening a second timer path. Three findings from #63 are parked and must not be
+    absorbed silently: #76 (no reachable `archived` state), #77 (rejections carry a code, not a
+    message — which is why the runner mirrors the phase rules locally for its hint), #78
+    (same-millisecond writes to one entity are ordered by a random UUID).
+
 ---
 
 ## 8. Session Continuity Log

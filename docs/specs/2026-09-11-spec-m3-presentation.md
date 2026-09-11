@@ -133,6 +133,19 @@ export const ProfilePatchSchema = z.object({
 }).strict().refine(v => Object.keys(v).length > 0, 'At least one field is required.');
 ```
 
+> **Erratum (2026-09-11, found while implementing #57).** The snippet above was written from memory
+> and its `// mirrors db/schema weightUnit enum` comment is false in both directions it points:
+> the actual enum — `db/schema/index.ts:29`, migration `0000:5`, and re-verified against the live
+> local database — is `('kg', 'lbs')`, not `('kg', 'lb')`; and the shipped `ProfileDataSchema`
+> carries a read-only `email` (the settings screen needs to show it; only the *patch* excludes it)
+> with `displayName` capped at 80, not 120. The implemented contract in `lib/contracts/profile.ts`
+> is authoritative; `z.enum(['kg','lbs'])` mirrors the DB literally, so a client sending `"lb"`
+> gets a 400 naming the value rather than a silent mapping. The guessed contract was a double
+> defect: `PATCH {"preferredUnit":"lbs"}` — the only value the column can actually hold — was
+> blocked with a 400, while `"lb"` sailed through validation and would have reached Postgres as
+> `invalid input value for enum weight_unit`, i.e. a 500 on every honest save. See §8.7 and
+> `tests/integration/api/profile.test.ts`.
+
 ```typescript
 // lib/contracts/sessions.ts  (extension)
 export const SessionPrefillQuerySchema = z.object({
@@ -318,3 +331,8 @@ The module boundaries pass the deletion test, notably `TimerController` (whose j
 
 ### 8.6 Ready for `pk:tasks`
 Decompose M3-00…M3-05 into `docs/tasks/m3/` with Gherkin AC, in M2's task-file shape, keeping §6's dependency facts intact: **M3-00 blocks M3-03's poller**, M3-01 blocks every screen (tokens, gates, E2E harness), and no task may claim a screen against an endpoint that does not yet exist.
+
+### 8.7 The `weight_unit` mirror was a guess, and wrong in both directions *(severe — it broke the exact field #57 exists for)*
+Found while implementing #57, not during the grill: §4.1's `z.enum(['kg', 'lb'])  // mirrors db/schema weightUnit enum` was written from memory, and the enum it claims to mirror is `('kg', 'lbs')` (`db/schema/index.ts:29`, migration `0000:5`, re-verified against the live local stack with a `pg_type ⋈ pg_enum` query). Committed as-is, the contract was a double defect: `"lbs"` — the only value the column can hold for pounds — returned a 400, so no user could ever set lb display; and `"lb"` passed validation and died in Postgres as `invalid input value for enum weight_unit` — a 500 on the save path. Decided against a mapping layer (`"lb"` on the wire → `"lbs"` in SQL) and against changing the enum: two names for one meaning is the §8.4 failure mode again, and a cosmetic `ALTER TYPE` is not the Expand-Contract discipline §4.2 commits this milestone to. The wire value is now the DB value, and the `('lb' → 400)` case is pinned in both specs — unit (`contracts.test.ts`) and route (`profile.test.ts`) — so the guessed spelling can never return.
+
+**Generalized rule this adds to §4.2's practice: a contract comment that claims to mirror storage is itself an unverified claim until a test reads the storage truth.** The mirror claim survived review because nothing executed it; the enum did not ship broken only because implementation hadn't started when the checkpoint caught the branch state.

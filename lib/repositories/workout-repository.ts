@@ -1,9 +1,10 @@
-import { and, asc, desc, eq, lt, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, lt, ne, or, sql } from 'drizzle-orm';
 import * as schema from '../../db/schema/index';
 import { assertUserContext } from '../db/auth-context';
 import { withUser } from '../db/with-user';
 import type { Db, Tx, JwtClaims } from '../db/with-user';
 import type { SyncMutation, SyncRequest } from '../contracts/sync';
+import type { PrefillData } from '../contracts/sessions';
 import { SyncEngine, ZERO_UUID } from '../domain/sync/sync-engine';
 import type {
   SyncEntityType,
@@ -197,6 +198,71 @@ export class WorkoutRepository {
 
   async findSession(userId: string, sessionId: string): Promise<SessionState | null> {
     return this.forUser(userId, (tx) => this.findSessionInTx(tx, userId, sessionId));
+  }
+
+  /**
+   * M3-00 (#57): "what did I lift last time" for this routine day, resolved by
+   * one indexed read instead of a client downloading its history.
+   *
+   * The source is `status IN ('completed','archived')` — an in-progress session
+   * is someone still deciding, not a fact worth remembering — ordered exactly
+   * like `listSessions` (`desc(localDate), desc(id)`) so "most recent" means
+   * one thing in this codebase. `excludeSessionId` drops the session currently
+   * being started; without it the second tap of Start would prefill from the
+   * resumed first tap.
+   *
+   * A completed set is kept when it carries **either** number: a reps-only
+   * legacy slot still has a real suggestion, and a weight-only slot too. Only
+   * the both-null slot is omitted — there is genuinely nothing to remember.
+   * `weightKg` is emitted in canonical kg (ADR-0005); the unit preference in
+   * the profile changes what the client renders, never what this returns.
+   */
+  async getPrefill(userId: string, routineDayId: string, excludeSessionId?: string): Promise<PrefillData> {
+    return this.forUser(userId, async (tx) => {
+      const [source] = await tx
+        .select({ id: workoutSessions.id, localDate: workoutSessions.localDate })
+        .from(workoutSessions)
+        .where(and(
+          eq(workoutSessions.userId, userId),
+          eq(workoutSessions.routineDayId, routineDayId),
+          inArray(workoutSessions.status, ['completed', 'archived']),
+          excludeSessionId ? ne(workoutSessions.id, excludeSessionId) : undefined,
+        ))
+        .orderBy(desc(workoutSessions.localDate), desc(workoutSessions.id))
+        .limit(1);
+
+      if (!source) {
+        return { entries: [], sourceSessionId: null, sourceLocalDate: null };
+      }
+
+      const rows = await tx
+        .select({
+          exerciseId: sessionSets.exerciseId,
+          setIndex: sessionSets.setIndex,
+          weightKg: sessionSets.weightKg,
+          reps: sessionSets.reps,
+        })
+        .from(sessionSets)
+        .where(and(
+          eq(sessionSets.userId, userId),
+          eq(sessionSets.sessionId, source.id),
+          eq(sessionSets.isCompleted, true),
+          or(isNotNull(sessionSets.weightKg), isNotNull(sessionSets.reps)),
+        ))
+        .orderBy(asc(sessionSets.exerciseId), asc(sessionSets.setIndex));
+
+      return {
+        entries: rows.map((row) => ({
+          exerciseId: row.exerciseId,
+          setIndex: row.setIndex,
+          weightKg: row.weightKg === null ? null : Number(row.weightKg),
+          reps: row.reps,
+          sourceLocalDate: source.localDate,
+        })),
+        sourceSessionId: source.id,
+        sourceLocalDate: source.localDate,
+      };
+    });
   }
 
   async findPersonalRecord(userId: string, exerciseId: string): Promise<PersonalRecordValue | null> {

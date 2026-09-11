@@ -17,8 +17,15 @@ import { UuidSchema } from './common';
  * would be a claim the system cannot honour.
  */
 
-/** Mirrors the `public.weight_unit` enum created by migration `0001`. */
-export const PreferredUnitSchema = z.enum(['kg', 'lb']);
+/**
+ * Mirrors the `public.weight_unit` enum exactly — measured against migration
+ * `0000` and the live local database on 2026-09-11, which is `('kg', 'lbs')`,
+ * **not** `('kg', 'lb')` as the M3 RFC §4.1 snippet guessed. The DB is the
+ * mirror target; a client sending `"lb"` gets a 400 naming the bad value
+ * rather than a silent mapping that would put the wire and the column one
+ * rename apart from agreeing.
+ */
+export const PreferredUnitSchema = z.enum(['kg', 'lbs']);
 export type PreferredUnit = z.infer<typeof PreferredUnitSchema>;
 
 export const ProfileDataSchema = z.object({

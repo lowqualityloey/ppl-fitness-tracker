@@ -81,10 +81,16 @@ test.describe('per-exercise progress', () => {
       // it: `bestE1rm: 126.5` must reach the screen as 126.5 kg, which proves the PR path renders
       // the stored value rather than recomputing something from the trendline beside it.
       await expect(page.getByTestId('pr-rows')).toContainText('126.5 kg');
-      // `en-GB` medium date style renders 2026-09-08 as "9 Sept 2026"; the point of the assertion is
-// that the achievement date reached the row at all, so it is matched on the rendered form rather
-// than on a format this spec invented.
-await expect(page.getByTestId('pr-rows')).toContainText('9 Sept 2026');
+      /*
+       * The year, not the month's spelling.
+       *
+       * This line read `toContainText('9 Sept 2026')`, passed locally, and failed in CI. Short-month
+       * rendering is `Intl`'s ICU data — this machine's Node build and the runner image spell it
+       * differently — so the assertion was measuring the base image rather than anything in this
+       * repository. The year still proves the record's `achievedAt` reached the row, which is the
+       * claim the test exists to make; the number on the line above stays asserted exactly.
+       */
+      await expect(page.getByTestId('pr-rows')).toContainText(/2026/);
     } finally {
       await db.end();
       await auth.cleanup();

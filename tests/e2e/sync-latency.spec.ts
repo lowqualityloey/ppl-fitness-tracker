@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 import {
   authHeaders,
-  clientTs,
   createTestSession,
   ids,
   seedSessionFixtures,
@@ -83,11 +82,26 @@ test.describe('production-mode measurements — POST /api/sync', () => {
       const samples: number[] = [];
       let sinceSeq = 0;
 
+      /*
+       * One timestamp per request, one millisecond apart. The spec used to hold a single
+       * `clientTs` constant for all fifty writes, and that was wrong twice over: it is not
+       * what an outbox sends (each queued mutation carries the moment the user tapped), and
+       * it made the test a coin flip. `compareEntityVersions` breaks a timestamp tie by
+       * `deviceId` and then by `mutationId`, so a re-tick of the same slot with an equal
+       * timestamp wins or loses on a random UUID — and this spec deliberately re-ticks
+       * three slots forty-seven times. It had only ever passed because the production build
+       * was slow enough that every `clientTs` fell outside `CLOCK_SKEW_LIMIT_MS` of
+       * `receivedAt`, which pinned `effectiveTs` to the receive clock and made the ordering
+       * monotone by accident. Re-running it against an already-built server reproduced
+       * `STALE_CONFLICT` at request 8.
+       */
+      const firstClientTs = Date.now();
+
       for (let index = 0; index < REQUESTS; index += 1) {
         const mutation = {
           op: 'set.upsert' as const,
           mutationId: randomUUID(),
-          clientTs,
+          clientTs: new Date(firstClientTs + index).toISOString(),
           sessionId: ids.session,
           exerciseId: ids.exercise,
           // Three legal slots, cycled. The seeded routine exercise plans 3 sets and

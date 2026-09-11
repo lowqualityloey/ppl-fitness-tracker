@@ -67,3 +67,137 @@ export async function advanceIntoRest(page: import('@playwright/test').Page) {
   await page.getByTestId('advance-phase').click();
   await expect(page.getByTestId('session-subtitle')).toContainText('Resting');
 }
+
+/**
+ * Keyboard-only driving (M3-10, #67, G-M3-5).
+ *
+ * Lives in the shared fixture rather than in the a11y spec because #60's completion flow already
+ * encodes the phase-machine order (`assertSetMutationAllowed` refuses a set change outside
+ * exercise/rest, so ticking on arrival is rejected). A second copy of that order in a second file is
+ * a rule that drifts — and drift here would leave a keyboard-only test completing a workout the app
+ * can never complete by mouse.
+ */
+
+/**
+ * Focus the *control* and activate it without a pointer.
+ *
+ * Two details that are the whole function:
+ *
+ * - The locator often resolves to a `<label>`, because a task row is a label wrapping a checkbox.
+ *   A label is not focusable, so `focus()` + a key press on it is a no-op that looks like the app
+ *   ignoring the keyboard. The focusable control is looked for inside.
+ * - **Space, not Enter.** Enter activates a `<button>` but does nothing to a checkbox; Space
+ *   activates both. An earlier draft pressed Enter everywhere and the keyboard test "failed" on a
+ *   phase gate that was never reached — which is the right outcome for the test, and the wrong
+ *   diagnosis to leave in the file.
+ */
+export async function pressActivate(locator: import('@playwright/test').Locator): Promise<void> {
+  const control = locator.or(locator.locator('input, select, textarea, a[href], button').first());
+  const target = (await control.count()) > 0 ? control : locator;
+  const checkbox = target.locator('input[type="checkbox"]').first();
+  const focusable = (await checkbox.count()) > 0 ? checkbox : target;
+  await focusable.focus();
+  await focusable.press('Space');
+}
+
+/**
+ * Every legacy `localStorage` name the new app must never write.
+ *
+ * Four come from `LEGACY_KEYS` in the importer; `guest_mode` is the fifth, set by the old
+ * dashboard's own scripts. It belongs in the list because the invariant is about the *namespace*,
+ * not about which names the importer happens to read.
+ */
+export const LEGACY_LOCALSTORAGE_KEYS: readonly string[] = [
+  'pushWorkoutProgress',
+  'legsWorkoutProgress',
+  'pullDayProgress',
+  'userStats',
+  'guest_mode',
+];
+
+/**
+ * Make mouse input impossible for the rest of the test, and *count* what the page actually received.
+ *
+ * Two guards, because each alone is weak. Monkey-patching `page.mouse` means any future edit that
+ * reaches for `.click()` fails immediately with a sentence naming the rule, instead of quietly
+ * passing a "keyboard-only" test that used a mouse. The page-side counter catches the subtler case:
+ * a helper that dispatches a synthetic pointer event would slip past the Node-side patch entirely.
+ *
+ * `click` is deliberately **not** counted: Enter on a focused button legitimately fires a `click`
+ * event, and forbidding that would forbid keyboard activation itself. Pointer, mouse-press, and
+ * touch events are the mouse-only ones.
+ */
+export async function armNoMouseGuard(page: import('@playwright/test').Page): Promise<void> {
+  await page.addInitScript(() => {
+    const w = window as unknown as { __pointerEvents: string[] };
+    w.__pointerEvents = [];
+    for (const type of ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'touchstart']) {
+      document.addEventListener(type, () => w.__pointerEvents.push(type), true);
+    }
+  });
+  const mouse = page.mouse as unknown as Record<string, unknown>;
+  for (const method of ['click', 'down', 'up', 'move', 'dblclick']) {
+    mouse[method] = async () => {
+      throw new Error(
+        `keyboard-only: page.mouse.${method}() is not available. Activate controls with focus() + press('Enter').`,
+      );
+    };
+  }
+}
+
+export function pointerEventCount(page: import('@playwright/test').Page): Promise<number> {
+  return page.evaluate(() => {
+    const w = window as unknown as { __pointerEvents?: string[] };
+    return w.__pointerEvents?.length ?? 0;
+  });
+}
+
+/** The legacy dashboard's Start button, reached without a pointer. */
+export async function startPushDayByKeyboard(
+  page: import('@playwright/test').Page,
+): Promise<void> {
+  await page.goto('/');
+  await pressActivate(page.getByRole('button', { name: `Start ${START_DAY}` }));
+  await expect(page).toHaveURL(/\/session\/[0-9a-f-]{36}/);
+}
+
+/**
+ * Complete a whole session — warm-up through finish — using the keyboard alone.
+ *
+ * The assertions between phases are not decoration: each is the proof that the keyboard path
+ * actually crossed a gate. A key press that did nothing would otherwise sail through to
+ * `finish-session` and fail there, and the failure would read like a finish-button bug.
+ */
+export async function completeWorkoutByKeyboard(
+  page: import('@playwright/test').Page,
+): Promise<void> {
+  await expect(page.getByTestId('phase-gate')).toContainText('Warm-up');
+  await pressActivate(page.getByTestId('task-warm_up'));
+  await waitForSynced(page);
+  await pressActivate(page.getByTestId('advance-phase'));
+  await expect(page.getByTestId('session-subtitle')).toContainText('Working out');
+
+  const ticks = page.locator('[data-testid^="tick-"]');
+  const total = await ticks.count();
+  expect(total).toBeGreaterThan(0);
+  for (let index = 0; index < total; index += 1) {
+    const tick = ticks.nth(index);
+    if ((await tick.getAttribute('aria-pressed')) === 'false') await pressActivate(tick);
+  }
+  await waitForSynced(page);
+
+  await pressActivate(page.getByTestId('advance-phase'));
+  await expect(page.getByTestId('session-subtitle')).toContainText('Resting');
+  await pressActivate(page.getByTestId('task-main_workout'));
+  await waitForSynced(page);
+
+  await pressActivate(page.getByTestId('advance-phase'));
+  await expect(page.getByTestId('session-subtitle')).toContainText('Stretching');
+  await pressActivate(page.getByTestId('task-stretch'));
+  await waitForSynced(page);
+
+  await pressActivate(page.getByTestId('advance-phase'));
+  await expect(page.getByTestId('session-subtitle')).toContainText('Finishing');
+  await pressActivate(page.getByTestId('finish-session'));
+  await waitForSynced(page);
+}

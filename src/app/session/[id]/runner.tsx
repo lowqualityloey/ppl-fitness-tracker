@@ -27,6 +27,15 @@ import {
   type PlannedTask,
   type VisibleRejection,
 } from '../../state/reconcile';
+import {
+  browserTimerClock,
+  createCountdownTimer,
+  createElapsedTimer,
+  formatDuration,
+  type CountdownState,
+  type Timer,
+} from '../../state/timer-controller';
+import { browserChime, type Chime } from '../../state/audio-cue';
 
 /**
  * M3-06 (#63): the session runner — the app's reason to exist, and the first caller of
@@ -49,6 +58,20 @@ import {
  */
 
 const PHASE_ORDER = ['pre_workout', 'exercise', 'rest', 'stretch', 'post_workout'] as const;
+/**
+ * The rest default is inherited from the module this replaces, not invented:
+ * `push-day-workout/app.js:245` starts its rest timer at `seconds: 90`, and the pull and legs
+ * modules do the same. It is a *default the athlete can change* rather than a fact about them,
+ * because the data has no machine-readable rest duration at all — `exercises.rest_time` is a text
+ * column seeded with strings like `'60-90s'` (`db/schema/index.ts:113`) — so the honest options
+ * were a changeable number or no timer.
+ */
+const REST_DEFAULT_MS = 90_000;
+/** The one adjustment offered mid-rest. "+15 s" is what an athlete actually asks a timer for. */
+const REST_EXTEND_MS = 15_000;
+/** How late in the countdown a screen reader is told about it: once, not every second. */
+const REST_WARN_MS = 10_000;
+
 const PHASE_LABEL: Record<string, string> = {
   pre_workout: 'Warming up',
   exercise: 'Working out',
@@ -170,6 +193,7 @@ function Runner({ userId, sessionId, initialView, unit, initialPrefill }: {
   const [drafts, setDrafts] = useState<Record<string, DraftValue>>({});
   const [announcement, setAnnouncement] = useState('');
   const measureArmed = useRef(false);
+  const chime = useRef<Chime | null>(null);
 
   const session = useQuery({
     queryKey: queryKey(userId, 'session', sessionId),
@@ -203,6 +227,81 @@ function Runner({ userId, sessionId, initialView, unit, initialPrefill }: {
     (placement) => placement.phase === 'stretch',
   );
 
+  /*
+   * The session clock (#64), derived from `startedAt` — an absolute instant the server already
+   * owns — and never from a counter that adds a second per repaint. That distinction is the whole
+   * reason the module exists: a counter-based elapsed clock understates a workout by exactly as
+   * long as the tab was backgrounded, so a 40-minute session reports 22 minutes and the number on
+   * screen is not about the workout at all.
+   */
+  const finishedElapsedMs = useMemo(() => {
+    if (!readOnly || serverView.completedAt === null) return null;
+    return Math.max(0, Date.parse(serverView.completedAt) - Date.parse(serverView.startedAt));
+  }, [readOnly, serverView.completedAt, serverView.startedAt]);
+
+  const [liveElapsedMs, setLiveElapsedMs] = useState<number | null>(null);
+
+  // A finished session shows a length, not a running clock: a number that keeps counting on a
+  // read-only screen is a live measurement of something that stopped happening. Derived rather
+  // than set from the effect below, because writing state synchronously inside an effect is how a
+  // render loop starts.
+  const elapsedMs = finishedElapsedMs ?? liveElapsedMs;
+
+  useEffect(() => {
+    if (finishedElapsedMs !== null) return;
+    const timer = createElapsedTimer(browserTimerClock());
+    const unsubscribe = timer.subscribe((state) => setLiveElapsedMs(state.elapsedMs));
+    timer.start(Date.parse(serverView.startedAt));
+    return () => {
+      unsubscribe();
+      timer.cancel();
+    };
+  }, [finishedElapsedMs, serverView.startedAt]);
+
+  /*
+   * Audio unlocks on the first gesture, because a context constructed on mount arrives suspended
+   * and never sounds — and reports nothing when it fails that way.
+   *
+   * `document` in capture phase, not `window` bubbling, and that placement is measured rather than
+   * preferred. The first version registered `pointerdown` on `window` with `{ once: true }`; an E2E
+   * probe then watched four pointerdowns go by — a spy listener on `document` (capture) counted all
+   * four, and the app's own `window` listener was never invoked, with no cleanup having run to
+   * remove it. Rather than spend the slice explaining that anomaly, the unlock now hangs off the
+   * place the events demonstrably arrive *and* off the component's own handlers below, so nothing
+   * depends on either route alone.
+   */
+  useEffect(() => {
+    const cue = browserChime();
+    chime.current = cue;
+    const unlock = (): void => {
+      cue.unlock();
+    };
+    document.addEventListener('pointerdown', unlock, { capture: true, once: true });
+    document.addEventListener('keydown', unlock, { capture: true, once: true });
+    return () => {
+      document.removeEventListener('pointerdown', unlock, { capture: true });
+      document.removeEventListener('keydown', unlock, { capture: true });
+      chime.current = null;
+    };
+  }, []);
+
+  /**
+   * Arming the chime from inside the handlers, not only from a listener.
+   *
+   * A click on one of these controls *is* the user gesture the Web Audio policy asks for, so
+   * relying on a separately-registered listener adds a way to fail without adding a way to work.
+   * `unlock()` is idempotent and never throws, which makes it free to call on every interaction.
+   */
+  const unlockChime = useCallback(() => {
+    chime.current?.unlock();
+  }, []);
+
+  // Stable on purpose: `RestTimer` keys its effect on this, and a new identity every render would
+  // restart the countdown on every repaint — a timer that resets itself once a second.
+  const playChime = useCallback(() => {
+    chime.current?.play();
+  }, []);
+
   function draftFor(exerciseId: string, set: PlannedSet): DraftValue {
     const key = `${exerciseId}:${set.setIndex}`;
     const draft = drafts[key];
@@ -229,6 +328,13 @@ function Runner({ userId, sessionId, initialView, unit, initialPrefill }: {
    * group's counts, and reading them from `projection` here would put a changing value in
    * the dependency list and undo the stability.
    */
+  /**
+   * Arming the chime from inside the handlers, not only from a listener.
+   *
+   * A click on one of these controls *is* the user gesture the Web Audio policy asks for, so
+   * relying on a separately-registered listener adds a way to fail without adding a way to work.
+   * `unlock()` is idempotent and never throws, which makes it free to call on every interaction.
+   */
   const tap = useCallback(
     async (
       exerciseId: string,
@@ -237,6 +343,7 @@ function Runner({ userId, sessionId, initialView, unit, initialPrefill }: {
       draft: DraftValue,
       announcement: string,
     ) => {
+      unlockChime();
       if (engine === null || readOnly || !setsOpen) return;
 
       const weightKg = parseWeightToKg(draft.weight, unit);
@@ -276,7 +383,7 @@ function Runner({ userId, sessionId, initialView, unit, initialPrefill }: {
 
       setAnnouncement(announcement);
     },
-    [engine, readOnly, setsOpen, sessionId, unit],
+    [engine, readOnly, setsOpen, sessionId, unit, unlockChime],
   );
 
   /*
@@ -319,6 +426,7 @@ function Runner({ userId, sessionId, initialView, unit, initialPrefill }: {
   );
 
   async function toggleTask(taskKey: TaskKey, completed: boolean) {
+    unlockChime();
     if (engine === null || readOnly) return;
     await engine.mutate({
       op: 'task.complete',
@@ -349,6 +457,25 @@ function Runner({ userId, sessionId, initialView, unit, initialPrefill }: {
 
       <p className="text-sm text-muted-foreground" data-testid="session-subtitle">
         {serverView.localDate} · {PHASE_LABEL[serverView.phase] ?? serverView.phase}
+      </p>
+
+      {/*
+        * `role="timer"` with `aria-live="off"`, deliberately: the role exists for exactly this
+        * content, and its implicit live state is off — which is right for a value that changes
+        * every second. A polite live region here would make a screen reader speak ninety times per
+        * rest period and drown out the rest of the screen, so the milestones worth interrupting for
+        * are announced through the runner's own polite region instead.
+        */}
+      <p
+        className="text-sm text-muted-foreground tabular-nums"
+        data-testid="session-elapsed"
+        role="timer"
+        aria-live="off"
+        aria-atomic="true"
+      >
+        {elapsedMs === null
+          ? 'Timing…'
+          : `${readOnly ? 'Workout length' : 'Elapsed'} ${formatDuration(elapsedMs)}`}
       </p>
 
       {unavailable !== null && <Banner tone="error">{unavailable}</Banner>}
@@ -428,6 +555,7 @@ function Runner({ userId, sessionId, initialView, unit, initialPrefill }: {
         gate={gateFor(nextPhase ?? serverView.phase, projection.tasks, projection.sets)}
         disabled={!ready || readOnly}
         onAdvance={async (phase) => {
+          unlockChime();
           if (engine === null) return;
           await engine.mutate({
             op: 'phase.advance',
@@ -439,6 +567,16 @@ function Runner({ userId, sessionId, initialView, unit, initialPrefill }: {
           setAnnouncement(`Phase change to ${PHASE_LABEL[phase] ?? phase} queued.`);
         }}
       />
+
+      {/*
+        * Mounting *is* the cancellation rule: the timer exists while the phase is `rest` and is
+        * unmounted the moment the session advances or finishes, and its cleanup cancels the
+        * countdown and detaches the visibility handler. A leaked interval that outlives its phase
+        * would keep writing numbers into a screen section that is no longer about rest.
+        */}
+      {serverView.phase === 'rest' && !readOnly && (
+        <RestTimer announce={setAnnouncement} onChime={playChime} />
+      )}
 
       <TaskChecklist
         section="pre_workout"
@@ -845,6 +983,130 @@ function TaskChecklist(props: {
 }
 
 /** The phase the stepper offers next, or `undefined` at the end of the machine. */
+/**
+ * The rest countdown, and the only timer the athlete interacts with.
+ *
+ * It is mounted for the duration of the `rest` phase and unmounted otherwise, which is what makes
+ * the card's cross-phase cancellation rule true by construction rather than by remembering to
+ * call `cancel()` from three places: the cleanup below cancels the countdown and detaches the
+ * visibility handler, so nothing is left that could write a number into the next phase's UI.
+ *
+ * Every value shown is derived from an absolute deadline. The three buttons change the *deadline*,
+ * never a displayed number, which is the difference between a timer that survives a backgrounded
+ * tab and one that merely looks busy.
+ */
+interface RestTimerProps {
+  readonly announce: (message: string) => void;
+  readonly onChime: () => void;
+}
+
+function RestTimer({ announce, onChime }: RestTimerProps) {
+  const [state, setState] = useState<CountdownState | null>(null);
+  const timer = useRef<Timer<CountdownState> | null>(null);
+
+  useEffect(() => {
+    const controller = createCountdownTimer({
+      ...browserTimerClock(),
+      // Once per deadline, guaranteed by the controller and asserted in its unit specs: the
+      // completion is the one moment the athlete is not looking at the screen, so it has to reach
+      // them without a glance.
+      onFinish: () => {
+        announce('Rest complete');
+        onChime();
+      },
+    });
+    timer.current = controller;
+
+    let warned = false;
+    const unsubscribe = controller.subscribe((next) => {
+      setState(next);
+      if (!warned && next.remainingMs > 0 && next.remainingMs <= REST_WARN_MS) {
+        warned = true;
+        announce(`${Math.round(next.remainingMs / 1_000)} seconds of rest left`);
+      }
+    });
+
+    controller.start(Date.now() + REST_DEFAULT_MS);
+
+    return () => {
+      unsubscribe();
+      controller.cancel();
+      timer.current = null;
+    };
+  }, [announce, onChime]);
+
+  const setDeadline = (ms: number): void => {
+    timer.current?.start(ms);
+  };
+
+  if (state === null) {
+    return (
+      <div className="mt-4" data-testid="rest-timer">
+        <Button
+          variant="outline"
+          onClick={() => setDeadline(Date.now() + REST_DEFAULT_MS)}
+          data-testid="rest-start"
+        >
+          Start {REST_DEFAULT_MS / 1_000}s rest
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 flex flex-wrap items-center gap-3" data-testid="rest-timer">
+      <span
+        className={
+          state.finished
+            ? 'font-mono text-2xl tabular-nums text-destructive'
+            : 'font-mono text-2xl tabular-nums'
+        }
+        data-testid="rest-remaining"
+        role="timer"
+        aria-live="off"
+        aria-atomic="true"
+        aria-label={
+          state.finished
+            ? `Rest over by ${formatDuration(state.overrunMs)}`
+            : `${formatDuration(state.remainingMs)} of rest remaining`
+        }
+      >
+        {state.finished
+          ? formatDuration(state.overrunMs, { overrun: true })
+          : formatDuration(state.remainingMs)}
+      </span>
+
+      {state.finished && (
+        // The overrun is shown rather than hidden or reset: four minutes of phone-scrolling after
+        // a beep is information about the rest that happened, and `0:00` frozen forever would be a
+        // clock lying in the opposite direction.
+        <span className="text-sm text-muted-foreground" data-testid="rest-overrun">
+          over rest — long enough, or add time
+        </span>
+      )}
+
+      <Button
+        variant="outline"
+        onClick={() => setDeadline((state.deadline ?? Date.now()) + REST_EXTEND_MS)}
+        data-testid="rest-extend"
+      >
+        +{REST_EXTEND_MS / 1_000}s
+      </Button>
+
+      <Button
+        variant="ghost"
+        onClick={() => {
+          timer.current?.cancel();
+          setState(null);
+        }}
+        data-testid="rest-skip"
+      >
+        Skip rest
+      </Button>
+    </div>
+  );
+}
+
 function nextPhaseOf(current: SessionPhase): SessionPhase | undefined {
   const index = PHASE_ORDER.indexOf(current as (typeof PHASE_ORDER)[number]);
   return index >= 0 ? PHASE_ORDER[index + 1] : undefined;

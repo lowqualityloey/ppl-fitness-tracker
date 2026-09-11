@@ -6,10 +6,10 @@
 - **Current Milestone / Epic**: **M2: Core Domain Engine — COMPLETE.** M2-00 → M2-06 all merged to `main` (PRs #43–#47, #51, #53; issue #42 closed). The milestone's last slice, M2-06 route hardening, merged as **PR #53 (`ce1c5d9`)**. **M3: Presentation** is in flight: RFC grilled and decomposed (2026-09-11) into `docs/tasks/m3/`, published as milestone #3, issues #57–#67. The first slice (#57 profile + prefill, #58 real `since` deltas) merged as **PR #69 (`8d2b696`)** with CI green; #59 (M3-02, design tokens) is next.
 - **Overall Status**: ACTIVE <!-- Options: ACTIVE | PAUSED | STABILIZING | RELEASE_CANDIDATE -->
 - **Target Release**: v1.0.0, no date committed
-- **Current Working Branch**: none in flight — `main` at `0adf233` (PR #83 merged). The next slice starts its own branch; **#66 (M3-09, settings + legacy-import UI) is the card to take**, and this file's own checkpoint commit is the first thing on it.
+- **Current Working Branch**: `feat/m3-09-settings-import` — **PR #85 open, awaiting merge** (M3-09 / #66: `UnitDisplay`, the settings screen, and the legacy-import dialog). Base is the post-#83 `main`; do not branch from `main` for anything else in M3 until #85 lands.
 
 > **Do not pin the current `main` SHA in this field.** It was tried three times and went stale three times, because the merge commit that lands the correction advances `main` past the value being recorded. Describe the state, not the hash. Run `git log --oneline -1` if you need the exact commit.
-- **Last Updated**: 2026-09-11 (`pk:checkpoint` after #83 merged: the M3 ledger in §2 is closed through M3-08, §3 describes the merged surface rather than a branch awaiting merge, §7 points at #66). Numbers below are measured, not carried forward from an earlier run.
+- **Last Updated**: 2026-09-11 (`UnitDisplay` + settings + import dialog implemented as #66; PR #85 opened with 50 Playwright / 254 unit / 60 integration tests measured green. Two findings filed or pinned rather than absorbed: #84 and the sign-out body requirement.)
 - **Gate status**: #48 (D5 route-handler coverage + D1 lint enforcement) and #49 (this intake
   record) are **merged to `main`**, and `main`'s own Actions runs are green (4m32s and 4m40s).
   `npm run lint` exits 0 there. Consequence for the text below: the gates are no longer pending
@@ -103,7 +103,7 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
 - [x] `#63` `M3-06`: session runner with optimistic tap and prefill (p0) — **merged as PR #79 (`5cf3b7e`)** —
 - [x] `#64` `M3-07`: `TimerController` absolute deadlines, background-tab recovery (p1) — **merged as PR #81 (`0278634`)** —
 - [x] `#65` `M3-08`: history + progress views on existing endpoints (p1) — **merged as PR #83 (`0adf233`)** —
-- [ ] `#66` `M3-09`: settings, `UnitDisplay`, legacy-import report surfaced in full (p1)
+- [x] `#66` `M3-09`: settings, `UnitDisplay`, legacy-import report surfaced in full (p1) — **in review as PR #85**
 - [ ] `#67` `M3-10`: M3 verification gate — SLAs measured on a production build, then M4 handoff (p0)
 
 **Process note, so this stops recurring**: issues `#6`, `#7`, `#9`, `#10` were done on `main` well before they were closed, because the branches that shipped them were stacked on each other instead of on `main`, and none of the PR bodies said "Closes #N". Going forward: branch from `main`, not from a feature branch, unless there's a real dependency; and every PR body must name the issue it closes.
@@ -610,6 +610,34 @@ Carried forward, still open:
     - **#82 is #66's or #67's to settle** if the import screen wants a date range; do not implement
       filtering client-side over cursor pages.
 
+
+20. **M3-09 (`#66`, in review as PR #85) — the seam decisions that are not in the diff.**
+    - **`src/app/state/unit-display.ts` is a façade, not a second converter.** The card's invariant
+      ("`UnitDisplay` is the only place a kg↔lb conversion exists") was already satisfied by
+      `lib/domain/units.ts`, which the server imports too; a second `KG_PER_LB` would have been the
+      violation. A test scans the file for the factor with **comments stripped**, because the file
+      describes the thing it must not contain — the same prose-vs-code trap #64 hit.
+    - **The rounding tolerance is derived, not chosen.** It was 5 g until a sweep proved that
+      incoherent (0.1 lb **is** 45 g, so the display is coarser than storage). It now comes from
+      asking the parser what `0.1 lb` weighs in kg. The enforceable claim is **monotonicity of the
+      displayed series**, not round-trip equality.
+    - **#84 was found by a test and deliberately not fixed here**: `parseWeightToKg` bounds the
+      *entered number* at `MAX_WEIGHT_KG`, so every thousands-grouped input (`2,000 lb` = 907 kg)
+      parses to `null`. Making the client more permissive than `WeightKgSchema` would move the
+      failure into the outbox, which is #77's territory. Do not "fix" the parser alone.
+    - **Sign-out needs `body: JSON.stringify({})`.** `SignoutRequestSchema` is
+      `z.object({}).strict()` and returns 400 to a bodyless POST — that strictness *is* the CSRF
+      posture of RFC §5.1. A settings button that looks inert but leaves the session alive is the
+      worst direction for this to fail in.
+    - **The unit reaches server routes without client state.** Verified across requests: save `lbs`
+      on `/settings`, then assert `220.5 lb` inside `/history/[id]`'s table. If a future slice
+      caches a profile read, that test is what breaks first — keep it.
+    - **Import never deletes a legacy key** (M4's call), reports `userStats` as *left alone* rather
+      than skipping it silently, and refuses to render an unparseable report instead of paraphrasing
+      it. Counts are read out of the dialog and `/history` is asserted against that number.
+    - **Known limit carried into #67:** the "switch units with 3 queued mutations" scenario has no
+      test, because Vitest here is `environment: "node"` with no jsdom. The protection is structural
+      (no sync path can import a display module), not observed. Do not let #67's gate claim it.
 
 ---
 

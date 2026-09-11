@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Client } from 'pg';
 import { requireUser } from '../../lib/auth/require-user.js';
 import { AppErrorException } from '../../lib/contracts/envelope.js';
-import { CookieJar, createClientFromCookieJar } from '../../lib/supabase/server.js';
+import { CookieJar, createClientFromCookieJar } from '../../lib/supabase/cookie-jar.js';
 
 /**
  * M1-12: requireUser() regression tests.

@@ -217,6 +217,19 @@ test('state is carried by glyph and word, not by colour', async ({ page }) => {
     expect(after.pressed, 'completion is not in the accessibility tree').not.toBe(before.pressed);
     expect(after.glyph, 'the state glyph did not change').not.toBe(before.glyph);
     expect(after.text, 'the state word did not change').not.toBe(before.text);
+    /*
+     * The word itself, measured apart from the glyph (M3-10, #67, Scenario 2).
+     *
+     * The differential checks above are satisfied by the glyph alone: strip both
+     * state words and `text` still changes (`○` → `✓`), so "glyph **and word**"
+     * in this test's name was only half-asserted. The break-each-gate audit
+     * observed exactly that: the injected glyph-only build passed this test and
+     * failed only `session-runner.spec.ts:55`. Each state must carry a *word*
+     * naming the state, and that word must move with the state.
+     */
+    const wordOf = (s: TickState) => s.text.replace(s.glyph, '').trim();
+    expect(wordOf(before), 'the un-logged state has no word carrier').toMatch(/not logged/i);
+    expect(wordOf(after), 'the logged state has no word carrier').toMatch(/logged/i);
     const chromaticChanged =
       after.background !== before.background ||
       after.border !== before.border ||

@@ -155,8 +155,11 @@ each serving correctly, zero collision.
   discussion: no budget moved, and one spec's 5 s default is not this suite's weak point — the
   shared-poll race behind it is, and #96 owns that. Pass `--workers=1` to a local e2e run
   regardless of timing luck: at Playwright's default 2 workers on a 4-CPU box this suite also
-  collides on the shared fixture ids (§5's #80), which is a different failure with a different
-  cause.
+  collides on the shared fixture ids (§5's #80) — a different failure with a different cause, and
+  one `--workers=1` does not fully avoid either: #105's ledger saw
+  `Could not clean up M1-16 test user (500)` from `session-runner.spec.ts:111`'s `finally` twice at
+  1 worker as well as once at 2, with that spec's own measurement already passed each time. §5's
+  #80 bullet carries what is and is not known about it.
   **Documented protocol: a red *timing* gate gets a solo re-run before anyone
   believes it** — that is the convention, not a rationalization.
 - **Typecheck**: `npm run typecheck` (runs `next typegen` first, then

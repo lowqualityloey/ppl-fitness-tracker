@@ -406,3 +406,55 @@ Observed firing on a live run, not a mock: `--users=2 --rps=1 --duration=8` →
 `ACCEPTED n=8 → 1.0 rps … p50=231.9 p95=480.3 max=480.3` then
 `NOTE: p95 is drawn from the tail, not a distribution — n=8 accepted, only 0 observation(s) above it.`
 The same run re-confirmed the floor result: **~232 ms median at one request per second.**
+
+## The 429 scenario, finally run for real — and it needed a rate the box could deliver
+
+Earlier sweeps asked for 50 rps and never got it: the client pegged `max_in_flight` and 401s ate the load
+before the limiter could count it (#125 sits upstream). So the scenario was rebuilt at a rate the ladder
+proved deliverable — **12 rps total**, with only the **per-user** rate changed. The M2-06 budget is 120
+req/min/user = **2 rps/user**, so the discriminator is user count at fixed total load.
+
+| Config | per-user rate | offered vs target | 2xx | **429** | p50 / p95 (2xx only) |
+| :-- | :-- | :-- | :-- | :-- | :-- |
+| 12 users, 12 rps, 30 s | 1.0 rps — under budget | 11.8 vs 12.0 ✓ | 361 | **0** | 374.5 / 725.8 ms |
+| 3 users, 12 rps, 30 s | 4.0 rps — over budget | 11.9 vs 12.0 ✓ | 360 | **1** | 472.9 / 820.7 ms |
+| 3 users, 12 rps, **90 s** | 4.0 rps — over budget | **12.0 vs 12.0 ✓** | 657 | **423** | 380.9 / **1022.7** ms |
+
+The 30 s "over budget" row produced a single 429 because a 30 s window at 4 rps delivers exactly 120 requests —
+it touches the sliding window's edge and stops there. **Sustaining it for 90 s (360 requests per user against a
+120/min budget) is what made the interference unmissable: 423 of 1080 requests refused, and achieved accepted
+throughput dropped to 7.3 rps against 12.0 offered.** The contrast row is the point of running both: at 1 rps
+user-per-rate the same total load produced zero rejections, so this is the budget biting, not the box.
+
+**Why the split matters here specifically:** those 423 rejections are fast — they return before the ledger
+insert, set upsert and PR pass. Folded into the sample they would have pulled the reported p95 *down* while
+the server did **39 % less work**, and the achieved-rps line (7.3 vs 12.0 offered) is what makes that
+legible. This is the card's fourth scenario satisfied: `REJECTED n=423 429=423 … (excluded from the percentiles
+above, by design)` plus the "fast by construction" note printing alongside it.
+
+**And the 200 ms question, at a delivered rate:** p50 380.9 ms / p95 1022.7 ms at a genuinely delivered 12 rps
+with `max_active_backends=6` and `max_idle_in_transaction=3` — so the over-budget result at 12 rps is *not*
+explained by the ten-connection pool saturating; the floor seen at 1 rps (~220 ms) plus ordinary contention
+already clears the document. The pool story still applies at higher concurrency; it is no longer the whole
+story.
+
+## CI on #126: red on the gate #121 describes, third independent sighting
+
+`test` failed in 12m49s on `d4a9d43`, **one** e2e failure, 60 passed:
+
+```
+[G-M3-2 tap→UI] n=17 median=15.1ms p95=73.8ms max=73.8ms
+Error: p95 73.8ms exceeds the 50ms goal
+```
+
+**`p95 == max` at `n=17`, with the median at 15.1 ms — 3.3× under budget.** That is #121 verbatim, and this
+branch's diff is `scripts/` and `docs/` only (`git diff main..HEAD -- src lib` → 0 lines), so nothing in #126
+could have caused it. Third independent sighting of the same event: this project's own uncapped run
+(55.1 / 73.2 ms), #120's first CI run (66.1 ms), #126's CI run (73.8 ms) — and the retry that made #120 green
+read 24.8 ms at the same `n=17`.
+
+**Consequence worth stating plainly: a degenerate statistic is now the only thing standing between a
+shipped-code-free documentation PR and a green merge gate.** #121 was filed as a measurement-integrity defect
+with no owner; on current evidence it gates every branch that touches CI, and it should be taken before more
+re-runs are used to explain it away. Re-running is recorded here as what it is: a coin flip on the largest of
+17 samples, not evidence about the app.

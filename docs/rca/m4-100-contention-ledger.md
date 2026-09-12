@@ -203,3 +203,64 @@ same identifiers — `G_M3_3_BADGE_WINDOW_MS`, `G_M3_3_PROPAGATION_WINDOW_MS`, `
 a clock cannot drift below the waits it contains without editing them, and `grep -n "timeout: [0-9]"` over
 this file returns nothing. Naming the values *is* the fence; a test asserting a sum of two names would
 decorate it.
+
+## `100run1` — a harness event, recorded because discarding it silently would be the same error as retrying a flake
+
+**54 failed / 6 passed in 2.9 m.** One cause, and the log proves it by its shape rather than by my
+reading of it:
+
+| # | Test | Result |
+| :-- | :-- | :-- |
+| 1–4 | `a11y.spec.ts` axe on `/`, `/sign-in` | passed in ~1 s — the server was alive |
+| 5 | `a11y.spec.ts:103` (keyboard walker) | failed at 13.7 s: expected `Working out`, received `· Warming up`, **Timeout 10 000 ms, 24 polls** at `runner-fixtures.ts:216` |
+| 6–60 | everything after | failed in **623–971 ms each**: `page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:3001/` |
+
+More than half a suite failing inside one second is not fifty-four findings; it is the target server
+disappearing, and every remaining spec then reporting the same absence. Test 5's label red is a symptom of
+the same event — its task mutation had no server to acknowledge it, so the phase legitimately never
+advanced, and `expectPhase` waited its full derived 10 s instead of deciding at 5 s.
+
+Evidence gathered, including the three negative results that matter: **no crash output** in the run's
+`[WebServer]` stream after its startup warnings (a Next process that throws says so; this one went silent,
+i.e. a signal), **no OOM in `dmesg` or the kernel journal**, and **no competing battery or stray
+`next-server` process** found afterwards. `pkill -f '[n]ext-server'` appears in my harness at the *start*
+and *end* of the e2e step, which is the right place for it but would be fatal if a second harness ever ran
+concurrently — the one hypothesis that fits a signal with no output, and not available for this pass
+because nothing else was running.
+
+**Reproduction, same tree, same command, nothing else on the box: `61 passed (5.3m)`, zero refusals, load
+1.78.** The verdict therefore is: `100run1` measured the harness, does not count toward #100's five, and
+its cause is **unnamed**. Unnamed is not the same as resolved, and #100 does not get to close while "the
+server can vanish mid-suite and the log blames the specs" is unaddressed.
+
+What the pass did buy: **the first `trace.zip` this project has ever produced from a battery failure**
+(`test-results/a11y-a-whole-session-can-b-f0515-…/trace.zip`), which is the instrumentation claim working
+on a real incident rather than on a provoked one. And `battery.sh` now counts `ERR_CONNECTION_REFUSED`
+occurrences and prints `HARNESS: that pass measured the harness, not the specs. Do not count it either
+way.` — so the misreading cannot be made again by whoever runs it next, including me.
+
+## The suite's wall clock, finally measurable — and the denominator I got wrong in my own table
+
+The green repro produced per-spec durations for all 61 specs. Slowest four, against the clock each one
+*actually* runs under:
+
+| Spec | Duration | Its real clock | Utilisation |
+| :-- | :-- | :-- | :-- |
+| `sla.spec.ts:315` G-M3-3 | 25.6 s | 145 s (set this round, from its 55 s of declared waits) | 18 % |
+| `timers.spec.ts:307` | 23.6 s | 90 s (`WORKOUT_FLOW_TIMEOUT_MS`, already present at `:308`) | 26 % |
+| `session-runner.spec.ts:202` | 18.3 s | 90 s | 20 % |
+| `lighthouse.spec.ts:276` | 13.5 s | **30 s default** → now 240 s | **45 % → 6 %** |
+
+My first pass at this table computed "utilisation" as a share of a **30 s default for every spec**, which
+was wrong for the six that set their own clocks and would have made G-M3-3 look like an 85 % near-miss when
+it had already been given 145 s. Corrected above. The lesson is the ledger's own, applied to me: a
+measurement without the right denominator is worse than no measurement, because it looks like evidence.
+
+**The one real finding in that column is a class #100 had not named: a `describe`-scoped clock does not
+reach tests declared outside the `describe`.** `lighthouse.spec.ts:99` set 240 s inside
+`test.describe('Lighthouse accessibility')`, while the two whole-page audits at the bottom of the same file
+are top-level `test(...)` calls — so they ran a cold Chrome plus a full audit inside the **30 s default**,
+taking 12.2 s and 13.5 s on an idle box. Under the same contention that produced pass C, those are reds
+with no product meaning at all. The ceiling is now `LIGHTHOUSE_RUN_TIMEOUT_MS`, named once and applied to
+all four specs; verified 4/4 green in 1.1 m. This is *scoping*, not arithmetic — the G-M3-3 bug was a sum
+that exceeded its clock, and this one was a clock that never applied.

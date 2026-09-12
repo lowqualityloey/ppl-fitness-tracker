@@ -496,10 +496,12 @@ The narrower claim that survived — "non-interactive shells resolve `/usr/bin/n
   consecutive full batteries green with zero solo re-runs exists twice (`100r1`–`r5` on `7baf430`,
   discarded when a spec's allowed runtime changed; `100s1`–`s5` on the shipping tree, one of them at load
   8.36 on `nproc=4`). **What this does not buy:** the 50 ms paint gate is missed by two specs at once at
-  CI's 2 workers on an oversubscribed box (55.1 / 73.2 ms) — CI's runner reads 16.8–19.4 ms there, so it is
-  load-sensitive rather than parallel-broken, and neither a `--workers` cap nor a moved goal was used;
+  CI's 2 workers on an oversubscribed box (55.1 / 73.2 ms) — CI's * quieter runner read 16.8–19.4 ms on one #116 job, but **CI itself went red on it too**
+  (66.1 ms at **n=17, where p95 is the maximum** — **#121**), so the gate is load-sensitive and its denominator is
+  broken on CI hardware; neither was papered over with a `--workers` cap or a moved goal, and neither a `--workers` cap nor a moved goal was used;
   `dashboard.spec.ts:125` is still unexplained after a wrong explanation was withdrawn; the GoTrue teardown
-  500 is nameable rather than fixed; `100run1`'s vanished server is unnamed. Full ledger, including the
+  500 is nameable rather than fixed; the sampler's `n=17` degeneracy is **#121**, and the `chrome-launcher`
+  WSL `PATH` scan that forced a stripped `PATH` on every Lighthouse number in this ledger is **#122**; `100run1`'s vanished server is unnamed. Full ledger, including the
   three claims of mine that were wrong in the flattering direction:
   `docs/rca/m4-100-contention-ledger.md`. **PR #120**, branch `test/m4-100-contention-fences`.
 
@@ -1046,7 +1048,9 @@ Carried forward, still open:
        across the shipping five); `100s5` **met it by 0.9 ms**, which is a coin flip rather than a result and
        is recorded instead of being quoted either way — #92; (e) at CI's real scheduling on
        this box the 50 ms paint gate is missed by two specs at once at 1.9× oversubscription (55.1 and 73.2 ms
-       p95) while reading 16.8–19.4 ms on CI's runner, so it is load-sensitive rather than parallel-broken,
+       p95), and CI's own runner went red on it too (66.1 ms at **n=17**, where p95 *is* the maximum — filed as
+       **#121**, because the defect is the sampler's denominator rather than the 50 ms goal), so it is
+       load-sensitive and its CI statistic is degenerate,
        and `timers.spec.ts:278` exhausted the new 10 s window there — the poll it is derived from is itself
        starved under contention, and widening the bound to fit a busy machine would tune it to the box.
        Five consecutive full batteries green with **zero solo re-runs** now exists twice — `100r1`–`100r5` on

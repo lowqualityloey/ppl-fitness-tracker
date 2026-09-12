@@ -1,6 +1,7 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test';
 import { createTestSession, type TestSession } from '../integration/api/fixtures.js';
 import {
+  WORKOUT_FLOW_TIMEOUT_MS,
   startPushDay,
   waitForSynced,
   warmUpAndStart,
@@ -28,6 +29,30 @@ import {
 const G_M3_2_BUDGET_MS = 50;
 const G_M3_3_BUDGET_MS = 5_000;
 const G_M3_4_BUDGET_MS = 5_000;
+
+/*
+ * Each spec's own **declared waiting**, lifted out of the inline assertions so a test clock can be the
+ * sum of the waits it contains rather than a number someone felt was generous.
+ *
+ * These values are unchanged from the literals they replace: naming a wait is not moving a budget. The
+ * SLA constants above are the enforced ones and none of them moved either. What was broken is that
+ * G-M3-3 permitted 15 000 + 5 x 8 000 = **55 s of waiting** inside Playwright's **30 s** default test
+ * timeout, and G-M3-4 permitted 10 000 + 15 000 = 25 s plus sixty UI activations inside the same 30 s.
+ * Audit 19 recorded the consequence for G-M3-3: the spec ran out its test budget **while printing a
+ * passing measurement**, i.e. the wall clock failed and the goal did not. That is not contention, and
+ * `docs/rca/m4-100-contention-ledger.md` now says so with the arithmetic.
+ *
+ * G-M3-2 is deliberately absent: it declares no waits (its recorded failure was a measurement breach at
+ * p95, not a timeout), so giving it a longer clock would be loosening a gate to fit a story.
+ */
+const G_M3_4_QUEUE_VISIBLE_MS = 10_000;
+const G_M3_4_DRAIN_WINDOW_MS = 15_000;
+const G_M3_4_DECLARED_WAIT_MS = G_M3_4_QUEUE_VISIBLE_MS + G_M3_4_DRAIN_WINDOW_MS;
+
+const G_M3_3_BADGE_WINDOW_MS = 15_000;
+const G_M3_3_PROPAGATION_WINDOW_MS = 8_000;
+const G_M3_3_SAMPLES = 5;
+const G_M3_3_DECLARED_WAIT_MS = G_M3_3_BADGE_WINDOW_MS + G_M3_3_SAMPLES * G_M3_3_PROPAGATION_WINDOW_MS;
 /**
  * The ceiling actually asserted, and it is deliberately looser than the goal — for a reason that
  * has to survive review, because this is the line item most likely to be mistaken for a loosened
@@ -142,6 +167,12 @@ test.describe('M3 latency goals (production build)', () => {
   });
 
   test('G-M3-4 — a 60-mutation queue drains in under 5 s after reconnect', async ({ page }) => {
+    /*
+     * Its own declared waits (25 s) plus the allowance this repo already uses for a workout walked
+     * through the UI, because building a 60-mutation queue *is* that much flow. Measured solo on a quiet
+     * box: 16.1 s, against the 30 s default it used to have to fit inside.
+     */
+    test.setTimeout(G_M3_4_DECLARED_WAIT_MS + WORKOUT_FLOW_TIMEOUT_MS);
     const auth = await createTestSession('e2e-sla-drain');
     try {
       await page.goto('/');
@@ -177,7 +208,9 @@ test.describe('M3 latency goals (production build)', () => {
       }
       // The badge counts what is waiting; `pendingCount` is the outbox length, so 60 is the queue
       // the drain has to carry. (No coalescing in `outbox.ts` — each tap is a stored mutation.)
-      await expect(page.getByTestId('queue-badge')).toContainText('60 waiting', { timeout: 10_000 });
+      await expect(page.getByTestId('queue-badge')).toContainText('60 waiting', {
+        timeout: G_M3_4_QUEUE_VISIBLE_MS,
+      });
 
       /*
        * One clock, page-side, both endpoints monotonic from navigation.
@@ -223,7 +256,7 @@ test.describe('M3 latency goals (production build)', () => {
        * "60 drained in 900 ms, 14 were superseded," not a silent green.
        */
       await expect(page.getByTestId('queue-badge')).not.toContainText('waiting to sync', {
-        timeout: 15_000,
+        timeout: G_M3_4_DRAIN_WINDOW_MS,
       });
       const wallMs = Date.now() - start;
       const m = await page.evaluate<{ online?: number; drained?: number }>(() => {
@@ -282,6 +315,14 @@ async function signedInContext(browser: Browser, session: TestSession): Promise<
 test('G-M3-3 — cross-device propagation reaches a second open session in under 5 s p95', async ({
   browser,
 }) => {
+  /*
+   * 55 s of permitted waiting by its own arithmetic (`G_M3_3_DECLARED_WAIT_MS`), plus two signed-in
+   * contexts and a UI day-start — which is the `WORKOUT_FLOW_TIMEOUT_MS` class of setup, twice over.
+   * The 30 s default it ran under was less than its own queue-badge and propagation windows together, so
+   * the spec could exhaust its clock while the goal it measures was passing. That is audit 19, and it was
+   * a clock bug rather than a flake.
+   */
+  test.setTimeout(G_M3_3_DECLARED_WAIT_MS + WORKOUT_FLOW_TIMEOUT_MS);
   const auth = await createTestSession('e2e-sla-cross');
   let a: BrowserContext | undefined;
   let b: BrowserContext | undefined;
@@ -295,7 +336,9 @@ test('G-M3-3 — cross-device propagation reaches a second open session in under
     b = await signedInContext(browser, auth);
     const pageB = await b.newPage();
     await pageB.goto(`/session/${sessionId}`);
-    await expect(pageB.getByTestId('queue-badge')).toBeVisible({ timeout: 15_000 });
+    await expect(pageB.getByTestId('queue-badge')).toBeVisible({
+        timeout: G_M3_3_BADGE_WINDOW_MS,
+      });
 
     const propagation: number[] = [];
     const ticks = pageA.locator('[data-testid^="tick-"]:not([disabled])');
@@ -307,7 +350,7 @@ test('G-M3-3 — cross-device propagation reaches a second open session in under
       // of the *same* row to read pressed is the whole cross-device claim.
       await expect(
         pageB.locator(`[data-testid^="tick-"]`).nth(index),
-      ).toHaveAttribute('aria-pressed', 'true', { timeout: 8_000 });
+      ).toHaveAttribute('aria-pressed', 'true', { timeout: G_M3_3_PROPAGATION_WINDOW_MS });
       propagation.push(Date.now() - before);
     }
     const p95 = report('G-M3-3 cross-device', propagation);

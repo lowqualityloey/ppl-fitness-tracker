@@ -47,7 +47,10 @@ function appPhaseLabels(): string[] {
   // parser, which looked for a quoted key, returned an empty list and the guard below would have
   // "passed" against nothing. A scanner that silently finds zero subjects is the failure mode this
   // file's own third rule exists to catch.
-  const labels = [...block[1].matchAll(/\w+\s*:\s*'([^']+)'/g)].map(([, label]) => label);
+  const body = block[1] ?? '';
+  const labels = [...body.matchAll(/\w+\s*:\s*'([^']+)'/g)]
+    .map(([, label]) => label)
+    .filter((label): label is string => typeof label === 'string');
   if (labels.length === 0) throw new Error('PHASE_LABEL block found but parsed to no labels.');
   return labels;
 }
@@ -74,8 +77,16 @@ describe('#100: the phase-label fence holds as code, not as intent', () => {
   it('asserts exactly the labels the app renders, no more and no fewer', () => {
     const helper = readFileSync(join(ROOT, 'tests', 'e2e', 'runner-fixtures.ts'), 'utf8');
     const union = helper.match(/label:\s*([^\n]+(?:\n[^\n]+)*?),\s*\n\s*\)\: Promise/);
-    expect(union, 'expectPhase label union not found — it changed shape').not.toBeNull();
-    const asserted = [...union![1].matchAll(/'([^']+)'/g)].map(([, label]) => label).sort();
+    if (!union) {
+      throw new Error(
+        'expectPhase label union not found. It did not "pass" — the guard lost its subject, so the ' +
+          'comparison below would have run against an empty list.',
+      );
+    }
+    const asserted = [...(union[1] ?? '').matchAll(/'([^']+)'/g)]
+      .map(([, label]) => label)
+      .filter((label): label is string => typeof label === 'string')
+      .sort();
     expect(asserted).toEqual(appPhaseLabels().sort());
   });
 

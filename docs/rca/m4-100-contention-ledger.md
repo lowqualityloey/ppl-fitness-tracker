@@ -171,3 +171,29 @@ exit 0, typecheck 0 errors.
 - The `waitForQueued` (registration-then-ack) idea is **not implemented**: it assumes the "N waiting to
   sync" render is observable long enough to catch, and if a fast ack skips it the helper becomes a new
   flake generator. The derived window carries the fence alone until that is measured.
+
+## The clocks, measured — and audit 19 stops being a mystery
+
+`sla.spec.ts`'s three measurement specs ran on Playwright's **30 s default test timeout** with no override,
+while two of them *declare* more permitted waiting than that. Both are now set from their own constants:
+
+| Spec | Declared waits | Measured solo, quiet box (load 1.08 / 2.33) | Old clock | New clock |
+| :-- | :-- | :-- | :-- | :-- |
+| **G-M3-3** `:315` | 15 000 + 5 × 8 000 = **55 s** | **25.7 s — 86 % of its old budget** | 30 s | 55 s + `WORKOUT_FLOW_TIMEOUT_MS` = 145 s |
+| G-M3-4 `:169` | 10 000 + 15 000 = 25 s | 8.3 s (16.1 s in an earlier solo) | 30 s | 115 s |
+| G-M3-2 `:94` | **none declared** | 5.8 s | 30 s | **30 s, left alone** |
+
+G-M3-3's number is the one that retires the story. Audit 19 recorded it "running out its 30 s *test* budget
+while printing a **passing** measurement", and that is exactly what a 25.7 s quiet-box baseline inside a
+30 s clock predicts: **4.3 s of headroom** on a spec whose own assertion windows permit 55 s of waiting. No
+contention required, no product defect required — the arithmetic never fit. The json reporter is what turned
+that from a reading of the code into a measurement: `list` printed 25.7 s once and would have forgotten it.
+
+G-M3-2 keeps the default deliberately. It declares no waits and its recorded failure was a measurement
+breach at p95, so extending its clock would be loosening a gate to fit a narrative about it.
+
+**Why there is no separate guard for these clocks:** the inline literals and the test timeouts are now the
+same identifiers — `G_M3_3_BADGE_WINDOW_MS`, `G_M3_3_PROPAGATION_WINDOW_MS`, `G_M3_4_QUEUE_VISIBLE_MS` — so
+a clock cannot drift below the waits it contains without editing them, and `grep -n "timeout: [0-9]"` over
+this file returns nothing. Naming the values *is* the fence; a test asserting a sum of two names would
+decorate it.

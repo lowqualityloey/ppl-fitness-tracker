@@ -370,3 +370,34 @@ one is a local paint, the other is a round trip through a contended Postgres.
 six mutation-harness controls, which are *supposed* to fail — `CAUGHT exit=1` — and whose `RESTORED` step
 came back 6 passed. Quoting that count as "e2e reds" would be a mistake a reader of this ledger could make,
 so it is pre-empted here.)
+| `100r5` | 0 ×8 | **61 passed (6.2 m)** | 45/430 · 11/64 | **36.3 ms** vs 50 (max tap 75.6) | p50 219.3 / p95 281.0 → MISSES | **4.80 / 5.42 / 5.25 → 5.00 / 5.59 / 5.34** | **5/5** |
+
+## #100's five-consecutive criterion: met, and what "met" means here
+
+`100r1` … `100r5` are **five consecutive full-battery greens on this machine with zero solo re-runs** — nothing
+was re-run in isolation, because nothing went red. Verified to share one code tree: `git diff --name-only
+7baf430..HEAD` returns this file alone, so `7baf430` is the code the whole sequence measured.
+
+The sequence is not continuous with the earlier passes, and the breakage is part of the record: `100q1` and
+`100q2` were green and were discarded when `100q3` went red on a teardown 500 whose cause could not yet be
+named. Carrying two greens earned *before* that red existed would be the same move as deleting the row.
+
+**Three of the five passes ran with the load average above the core count** — r3 started at 7.04 on the
+5-minute average (1.8×), r4 ended at 6.85 (1.7×), r5 ran its whole length between 4.80 and 5.59 (1.2–1.4×).
+That is the difference between "green on a quiet box" and something worth calling evidence, and it is
+reportable only because the denominator got attached to the harness. The `nproc=4` count and both load
+samples are in `battery.sh`'s output for every pass from here on.
+
+**What is still not claimed**, restated so the summary above cannot be read as a close:
+
+1. **The suite is not proven quiet.** Five greens at 1–1.8× oversubscription on one machine with one
+   neighbour profile is a strong result and not a proof; the 50 ms tap gate and the 5 s propagation budgets
+   were never moved to obtain it.
+2. **The `100run1` server disappearance is unnamed.** It did not reproduce and the harness now detects it,
+   but "a production server can vanish mid-suite with no signal explanation" is unresolved.
+3. **`dashboard.spec.ts:125` is unresolved**, with a wrong explanation withdrawn (see above).
+4. **The GoTrue teardown 500 is now *nameable* rather than fixed.** `describeGoTrueFailure` surfaces the
+   service's own message; the cause of the 500 is still open, and #100 does not claim it. If it recurs in
+   the counted runs, the message will say what it was.
+5. **`/api/sync` misses its documented 200 ms budget on p95 every counted pass** (335.5 → 302.3 → 210.8 →
+   320.3 → 281.0 ms). #92's, with the caveat already recorded about quoting a p50 that dipped under.

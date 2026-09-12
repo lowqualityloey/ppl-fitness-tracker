@@ -1019,8 +1019,10 @@ Carried forward, still open:
        came from the production server vanishing mid-run — no crash output, no OOM, no competing process, and
        it did **not** reproduce — cause unnamed, harness now detects the signature and locks against a
        concurrent pass; (c) the GoTrue teardown 500 that had been filed as two unexplained flakes is now
-       *nameable* (our helper was discarding the response body) but not fixed; (d) `/api/sync` missed its
-       documented 200 ms on **p95 every counted pass** (210.8–335.5 ms) — #92; (e) at CI's real scheduling on
+       *nameable* (our helper was discarding the response body) but not fixed; (d) `/api/sync`'s
+       documented 200 ms is judged on p95 and was missed on nine of ten counted passes (199.1–404.6 ms
+       across the shipping five); `100s5` **met it by 0.9 ms**, which is a coin flip rather than a result and
+       is recorded instead of being quoted either way — #92; (e) at CI's real scheduling on
        this box the 50 ms paint gate is missed by two specs at once at 1.9× oversubscription (55.1 and 73.2 ms
        p95) while reading 16.8–19.4 ms on CI's runner, so it is load-sensitive rather than parallel-broken,
        and `timers.spec.ts:278` exhausted the new 10 s window there — the poll it is derived from is itself

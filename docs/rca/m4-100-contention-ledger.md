@@ -453,7 +453,7 @@ streak column only advances when a pass is 8/8 green with zero e2e reds.
 | `100s2` | `05a6b0d` | 8/8 | **61 passed (5.5m)**, 0 reds | 45/430 · 11/64 | p95 **20.7** (max 30.3) | 173.7 / 202.1 → MISSES | 2.17 3.34 4.43 → 2.25 3.55 4.15 | **2/5** |
 | `100s3` | `05a6b0d` | 8/8 | **61 passed (5.6m)**, 0 reds | 45/430 · 11/64 | p95 **35.0** (max 42.1) | 216.8 / 324.1 → MISSES | 2.25 3.55 4.15 → 4.43 3.85 3.99 | **3/5** |
 | `100s4` | `05a6b0d` | 8/8 | **61 passed (6.6m)**, 0 reds | 45/430 · 11/64 | p95 **30.5** (max 39.4) | 242.3 / 404.6 → MISSES | 4.43 3.85 3.99 → 8.36 6.83 5.34 | **4/5** |
-| `100s5` | `05a6b0d` | 8/8 | **61 passed (5.3m)**, 0 reds | 45/430 · 11/64 | p95 **24.2** (max 50.9) | 171.5 / 199.1 → MISSES | 8.36 6.83 5.34 → 2.64 4.08 4.80 | **5/5** |
+| `100s5` | `05a6b0d` | 8/8 | **61 passed (5.3m)**, 0 reds | 45/430 · 11/64 | p95 **24.2** (max 50.9) | 171.5 / **199.1 → MET, by 0.9 ms** | 8.36 6.83 5.34 → 2.64 4.08 4.80 | **5/5** |
 
 **5 of 5 counted passes green on `05a6b0d`.**
 
@@ -464,8 +464,13 @@ Five consecutive full-battery greens exist for two code trees: `7baf430` (`100r1
 discarded on principle, not necessity — a spec's allowed runtime is shipped behaviour, so carrying those
 greens across a clock change would have been the same shortcut as carrying them across a red.
 
-Load on the shipping five stayed between **2.17 and 4.43** after-state on `nproc=4`: busy at the edges, not
-the 6.85–8.49 of the earlier passes. So the strongest statement the data supports is *five consecutive full
+**Two errors in this table, both corrected on sight.** The first version of `100s5`'s row said "MISSES"
+because the generator wrote that verdict unconditionally; `100s5` actually printed **p95 199.1 ms against the
+200 ms document — met, by 0.9 ms**, the only pass in the project's recorded history to clear it, and clearing
+it by 0.9 ms is a coin flip rather than a result. The second: a paragraph below the earlier version claimed
+the shipping five "stayed between 2.17 and 4.43", which the rows contradict — `100s4` ended at **8.36**
+(2.1× cores) and `100s5` began there. Both statements are wrong in the *flattering* direction, which is the
+kind worth looking for. So the strongest statement the data supports is *five consecutive full
 batteries at `--workers=1`, on a box whose neighbours were awake, with the label windows and the spec clocks
 each sized from the arithmetic they depend on* — and the uncapped 2-worker run above shows the same tree
 still reds on the 50 ms paint gate at 1.9× oversubscription. #100 exits as **a named fence with named

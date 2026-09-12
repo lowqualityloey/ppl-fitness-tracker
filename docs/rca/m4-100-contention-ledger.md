@@ -351,3 +351,10 @@ That is not "the box was quiet so it passed" and it is not "we loosened somethin
 previously been shorter than the propagation it waited on was widened to its derived bound *before* this
 pass, and no SLA moved. The honest reading is narrower than "flakes fixed" — it is **one pass at 2× load
 with zero reds**, which is more than any earlier branch can show *measured*.
+| `100r3` | 0 ×8 | **61 passed (5.3 m)** | 45/430 · 11/64 | **18.7 ms** vs 50 | **175.2 ms — inside 200** | 3.53 / **7.04** / 6.39 → 2.68 / 4.19 / 5.29 | **3/5** |
+
+`100r3` ran with the 5-minute average at **7.04** (1.8× cores) when it started and came down as it went, and
+`POST /api/sync` printed **p50 175.2 ms — inside the documented 200 ms** for the first time in this ledger.
+Worth stating precisely because it cuts both ways: the budget's verdict on this box swings with what the
+neighbours are doing, which is #92's point about the measurement needing a quieter denominator, not evidence
+that anything in the app improved. The 800 ms enforced ceiling is untouched and was never approached.

@@ -440,3 +440,13 @@ stays as derived and this row is the disclosure.
 `100r1`–`100r5`; the clocks above are a real change to a shipped behaviour (how long a spec is allowed to
 run), so reusing that pair of… passes would be the same shortcut as carrying greens across a red. New code
 tip, five fresh passes, same rule.
+
+## The five fresh counted passes on `05a6b0d` — recorded as they land
+
+| Pass | Per-step exits | e2e | unit / api | set-tap | `/api/sync` | load before → after | Streak |
+| :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
+| `100s1` (`05a6b0d`) | 8/8 steps exit 0 | **61 passed (5.4mm)** | 45/430 · 11/64 | p95 **32.2 ms** (max 61.2) | p50 194.5 / p95 280.7 → MISSES | 3.19 4.67 5.31 → 2.17 3.34 4.43 | **1/5** |
+| `100s2` (`05a6b0d`) | 8/8 steps exit 0 | **61 passed (5.5mm)** | 45/430 · 11/64 | p95 **20.7 ms** (max 30.3) | p50 173.7 / p95 202.1 → MISSES | 2.17 3.34 4.43 → 2.25 3.55 4.15 | **2/5** |
+| `100s3` (`05a6b0d`) | 8/8 steps exit 0 | **61 passed (5.6mm)** | 45/430 · 11/64 | p95 **35.0 ms** (max 42.1) | p50 216.8 / p95 324.1 → MISSES | 2.25 3.55 4.15 → 4.43 3.85 3.99 | **3/5** |
+| `100s4` (`05a6b0d`) | 8/8 steps exit 0 | **61 passed (6.6mm)** | 45/430 · 11/64 | p95 **30.5 ms** (max 39.4) | p50 242.3 / p95 404.6 → MISSES | 4.43 3.85 3.99 → 8.36 6.83 5.34 | **4/5** |
+| `100s5` | *running at the time of this write* | | | | | | **in flight** |

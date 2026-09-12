@@ -325,3 +325,11 @@ and for the same reason: a ledger row must not invalidate the pass it is recordi
 protocol §7 still recommends ("re-run a red timing gate solo before believing it") stayed unused, which is
 the first time in this project's history that the recommendation has been *satisfiable* rather than merely
 followed.
+
+## The streak restarts at `7baf430` — the cost of treating a red as real
+
+`100q1` and `100q2` are history, not the first two of five. **Fresh sequence, code tip `7baf430`:**
+
+| Pass | Per-step exits | e2e | unit / api | set-tap p95 | `/api/sync` p50 | load before → after | Streak |
+| :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
+| `100r1` | 0 ×8 | **61 passed (5.6 m)** | 45/430 · 11/64 | **18.2 ms** vs 50 | 244.2 vs 200 (MISSES, #92) | 4 cores · see log line | **1/5** |

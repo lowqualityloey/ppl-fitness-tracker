@@ -478,3 +478,41 @@ residue**, not as a root-caused silence: three causes were found and fenced with
 label window, the under-sized spec clocks, and the unreachable-trace configuration), and four things remain
 open by name (`dashboard.spec.ts:125`, the vanished server in `100run1`, the GoTrue teardown 500 now being
 nameable rather than fixed, and `/api/sync`'s p95 against its 200 ms document).
+
+## CI went red on the paint gate, and the retry passing is not the end of it
+
+**Run 34710896238 (`c0c727b4`, the merge ref): `test` job failed — "Run E2E suite against the production
+build", 60 passed / 1 failed.** The red was `sla.spec.ts:94` G-M3-2: `p95 66.1ms exceeds the 50ms goal`.
+**Run 34711078660 (`d0c6037`) passed in 12m37s**, `MERGEABLE`/`CLEAN`. Both numbers are from the job logs,
+fetched rather than remembered.
+
+The retry does not close it, and the pair is more useful together than either run alone:
+
+| CI run | G-M3-2 line | median | p95 | max | **n** |
+| :-- | :-- | :-- | :-- | :-- | :-- |
+| 34710896238 (red) | `[G-M3-2 tap→UI]` | **15.3 ms** | **66.1 ms** | 66.1 ms | **17** |
+| 34711078660 (green) | `[G-M3-2 tap→UI]` | **15.3 ms** | **24.8 ms** | 24.8 ms | **17** |
+| local counted passes | same | 12.8–17.4 ms | 18.2–36.3 ms | 24.9–75.6 ms | **100** |
+
+**Two facts in that table, and neither is contention.** First: **`p95 == max` in both CI runs.** With
+`n=17` the "95th percentile" *is* the largest observation, so a single slow tap decides a 50 ms SLA — which
+is why the same median (15.3 ms, identical in both runs) produced red and green on successive runs of
+different trees. Second: the spec's title promises **100 taps** and CI records **17**, while this box
+records 100.
+
+**The mechanism is in the sampler, not the app.** `sla.spec.ts:126-152` pairs each click's `t0` with the
+`MutationObserver` record that follows, and deletes `t0` on the first match — so when the same element is
+tapped repeatedly, later taps usually have no pending `t0` when a batched mutation arrives and the sample is
+discarded. How many survive depends on paint coalescing, which differs by machine class: 100 here, 17 there.
+Locally the degeneracy is hidden because `p95(100)` is a real 95th percentile and the max (up to 75.6 ms)
+never gates.
+
+**Not fixed here, and why that is disclosed rather than tidied:** the fix is to make the loop await the paint
+it is timing before the next tap (or key `t0` per pending click rather than per element), which changes *how
+many samples the gate sees* — a measurement-semantics change that deserves its own control and its own
+counted passes, not a commit riding on a PR whose five batteries were measured on the current sampler. Two
+corrections travel with it: this PR's body claimed CI reads **16.8–19.4 ms** for this gate (from #116's
+single job) when the honest figure is 24.8 ms with n=17, and **§7's claim that G-M3-2's reds are
+load-attributable is now at least partly a degenerate-statistic problem on CI hardware.** The 50 ms goal
+itself has not moved, and will not be moved to accommodate this: the defect is in the denominator, not the
+threshold.

@@ -526,3 +526,21 @@ single job) when the honest figure is 24.8 ms with n=17, and **§7's claim that 
 load-attributable is now at least partly a degenerate-statistic problem on CI hardware.** The 50 ms goal
 itself has not moved, and will not be moved to accommodate this: the defect is in the denominator, not the
 threshold.
+
+## Re-run accounting for every red this branch produced
+
+The criterion is "five consecutive full batteries with **zero solo re-runs**", so the ledger has to say which
+red was re-run and in what form — otherwise "zero" is a claim about a number nobody recorded.
+
+| Red | Where | Solo re-run? | What resolved it instead |
+| :-- | :-- | :-- | :-- |
+| `80passC` × 4 (`dashboard.spec.ts:125`, `session-runner.spec.ts:111`, `session-runner.spec.ts:237`, `sla.spec.ts:144`) | `--workers=1` full suite | **yes, 4/4, before #100 existed** | Each green solo in 1.1 m with its number recorded in the "solo re-run" table above. This is the practice #100's criterion is designed to make unnecessary, and it is kept visible for exactly that reason. |
+| `100run1` × 54 | `--workers=1` full suite | **no** | Full-suite re-run of the identical command on the identical tree: 61 passed, zero refusals. A server disappearance is not a per-spec property, so a solo run would have measured the wrong thing. |
+| `100q3` × 1 (`a11y.spec.ts:163`) | `--workers=1` full suite | **no, deliberately** | Named from code and text instead: `fixtures.ts:156` threw in `cleanup()`. Re-running a teardown throw solo would either pass by luck or produce the same 500 without ever explaining it, and it is the move that had already mis-filed this event twice under two spec names. |
+| uncapped × 4 (`session-runner.spec.ts:112`, `session-runner.spec.ts:299`, `sla.spec.ts:94`, `timers.spec.ts:278`) | default 2 workers | **no** | Classified from their own error strings (55.1 / `Test timeout of 30000ms` / 73.2 / window exhausted). One was fixed by a clock sized from measured durations, which was then re-verified by restarting the whole counted five rather than by re-running the single spec. |
+| CI `test` job on `c0c727b4` (`sla.spec.ts:94`) | GitHub runner | **no** | The retry that produced #116's "same SHA, 61/0" story was *not* reproduced here: the next green run was a different SHA, and the red was taken to its own cause (`n=17`, `p95 == max`), which is filed as **#121** with the 50 ms goal left untouched. |
+
+**Across `100s1`–`100s5` (the counted five): no spec was ever run in isolation at all** — nothing went red, and
+the passes are the unit. That is the first time in this project's history that §7's "re-run a red timing gate
+solo before believing it" protocol was satisfied by *not needing it* rather than by following it, and the row
+above exists so that claim can be audited rather than read as rhetoric.

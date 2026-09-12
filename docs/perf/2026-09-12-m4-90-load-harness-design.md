@@ -197,3 +197,77 @@ fast half of the distribution as p95). When either is non-zero the report says p
 before reading the verdict.
 
 Typecheck 0, lint 0 after both changes.
+
+## The mechanism behind `max_idle_in_transaction=10`, read from the code
+
+Recorded here rather than in a chat message because it is the part of #90 that #92 will have to act on, and it
+was established by reading, not by guessing at the numbers:
+
+- `lib/db/client.ts:26` — `const pool = new Pool({ connectionString })`, **no `max`**, so **pg's default of 10
+  applies**.
+- `lib/db/client.ts:37-47` — `getDb()` memoizes **one process-wide handle** on `globalThis`, so those 10
+  connections are the ceiling for the *entire server process*, not per worker. `MIGRATION_DATABASE_URL` is
+  deliberately never consulted here, which is why the observer's own pool is separate and capped at 2.
+- `lib/db/with-user.ts:48` — `return db.transaction(async (tx) => …)` is the **only** transaction site in
+  `lib/`. Every authenticated request that touches data therefore checks out a pool connection, opens a
+  transaction, and **holds it across `await`s** that are not database work.
+
+Put together, those three lines predict exactly what `pg_stat_activity` showed: ten backends parked in
+`idle in transaction`, an eleventh caller queued in the pool where the driver cannot see it, and latency that
+grows with concurrency while a single sequential request looks fine. It also explains why every number this
+repo has ever printed about `/api/sync` was comfortable: **one request at a time never needs an eleventh
+connection.**
+
+What #90 does with that: report it, with the citations. What #90 does **not** do: change `max`, restructure
+`with-user`, or move the 200 ms budget. Any of those is #92, and doing them here would trade a measured
+question for an unmeasured answer.
+
+One thing this box cannot tell me, stated so nobody pretends otherwise: `next start` on a 4-core WSL box is
+not a deployable server, and the harness's own load reached 15.19. So the **shape** above transfers to any
+deployment, while the **milliseconds** below are a property of this machine and are labelled as such every
+time they appear.
+
+## Pilot, baseline and sweep — 2026-09-12, `cc84de4` + parser/scheduler fixes, production build on :3001
+
+Reproduction: `/tmp/ppl-battery/perf-run.sh` (build unmodified tree → `next start --port 3001` → pilot →
+baseline → sweep → kill by PID). Box: `nproc=4`, **load 1.34 before the pilot and 26.7 after the baseline**,
+so the harness was the dominant load on the machine it measured.
+
+| Run | config | offered | accepted | p50 / p95 / max (2xx) | rejected | DB-side max |
+| :-- | :-- | :-- | :-- | :-- | :-- | :-- |
+| pilot | 5 users, 10 rps, 15 s | 8.6 rps | n=150 | **4282 / 5514 / 6401 ms** | 0 | active 19, idle-in-tx 7 |
+| baseline | 30 users, 50 rps, 60 s | **13.0 rps** | n=419 | **5655 / 8763 / 11676 ms** | **401 ×407** | active 14, idle-in-tx **10** |
+| sweep | 20 users, 50 rps, 20 s | 12.9 rps | n=158 | 5133 / 7080 ms | 401 ×136 | — |
+| sweep | 10 users, 50 rps, 20 s | 11.5 rps | n=220 | 5822 / 6994 ms | 401 ×50 | — |
+| sweep | 4 users, 50 rps, 20 s | 10.6 rps | n=229 | 5973 / 7320 ms | 401 ×17 | — |
+
+### This run does not answer the question the card asks, for two named reasons
+
+**1. 50 rps was never offered.** The baseline fired 826 requests in 63.7 s = **13.0 rps**, with
+`backpressure_ticks=2175` at the client's `--max-inflight=64` cap: the driver spent 72 % of its ticks refusing
+to fire. Every sweep row lands at 10–13 rps too. So "p95 at 50 rps" is **not established on this hardware**;
+what is established is that ~13 concurrent-ish rps is enough to saturate the client at 64 in flight. The
+VERDICT line said "at 50 rps" anyway, which is a lie of phrasing rather than of arithmetic — fixed below.
+
+**2. 49 % of the baseline's requests returned 401, and `429=0` anywhere means the per-user sync budget was
+never reached.** Order in the route explains it: `requireUserContext()` runs *before* `rateLimitedResponse`,
+so an unauthenticated request is rejected before the limiter ever counts it. The card's negative scenario
+("fewer users than the run demands" → visible 429 interference) therefore **did not run**; the sweep produced
+401 interference instead. That is a finding, not a shortcut.
+
+### The 401 epidemic is now the most interesting thing here, and it is unexplained
+
+The pilot (5 users) had **zero** rejections. The baseline (30 users) had 407 of 826. Each of these users has
+its own `CookieJar` and its own session string, so the usual story (shared jar, overwritten session) does not
+apply. The leading candidate is visible in the driver, not the app: **the harness never applies `Set-Cookie`
+from responses back into its jar.** If a response rotates the auth cookie — which is what a session refresh
+does — then every subsequent request from that user carries a superseded credential, and the failure rate
+should rise with the number of requests a user makes after the first rotation. That prediction is testable and
+is the first thing to check next, because if it holds, **most of the latency table above is measuring requests
+that authenticated**, and the 401s are a client bug wearing a server's costume.
+
+If it does not hold — if a real client holding a rotated cookie still gets 401 under concurrency — then this
+is a genuine server-side behavior with product consequences (a syncing client losing its session under load is
+exactly the class M4 exists to find), and it becomes a card of its own rather than a footnote here.
+
+Either way: **no number in the table above is a baseline**, and the 200 ms question stays open.

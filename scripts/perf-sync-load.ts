@@ -363,15 +363,31 @@ async function main(): Promise<number> {
     console.log(`DENOMINATOR  load_after=${loadavg()}`);
     console.log(`STATUS       ${[...statusCounts.entries()].map(([k, v]) => `${k}:${v}`).join(' ')}`);
 
+    // A verdict that names the target rate when the client never offered it is a lie of phrasing, not of
+    // arithmetic: the first baseline printed "MISS … at 50 rps" for a run that offered 13 rps because the
+    // driver spent 72% of its ticks at the in-flight cap. So the target is only claimed when it was delivered.
+    const offeredRps = offered / elapsedS;
+    const offeredEnough = offeredRps >= options.targetRps * 0.9;
     const verdictOK = accepted.length > 0 && Number.isFinite(p95) && p95 < LATENCY_BUDGET_MS;
+    const verdictWord = !offeredEnough
+      ? 'INCONCLUSIVE'
+      : accepted.length === 0
+        ? 'MISS'
+        : verdictOK
+          ? 'PASS'
+          : 'MISS';
     console.log(
-      `VERDICT      ${verdictOK ? 'PASS' : 'MISS'} — p95 ${fmt(p95)} ms vs the documented ` +
-        `${LATENCY_BUDGET_MS} ms at ${options.targetRps} rps. The budget is a product goal; this script does` +
-        ` not edit it.`,
+      `VERDICT      ${verdictWord} — p95 ${fmt(p95)} ms vs the documented ${LATENCY_BUDGET_MS} ms ` +
+        `at ${offeredEnough ? `${options.targetRps} rps` : `an offered ${offeredRps.toFixed(1)} rps, ` +
+          `NOT the ${options.targetRps} rps the budget is written against`}. ` +
+        `The budget is a product goal; this script does not edit it.`,
     );
     if (!verdictOK) {
       console.log(
-        `             A MISS is the harness working. Closing the gap is #92's job, not this file's.` +
+        `             ${verdictWord === 'INCONCLUSIVE' ? 'An INCONCLUSIVE verdict is the harness refusing' : 'A MISS is the harness working'}` +
+          ` to name a rate it did not deliver: raise --max-inflight (backpressure_ticks=` +
+          `${backpressureTicks}) until offered ≈ target before any PASS/MISS is read as a latency answer.` +
+          ` Closing a real gap is #92's job, not this file's.` +
           (accepted.length === 0 ? ' (n=0 accepted: nothing was measured — check the server and the stack.)' : ''),
       );
     }

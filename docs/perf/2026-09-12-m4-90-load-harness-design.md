@@ -108,3 +108,66 @@ honestly.
 4. Watched-fail control (scratch sleep), revert, re-measure.
 5. `docs/STATE.md` §3/§7 updates only from numbers measured on merged `main`, and the honesty law applies to
    the wording: no "meets the budget" without the accepted-rps line beside it.
+
+---
+
+# Run log
+
+## `smoke-intended` run — 2026-09-12, production build on :3001, local stack up
+
+**It was not a smoke run.** `--users=3 --rps=6 --duration=5` were passed and **ignored**: `parseArgs` only
+matches the space-separated form (`--users 3`), and npm hands over `--users=3`, so every setting fell back to
+its default. The harness therefore ran the **full 30 users / 50 rps / 60 s** configuration unannounced, for
+63.9 s, at load up to 15.19 on a 4-core box. Recorded first because a run whose parameters are silently not
+the parameters you typed is the exact failure mode this card exists to catch, and because it means the
+numbers below are a *maximal* run, not a pilot.
+
+Server identity was checked, not assumed: `perf-start.log` prints **Next.js 16.3.4 / Ready** on :3001, so the
+run measured this repo's build. (There is also an unrelated `next-server v15.0.0` process on this machine,
+which did not own the port; flagged for housekeeping, not mine to kill.)
+
+```
+OFFERED      564 requests over 63.9 s = 8.8 rps (target 50.0)
+ACCEPTED     n=548 → 8.6 rps achieved | p50=3182.4 p95=5278.4 max=8553.6 ms  (2xx only)
+REJECTED     n=16 429=0 5xx=0 other=16 fetch_error=0
+DB-SIDE      max_active_backends=14 max_total_backends=62 max_idle_in_transaction=10 observer_errors=0
+STATUS       200:548 401:16
+DENOMINATOR  nproc=4 load_before=1.42 1.21 1.21   load_after=15.19 5.19 2.59
+VERDICT      MISS — p95 5278.4 ms vs the documented 200 ms at 50 rps
+```
+
+### Four findings, in the order that matters
+
+**B — the closed loop can hide the very thing it is measuring, and this run proves it.** The driver issues
+one request per user and waits, so per-user rate is capped at `1 / latency`: 30 users at ~3.2 s ≈ 9.4 rps —
+and 8.8 rps is what was offered against a 50 rps target. **A sequential per-user pacer under-offers exactly
+when the system is slow**, which is a load test that goes quiet on the interesting part. This must become an
+open-loop scheduler (a global pacer firing at the target rate, many requests in flight, reporting max
+in-flight), with the offered-vs-achieved line kept honest by printing both. Fixing the arg parser is the
+smaller half of the same bug: I could not even run a small configuration.
+
+**C — the strongest lead, and it is not in the route's code.** `max_idle_in_transaction=10` while 30 users
+queue, and `lib/db/client.ts:26` builds `new Pool({ connectionString })` with **no `max`**, so it defaults to
+pg's **10 connections**. Ten backends parked in `idle in transaction` with everything else waiting behind them
+is ADR-0003's caution stated as an observation rather than a worry. It is also the first *mechanism* this
+project has had for "why is `/api/sync` slow at concurrency" — the sequential numbers never showed it because
+one request at a time never needs an eleventh connection. Explicitly **not** acted on here: changing the pool
+is #92's territory, and this box's own load (15.19 on 4 cores, from the harness itself) means the absolute
+milliseconds are local-stack-shaped. What transfers is the shape, not the number.
+
+**D — 16 requests answered 401**, unexplained. Each of the 30 users has its own `CookieJar` and its own
+session cookie, so the usual suspects (shared jar, overwritten session) do not apply. 2.8 % of requests
+unauthenticated, arriving without any 429 or 5xx around them, is a real question about either cookie lifetime
+under load or `requireUserContext`'s failure path. Left open, named, and *not* smoothed over: those 16 are
+excluded from the percentiles, which is right for latency and wrong to forget.
+
+**A — the arg-parser bug above**, plus the note that the harness's own verdict line worked correctly on a
+tree it was never tuned against: it printed MISS without anything being edited to fit.
+
+### What this run does **not** establish
+
+It is not the baseline, because the configuration was not the one intended, the driver under-offered by 5.7×,
+and the box was oversubscribed by the harness itself. The 200 ms question stays open. Sequence from here:
+fix the parser, make the scheduler open-loop, then a short real pilot (small `--users`, small `--rps`), then
+the baseline, then the watched-fail control. Until the control goes red on purpose, no number in this file is
+evidence about the budget.

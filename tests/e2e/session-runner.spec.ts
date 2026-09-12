@@ -11,6 +11,7 @@ import {
   warmUpAndStart,
   WORKOUT_FLOW_TIMEOUT_MS,
 } from './runner-fixtures';
+import { refusedSyncResponseBody } from './sync-fixtures';
 
 /**
  * M3-06 (#63): the runner, and with it the first real execution of everything M3-05
@@ -163,35 +164,19 @@ test.describe('session runner', () => {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify({
-            ok: true,
-            data: {
-              serverSeq: 1,
-              applied: [],
-              // The item is refused by name. Item-level results are why §8.2 says a batch
-              // is not a transaction, and why the screen has to say *which* set.
-              rejected: [{ mutationId: first, reason: 'ILLEGAL_TRANSITION' }],
-              state: {
-                session: {
-                  id: first,
-                  routineDayId: first,
-                  status: 'in_progress',
-                  phase: 'exercise',
-                  localDate: '2026-09-11',
-                  sets: [],
-                  tasks: [],
-                  routineDay: { id: first, name: START_DAY, exercises: [] },
-                },
-              },
-              clockSkewMs: 0,
-            },
-          }),
+          // #105. This line used to write the JSON out by hand and invent a
+          // `data.state: { session: {…} }` key in it. `SyncResponseDataSchema` was strict, and
+          // the `state` it did have was a whole session graph rather than an object wrapping
+          // one, so no response the server could produce looked like this; the spec drove a
+          // browser through fiction and passed. The builder below parses through the contract at
+          // build time, so a fixture can no longer be more imaginative than the wire.
+          body: refusedSyncResponseBody(first),
         });
       });
 
       const tick = firstTick(page);
       await tick.click();
-      await expect(page.getByTestId('rejection-line')).toContainText('ILLEGAL_TRANSITION');
+      await expect(page.getByTestId('rejection-line')).toContainText('CONFLICT');
       await expect(page.getByTestId('rejection-line')).toContainText('Set 1');
       // The tick is un-painted by the authoritative refetch rather than by a local
       // rollback: the screen shows what the server says, and §4.3 forbids surgery.

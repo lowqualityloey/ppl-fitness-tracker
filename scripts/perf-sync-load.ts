@@ -254,8 +254,11 @@ async function main(): Promise<number> {
       recoveries: number;
     }
     const tracks = created.map<Track>(() => ({ sawReject: false, recoveries: 0 }));
-    let rejectSample = '';
-    let rejectSetCookie = 'none';
+    // Sample the first response body PER STATUS CODE. The original version kept only the first rejection of
+    // any kind, so a run that produced 2715 x 401 and 4 x 500 captured the 401 text and left the 500s - the
+    // responses most worth reading - entirely unsampled. One slot per code is the fix.
+    const firstBody = new Map<string, string>();
+    const firstSetCookie = new Map<string, string>();
 
     const fire = (index: number): void => {
       const session = created[index];
@@ -286,11 +289,13 @@ async function main(): Promise<number> {
           } else {
             rejected.push(elapsedMs);
             track.sawReject = true;
-            if (!rejectSample) {
-              rejectSample = `${response.status} ${text.slice(0, 220)}`;
-              rejectSetCookie = response.headers.get('set-cookie')
-                ? `present (${(response.headers.get('set-cookie') ?? '').slice(0, 40)}…)`
-                : 'absent';
+            if (!firstBody.has(String(response.status))) {
+              firstBody.set(String(response.status), text.slice(0, 220));
+              const setCookie = response.headers.get('set-cookie');
+              firstSetCookie.set(
+                String(response.status),
+                setCookie ? `present (${setCookie.slice(0, 40)}…)` : 'absent',
+              );
             }
           }
         } catch (error) {
@@ -374,7 +379,6 @@ async function main(): Promise<number> {
           : `             ${usersWithReject - usersThatRecovered} user(s) never recovered on the same cookie, so` +
             ` not every 401 is explicable as a shed verification hop — this needs a cause, not a guess.`,
       );
-      console.log(`             first rejection seen: ${rejectSample || 'n/a'} | set-cookie: ${rejectSetCookie}`);
     }
     // The card's negative scenario expects 429 interference once per-user load exceeds the M2-06 budget of
     // 120 req/min (2 rps). Zero 429s while asking for more than 2 rps/user is therefore NOT a clean bill of
@@ -386,6 +390,22 @@ async function main(): Promise<number> {
           ` BEFORE counting it, so anything rejected upstream never reaches the limiter. Read the AUTH line.` +
           ` If auth were clean, this line would be the finding — a budget that should have bitten and did not.`,
       );
+    }
+    // Its own condition, not inside the 401 block: nesting it there meant a run with 361 rejections and zero
+    // 401s printed no response body at all - the exact defect this change was meant to remove, caught by
+    // watching it and seeing no output rather than by reading the code and assuming.
+    if (firstBody.size > 0) {
+      for (const [status, count] of [...statusCounts.entries()].sort(
+        (left, right) => Number(left[0].startsWith('2')) - Number(right[0].startsWith('2')),
+      )) {
+        if (status.startsWith('2')) continue;
+        const body = firstBody.get(status);
+        if (body === undefined) continue;
+        console.log(
+          `             first ${status} seen (of ${count}): ${body} | set-cookie: ` +
+            `${firstSetCookie.get(status) ?? 'unknown'}`,
+        );
+      }
     }
     if (countOf('429') > 0) {
       console.log(

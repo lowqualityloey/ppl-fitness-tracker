@@ -458,3 +458,64 @@ shipped-code-free documentation PR and a green merge gate.** #121 was filed as a
 with no owner; on current evidence it gates every branch that touches CI, and it should be taken before more
 re-runs are used to explain it away. Re-running is recorded here as what it is: a coin flip on the largest of
 17 samples, not evidence about the app.
+
+## The 60 s baseline re-run with final tooling, and what it added
+
+The baseline row in the table above was produced *before* the AUTH discriminator, the tail-statistic guard and
+the `INCONCLUSIVE` phrasing existed. Re-running it with the shipped tool
+(`scripts/perf/baseline-sweep.sh`'s config, plus `--max-inflight=256`) at `02051f2`:
+
+```
+OFFERED      2899 requests over 66.4 s = 43.6 rps (target 50.0)
+CLIENT       max_in_flight=256 (cap 256) backpressure_ticks=101 unfinished_at_grace=0
+ACCEPTED     n=180 → 2.7 rps achieved | p50=11331.7 p95=18233.7 max=20644.9 ms  (2xx only)
+REJECTED     n=2719 429=0 5xx=4 other=2715
+AUTH         401=2715 users_ever_rejected=30 users_later_accepted_with_the_same_cookie=30
+DB-SIDE      max_active_backends=15 max_total_backends=59 max_idle_in_transaction=6
+DENOMINATOR  load_before=2.86  load_after=34.13
+VERDICT      INCONCLUSIVE — … at an offered 43.6 rps, NOT the 50 rps the budget is written against
+```
+
+Confirms and extends what #125 claims: **93.6 % of requests were 401 and all 30 users later succeeded on the
+same cookie**, at a rate near the target this time. Two things are new and unresolved:
+
+- **4 responses were 500.** Earlier runs had `5xx=0`. A 500 after the write *did* work, so its exclusion from
+  the percentile sample is a disclosed bias, not a clean-up — and four occurrences with no captured body was a
+  gap in the tool, see below.
+- The offered rate reached 43.6 rps only because the client cap went to 256, and it needed ~256 concurrent
+  in-flight to be *refused* that fast. On this box "50 rps sustained" remains unreachable, now measured with
+  the guards in place rather than asserted.
+
+## A lower rate at which the route is actually inside the budget
+
+`--users=3 --rps=4 --duration=20` (4 rps/user, 80 requests per user — under the 120/min window, so zero
+rejections, which is the limiter behaving and not a silence):
+
+```
+ACCEPTED     n=81 → 4.0 rps achieved | p50=181.3 p95=238.4 max=733.8 ms  (2xx only)
+```
+
+**p50 181.3 ms is inside the 200 ms document; p95 238.4 ms is outside it**, with 4 observations above the
+percentile so the tail guard stayed quiet. That is a sharper statement of #92's problem than "it misses":
+at low concurrency the *typical* request meets the budget and the *tail* does not. It also can't be read as a
+pass — n=81 and a 733.8 ms max on a box whose load was already 2.86.
+
+Limiter behaviour at the same 12 rps, two durations, for comparison: 60 s → 360 accepted / **241 429**;
+90 s → 657 accepted / **423 429**. Consistent with a 120 req/min sliding window against 4 rps/user, i.e. the
+refusal fraction grows with duration exactly as the budget implies.
+
+## The sampler defect this round caught by watching output instead of reading code
+
+The per-status body sampler was first written *inside* the `countOf('401') > 0` block. Result: a run with
+**361 rejections and zero 401s printed no response body at all** — the 429s and 500s I had added the feature to
+capture were still unsampled. Reading the code would have looked correct; the absence of the expected line in
+real output is what found it. Hoisted to its own `firstBody.size > 0` condition and verified on a rerun:
+
+```
+REJECTED     n=241 429=241 …
+             first 429 seen (of 241): {"ok":false,"error":{"code":"RATE_LIMITED","message":"Too many sync requests. …
+```
+
+Remaining gap, named rather than fixed quietly: the sampler records the body and `set-cookie`, **not
+`Retry-After`**, which is the header a client needs to back off correctly — relevant to #96 (outbox depth and
+age) and to #125's mapping question.

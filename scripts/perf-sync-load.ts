@@ -399,10 +399,16 @@ async function main(): Promise<number> {
           ` write did the work, so leaving it out is a separate bias, disclosed rather than hidden.`,
       );
     }
-    if (accepted.length > 0 && Math.abs(p95 - maxMs) < 1e-9) {
+    // #121's lesson applied to this tool. The old check only fired when p95 was LITERALLY the maximum, which
+    // missed the case that actually happened in the control run: at n=20 the p95 index is 18, so "p95" is the
+    // second-largest observation and it swung 261/312/545 ms across identical code. What matters is how many
+    // samples sit above the reported percentile, so that is what gets reported.
+    const aboveP95 = accepted.filter((value) => value > p95).length;
+    if (accepted.length > 0 && (Math.abs(p95 - maxMs) < 1e-9 || aboveP95 < 5)) {
       console.log(
-        `             NOTE: p95 == max at n=${accepted.length}. At small n the 95th-percentile index lands on` +
-          ` the last element, so this "p95" is one request, not a distribution (#121's exact failure shape).`,
+        `             NOTE: p95 is drawn from the tail, not a distribution — n=${accepted.length} accepted, ` +
+          `only ${aboveP95} observation(s) above it. Run a longer --duration before reading this as a gate` +
+          ` (#121's exact failure shape: at n=17 its p95 WAS the maximum).`,
       );
     }
     console.log(

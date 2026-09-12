@@ -394,3 +394,15 @@ threshold was altered in the move.
 They are also **not wired into any CI job or npm script**, per the card's scope: each needs the local stack, a
 production build, and a machine that is not a shared runner. `npm run perf:sync` is the only new entry point,
 and it is a manual command.
+
+## The tail-statistic guard, applied to this tool before anyone asked
+
+`scripts/perf-sync-load.ts` used to warn only when `p95` was *literally* the maximum. That missed the case the
+control run actually produced: at n=20 the p95 index is 18, so "p95" is the **second-largest observation** — and
+it read 261 / 312 / 545 ms across three runs of identical code. The guard now reports **how many observations
+sit above the reported percentile** and flags the run when fewer than five do.
+
+Observed firing on a live run, not a mock: `--users=2 --rps=1 --duration=8` →
+`ACCEPTED n=8 → 1.0 rps … p50=231.9 p95=480.3 max=480.3` then
+`NOTE: p95 is drawn from the tail, not a distribution — n=8 accepted, only 0 observation(s) above it.`
+The same run re-confirmed the floor result: **~232 ms median at one request per second.**

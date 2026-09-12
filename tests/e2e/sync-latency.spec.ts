@@ -3,7 +3,6 @@ import { expect, test } from '@playwright/test';
 import {
   authHeaders,
   createTestSession,
-  ids,
   seedSessionFixtures,
   type SessionFixture,
   type TestSession,
@@ -73,20 +72,21 @@ test.describe('production-mode measurements — POST /api/sync', () => {
   /*
    * One worker for this file, for two reasons that are the same reason.
    *
-   * `tests/integration/api/fixtures.ts` exports a **fixed** id set — `session: 2222…`,
-   * `exercise: 3333…` — and `seedSessionFixtures` creates rows for exactly those ids, then
-   * deletes them in `cleanup()`. This project's Playwright config runs `fullyParallel: true`, so
-   * the file's two tests can land in two processes: one is measuring its 50 writes while the
-   * other's cleanup deletes the session underneath it. #64 saw exactly that as
-   * `request 18: status=404 … "code":"NOT_FOUND"`, with the spec passing in isolation and on a
-   * quieter re-run — and a shared row can also mean a shared lock, which is the same collision
-   * wearing a different mask.
+   * The first reason is historical and #80 closed it: this file used to be the incident.
+   * `seedSessionFixtures` used to create rows for a **fixed** id set (`session: 2222…`,
+   * `exercise: 3333…`) and delete exactly those ids on its way in and out, so under
+   * `fullyParallel: true` the file's two tests could land in two processes and one would be
+   * measuring its 50 writes while the other's cleanup deleted the session underneath it — which is
+   * what #64 recorded as `request 18: status=404 … "code":"NOT_FOUND"`, passing in isolation and on
+   * a quieter re-run. The ids are now minted per seeding call (`fixtures.ids`), so a sibling's
+   * `DELETE` cannot reach this run's rows: the collision is gone by construction rather than
+   * scheduled around.
    *
-   * The second reason is the reason the file exists: these are *latency measurements*. Another
-   * worker's 50 sequential writes against the same local server is load, and load is the thing
-   * this spec is trying to characterise, not introduce. Serialising the file is a scheduling fact
-   * about a benchmark, not a weakened assertion: every threshold and every expectation below is
-   * unchanged. The underlying fixture hazard is filed separately.
+   * The second reason is why `serial` stays, and it is not about rows: these are *latency
+   * measurements*. Another worker's 50 sequential writes against the same local server is load, and
+   * load is the thing this spec exists to characterise, not introduce — which is also why #100 has
+   * to keep this pin honest rather than celebrate it. Serialising a benchmark is a scheduling fact
+   * about one file, not a weakened assertion: every threshold and expectation below is untouched.
    */
   // `serial` is Playwright's one-worker mode for a file: its tests run in sequence, in a single
   // process. (`singleWorker` is not a member of `configure`'s `mode` union in 1.63.)
@@ -123,8 +123,8 @@ test.describe('production-mode measurements — POST /api/sync', () => {
           op: 'set.upsert' as const,
           mutationId: randomUUID(),
           clientTs: new Date(firstClientTs + index).toISOString(),
-          sessionId: ids.session,
-          exerciseId: ids.exercise,
+          sessionId: fixtures.ids.session,
+          exerciseId: fixtures.ids.exercise,
           // Three legal slots, cycled. The seeded routine exercise plans 3 sets and
           // M2-04 rejects a setIndex beyond the plan with INVALID_MUTATION: the first
           // draft counted 0..49 and lost the run at index 3. Re-ticking the same slots
@@ -143,7 +143,7 @@ test.describe('production-mode measurements — POST /api/sync', () => {
           // narrower and fetch accepts both. Cast rather than duplicate the cookie
           // builder, so there stays exactly one definition of "authenticated".
           headers: authHeaders(owner) as Record<string, string>,
-          data: { deviceId: ids.device, sinceSeq, mutations: [mutation] },
+          data: { deviceId: fixtures.ids.device, sinceSeq, mutations: [mutation] },
         });
         const body = (await response.json()) as {
           ok?: boolean;

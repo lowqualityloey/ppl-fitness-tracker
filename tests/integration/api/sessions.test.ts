@@ -5,7 +5,14 @@ import {
   SessionStartResponseSchema,
   SessionsListResponseSchema,
 } from '../../../lib/contracts/sessions.js';
-import { authHeaders, ids, createTestSession, seedSessionFixtures, type SessionFixture, type TestSession } from './fixtures.js';
+import {
+  authHeaders,
+  createTestSession,
+  seedSessionFixtures,
+  type FixtureIds,
+  type SessionFixture,
+  type TestSession,
+} from './fixtures.js';
 import { apiRequest, jsonRequest, responseBody, startApiServer, stopApiServer } from './test-server.js';
 
 async function expectAppError(response: Response, status: number, code: string): Promise<void> {
@@ -18,11 +25,14 @@ async function expectAppError(response: Response, status: number, code: string):
 describe('M2-01: /api/sessions', () => {
   let owner!: TestSession;
   let fixtures!: SessionFixture;
+  /** Minted per seeding call (#80); every reference below reads this run's rows. */
+  let ids!: FixtureIds;
 
   beforeAll(async () => {
     await startApiServer();
     owner = await createTestSession('sessions');
     fixtures = await seedSessionFixtures(owner);
+    ids = fixtures.ids;
   });
 
   afterAll(async () => {

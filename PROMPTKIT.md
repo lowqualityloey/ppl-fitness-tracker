@@ -2,12 +2,13 @@
 
 > **Instructions for AI**: Read this file during every session. Adhere strictly to the project domain boundaries, commands, documentation targets, and non-negotiable architectural rules defined below.
 
-> **This project is mid-migration.** Two stacks coexist, and the split is now **backend vs. frontend**, not "built vs. unbuilt".
+> **This project is mid-migration.** Two stacks coexist, and the split is no longer "built vs. unbuilt" on either side of the seam.
 >
-> - The *target* stack's **server side exists and is merged to `main`**: schema + migrations `0000`–`0006`, RLS on every table, magic-link auth, Zod contracts, the sessions API, `SessionEngine`, `ProgressionEngine`, and transactional conflict-aware sync (M1 complete; M2-00 → M2-04 merged as PRs #43–#47).
-> - The target stack has **no UI** beyond a placeholder `src/app/page.tsx` and `src/app/sign-in/`. Tailwind, shadcn and design tokens land in M3. A user who opens this app today still gets the legacy vanilla-JS pages.
+> - The *target* stack's **server side and its UI are both merged to `main`**: schema + migrations `0000`–`0006`, RLS on every table, magic-link auth, Zod contracts (including the session-state graph, as of #73), the sessions/profile/prefill/exercises/progress/sync/import APIs, `SessionEngine`, `ProgressionEngine`, and transactional conflict-aware sync (M1 complete bar deferred #16; M2-00 → M2-06 merged as PRs #43–#47, #51, #53; **M3-00 → M3-10 merged as PRs #69–#87 — the milestone is complete, open=0 / closed=19**).
+> - The target stack is now a **working app**: `/` (dashboard), `/sign-in`, `/session/[id]` (the runner), `/history` + a one-session report + per-exercise progress, and `/settings` with the legacy-import dialog. What it still is not: **deployable**. Production email delivery (#16), telemetry/Sentry, the 50 rps load test, a service worker, volume/streak analytics, body-measurement import and data export do not exist — M4's list, with its measured starting facts in `docs/releases/2026-09-12-m3-exit-report-and-m4-handoff.md`.
+> - The **legacy vanilla-JS app still runs unchanged** on port 3000 beside it and is still the thing `npm run build` builds (a build that emits zero JavaScript — see §2). M3 was required to run beside all of it and never wrote a legacy key; `tests/e2e/legacy-parity.spec.ts` measures that, and is built to fire when M4 deletes them.
 >
-> Do not describe unbuilt target-stack components as if they exist, and do not describe the merged backend as if it were still a plan. See `docs/STATE.md` for the live position.
+> Do not describe unbuilt target-stack components as if they exist, and do not describe the merged backend **or the merged M3 UI** as if either were still a plan. See `docs/STATE.md` for the live position.
 
 ---
 
@@ -31,7 +32,7 @@
 - No tests, no backend, no auth
 - **Known broken**: `npm run build` exits 0 but emits **zero JavaScript**. All four `<script>` tags are classic scripts, so Vite neither transforms nor copies them and leaves the original `src` in the output HTML. Every page in `dist/` 404s on its script and is inert. Do not treat a successful `build` exit code as evidence of a working build.
 
-### Target stack (v1 — **M3 merged except its verification slice**: M3-00…M3-09 landed 2026-09-11 as PRs #69–#85; #67 (M3-10) in review; re-verified on `feat/m3-10-verification-gate` 2026-09-12)
+### Target stack (v1 — **M3 COMPLETE: 19/19 closed on milestone #3, open=0**. M3-00…M3-09 landed 2026-09-11 as PRs #69–#85; #67 (M3-10, the verification gate) merged as **PR #86 (`8704c19`, 2026-09-11T19:23Z)**; #73 (the session-state contract) merged as **PR #87 (`2d5edfb`, 2026-09-12T02:00Z)**. Everything below is re-verified on merged `main`, not on a feature branch, 2026-09-12.)
 
 - **Language & Runtime**: TypeScript `strict`, Node.js **≥ 20.9** (required by Next.js 16 — Node 18 is unsupported). nvm default is v24.20.0 LTS; see the shell footgun in §3.
 - **Framework**: Next.js 16 (App Router), React 19 — ADR-0001. Live screens: `/` (dashboard), `/sign-in`, `/session/[id]` (the runner), `/history` + one-session report + per-exercise progress, `/settings` (+ import dialog). Route handlers: `src/app/api/{sessions,sessions/[id],sync,import/legacy,exercises,profile,progress}`; `src/middleware.ts` refreshes sessions. Runs on port 3001 alongside the legacy Vite server on 3000 (untouched until M4; `tests/e2e/legacy-parity.spec.ts` guards that no M3 code writes legacy keys).
@@ -40,8 +41,8 @@
 - **State & Data Fetching**: client sync island under `src/app/state/` (M3-05, PR #75; wired through M3-06/07): IndexedDB-backed `outbox.ts`, `sync-engine.ts` (one in-flight batch, jittered backoff, visibility-aware polling at 4 s visible / 30 s hidden, reconnect drain — `notifyConnectivityRestored()` clears offline-grown windows, `9ca17cc`), `provider.tsx`, `reconcile.ts`, `timer-controller.ts` (absolute-deadline arithmetic), `unit-display.ts`, `device-identity.ts`, `audio-cue.ts`. Set-taps are optimistic with the server as sole truth; Server Actions remain unused (deliberate, spec §3.2).
 - **Backend & Database**: Supabase — PostgreSQL **17.6** (measured on the local stack 2026-09-08; earlier drafts said 16), Supabase Auth (email magic link) — ADR-0002. **Realtime is not in use**: zero `.channel(`/realtime references in application code, and `npm run db:up` starts the stack with `-x realtime,...`, so the local stack does not even run it.
 - **ORM**: Drizzle (`db/schema/index.ts`), connecting as a non-owner `app_authenticated` role — ADR-0003. `db/seed/` loads exercise and stretch content.
-- **Validation**: Zod at every boundary (`lib/contracts/` — envelope, auth, sessions, sync, progress, exercises, legacy import)
-- **Testing**: Vitest — **47 `.test.ts` files** (counted with `find` 2026-09-12, not inherited from the last edit): 23 unit files (`npm test` runs 37 files / 380 tests with the stack up; the API directory is excluded because those suites boot servers), 10 route-handler API files (`test:api`: 60 tests). **Playwright E2E exists and is the merge gate for anything user-visible** — 13 spec files / 61 tests (M3-03 harness, PR #72; grown by M3-06…10), run by `npm run test:e2e` in CI against a **production** build, including `lighthouse.spec.ts` (Lighthouse is a devDependency; the CI job installs browsers `--with-deps` for exactly this). Every latency claim this repo makes is quoted from these logs — see `docs/tests/2026-09-11-m3-verification-audit.md` for what each gate prints and how it was proven capable of failing. D3 is resolved.
+- **Validation**: Zod at every boundary (`lib/contracts/` — envelope, auth, sessions, sync, progress, exercises, legacy import). Since **#73** the session graph is one of those boundaries rather than the exception: `SessionStateSchema` is a `.strict()` description of what `mapSessionState` emits, `lib/views/session-view.ts` is a **re-export** of it, and the three producers (`POST /api/sessions`, `GET /api/sessions/[id]`, `POST /api/sync`) validate what they send through `validateOutgoing` in `envelope.ts`.
+- **Testing**: Vitest — **49 `.test.ts` files** (counted with `find` on merged `main` 2026-09-12, not inherited from the last edit): **25** under `tests/unit/`, **14** DB-backed under `tests/integration/` (12 at its root, 2 in `repository/`), **10** route-handler suites under `tests/integration/api/`. `npm test` runs the first two groups — **39 files / 398 tests**, stack up — because the API directory boots real servers; `npm run test:api` runs those **10 files / 60 tests**. **Playwright E2E exists and is the merge gate for anything user-visible** — 13 spec files / 61 tests (M3-03 harness, PR #72; grown by M3-06…10), run by `npm run test:e2e` in CI against a **production** build, including `lighthouse.spec.ts` (Lighthouse is a devDependency; the CI job installs browsers `--with-deps` for exactly this; it scores `/sign-in` plus `/history`, `/` and `/session/[id]`, the last three authenticated). Every latency claim this repo makes is quoted from these logs — see `docs/tests/2026-09-11-m3-verification-audit.md` for what each gate prints and how it was proven capable of failing. D3 is resolved.
 
 ---
 
@@ -80,7 +81,7 @@ for any automation that might not inherit the nvm `PATH`:
 
 Verify before trusting a result: `node --version` must report ≥ 20.9. v18 means nvm was not sourced.
 
-### Target (M3 merged bar #67; commands and counts re-verified 2026-09-12 on `feat/m3-10-verification-gate`)
+### Target (M3 complete, nothing in flight; commands and counts re-verified 2026-09-12 on merged `main` with the stack up)
 
 Next.js 16 lives at the repo root alongside the legacy app (`PROMPTKIT.md` §4: no
 monorepo, single `package.json`). It runs on **port 3001**, not 3000 — the legacy
@@ -93,25 +94,26 @@ each serving correctly, zero collision.
   legacy `npm run build`, which is verified zero-JS (see the note above) and stays
   that way until M4
 - **Start (production)**: `npm run next:start`
-- **Test files that exist today** (re-counted 2026-09-12): **47 `.test.ts` files** — 23 unit, 10
-  under `tests/integration/` (DB-backed), 10 route-handler API suites under
-  `tests/integration/api/` (plus `fixtures.ts` and `test-server.ts` helpers) — plus **13
-  `.spec.ts` files** under `tests/e2e/`. `npm test` (unit + DB integration) runs 37 files / 380
-  tests **with the stack up** and fails `ECONNREFUSED` without it. The unit-layer split includes
-  `tests/unit/with-user.test.ts`, which opens a real socket to Postgres — still an integration
-  test filed in the unit layer (D2, unchanged, listed so the failure mode stays recognizable).
+- **Test files that exist today** (re-counted 2026-09-12 on merged `main`): **49 `.test.ts` files** —
+  25 under `tests/unit/`, 14 DB-backed under `tests/integration/` (12 at its root, 2 in `repository/`),
+  10 route-handler API suites under `tests/integration/api/` (plus `fixtures.ts` and `test-server.ts`
+  helpers) — plus **13 `.spec.ts` files** under `tests/e2e/`. `npm test` (unit + DB integration) runs
+  **39 files / 398 tests** **with the stack up** and fails `ECONNREFUSED` without it. The unit-layer
+  split includes `tests/unit/with-user.test.ts`, which opens a real socket to Postgres — still an
+  integration test filed in the unit layer (D2, unchanged, listed so the failure mode stays
+  recognizable).
 - **Unit + Integration Tests**: `npm test`
   (`vitest run --exclude 'tests/integration/api/**'`). **Requires the stack up**: run
   `npm run db:up` first, or every DB-touching file fails with `ECONNREFUSED`.
 - **API suite**: `npm run test:api` (`vitest run tests/integration/api/`, also reachable as
-  `test:red`). These 7 files stay out of `npm test` because they boot a real `next dev` server,
+  `test:red`). These **10** files stay out of `npm test` because they boot a real `next dev` server,
   but **CI runs this step separately, so the route handlers are inside the merge gate**.
   There are no declared-pending skips any more: `tests/integration/api/pending-handlers.ts` and its
   anti-rot guard were **retired in #42** once every M1 route had a handler. If a future slice parks
   a route behind a skip, bring that registry and its guard back together — skips are counted and
   issue-attributed and self-expiring, never hidden by a glob. Run `npm run test:api:preflight` first:
   when results look impossible it separates a broken environment from broken code.
-  Measured 2026-09-12 **on `feat/m3-10-verification-gate`**: **10 files / 60 passed / 0 skipped**.
+  Measured 2026-09-12 **on merged `main` (`2d5edfb`)**: **10 files / 60 passed / 0 skipped**.
   `tests/integration/api/import-legacy.test.ts` calls `seedExercises()` in `beforeAll`, and why:
   **CI has no seed step**, and the importer resolves legacy `ex1`…`ex6` against seeded routine
   content, so without that call the suite fails for a reason unrelated to the code under test. Any
@@ -121,8 +123,8 @@ each serving correctly, zero collision.
   each RLS control in turn and requires the drift test to go red. Needs the stack up, **and it is
   the only gate script that does not pass `--env-file-if-exists=.env.local`**: run bare it exits with
   `MIGRATION_DATABASE_URL environment variable required`, so source the env first
-  (`set -a; . ./.env.local; set +a`). Verified exit 0 on 2026-09-11 — every control removed made the
-  drift test go red, and restoring it made the suite pass again.
+  (`set -a; . ./.env.local; set +a`). Verified exit 0 on merged `main` 2026-09-12 — every control
+  removed made the drift test go red, and restoring it made the suite pass again.
 - **E2E Tests**: `npm run test:e2e` (`playwright test`) — **13 spec files, 61 tests, and they are
   the CI merge gate.** `playwright.config.ts` boots its own **production** server
   (`npm run next:build && npm run next:start` on :3001; `reuseExistingServer: !process.env.CI`),
@@ -133,11 +135,16 @@ each serving correctly, zero collision.
   `tests/integration/api/fixtures.ts`, so a missing `.env.local` kills the *whole run at
   collection*, and on a box without system libs Chromium needs
   `LD_LIBRARY_PATH=/tmp/pwlibs/ext/usr/lib/x86_64-linux-gnu` (CI: `--with-deps`). Lighthouse is a
-  devDependency; `lighthouse.spec.ts` asserts **100** on four routes and prints each score line.
-  Playwright writes its summary to **stderr** — capture `> log 2>&1`. Run the suite **twice**
+  devDependency; `lighthouse.spec.ts` asserts **100** on four routes (`/sign-in` unauthenticated;
+  `/history`, `/` and `/session/[id]` authenticated via `--extra-headers`) and prints each score
+  line. Playwright writes its summary to **stderr** — capture `> log 2>&1`. Run the suite **twice**
   before declaring green: the 15 s hang ceilings in `sla.spec.ts` are load-sensitive by design.
+  Known load-sensitive specs on this box, all green solo and in CI, none of whose budgets moved:
+  `a11y.spec.ts:102`, `sla.spec.ts:69` (audit entry 17) and `timers.spec.ts:277`, `sla.spec.ts:282`
+  (audit entry 19). **Documented protocol: a red *timing* gate gets a solo re-run before anyone
+  believes it** — that is the convention, not a rationalization.
 - **Typecheck**: `npm run typecheck` (runs `next typegen` first, then
-  `tsc --noEmit`; **verified exit 0 on 2026-09-11**, and verified to reject implicit `any`
+  `tsc --noEmit`; **verified exit 0 on merged `main` 2026-09-12**, and verified to reject implicit `any`
   — strict mode is enforced, not just declared, with `noUncheckedIndexedAccess: true`
   also on). Bare `npx tsc --noEmit` fails on a fresh checkout with
   `Cannot find name 'LayoutProps'` — that type is generated into `.next/types`
@@ -174,7 +181,9 @@ each serving correctly, zero collision.
   `app_authenticated` **exists** (created by `0001_app_authenticated_role_trigger.sql`,
   `M1-04`/#6), so `DATABASE_URL` authenticates once the stack is up. Verified attributes:
   `LOGIN NOBYPASSRLS NOSUPERUSER NOINHERIT`, owns nothing.
-  **Stack state as of the 2026-09-11 intake: stopped** (`docker ps` empty, daemon
+  **Stack state as of this file's last refresh (2026-09-12): running** — it was started to re-measure
+  the gates on merged `main`; treat it as a question to ask (`docker ps`), not a fact to inherit. The
+  2026-09-11 intake found it stopped (daemon
   `29.7.2` reachable) — start it with `npm run db:up` before running any DB-backed gate.
 
 Node version note: `next build`'s Turbopack warns that it ignored

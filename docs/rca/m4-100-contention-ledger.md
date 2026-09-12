@@ -36,12 +36,18 @@ budget, or SLA is weakened by it.
 | :-- | :-- | :-- | :-- | :-- |
 | `80passA` (pre-commit tree, identical code) | 0/0/0/0/0/0/0/0 | green, e2e 61 passed | 6.2 m | not sampled |
 | `80passB` | 0/0/0/0/0/0/0/0 | green, e2e 61 passed | 6.2 m | kiro-server cluster already resident |
-| `80passC` | 0/0/0/0/0/0/0/**1** | **4 failed / 57 passed** | **8.5 m** | 5-min load **6.47–6.88 on 4 cores** |
+| `80passC` | 0/0/0/0/0/0/0/**1** | **4 failed / 57 passed** | **8.5 m** | 5-min load **6.47–6.88 on 4 cores** — **excluded by the rule below**, written minutes after it excused this run |
+| `80passD` | 0/0/0/0/0/0/0/0 | **green, 61 passed** | 5.8 m | `nproc=4`, load **1.88 / 3.99 / 4.85** before, **2.38 / 2.69 / 3.80** after → **counts** |
 
 Pass C's measurements, which show the shape rather than a breach: set-tap **median 21.5 / p95 53.5 /
 max 69.9 ms** against a 50 ms gate (passes A and B printed 27.4 and 24.9 ms p95 on the same build), and
 `/api/sync` p50 **191.1 ms** — the same spec that printed 208.6 and 232.1 ms in passes A and B, i.e. it
 *missed* the documented 200 ms budget more convincingly while the suite was green than while it was red.
+
+Pass D's numbers, on the quieter box, moved in the direction the rule predicts: set-tap **median 14.9 /
+p95 18.2 / max 21.1 ms** (against pass C's 21.5 / 53.5 / 69.9 on the same build), and `/api/sync` p50
+**171.0 / p95 226.5 ms**, still printing **MISSES** against the 200 ms documented budget — the verdict is
+computed on p95, and that is #92's subject, not this card's and not #80's.
 
 ### Pass C's four reds
 

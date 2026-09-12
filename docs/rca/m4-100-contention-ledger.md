@@ -85,3 +85,39 @@ Playwright's default assertion timeout is **5 s** — 20 % headroom, on a spec w
 Under a 1.7x-oversubscribed box the poll lands late, the window closes, and a correct product reads as a
 failure. That is not contention being mistaken for a bug; it is a window that was never derived from the
 propagation design it depends on.
+
+## Instrumentation landed — #100 branch `test/m4-100-contention-fences` (stacked on `#80`'s `8b5d974`)
+
+`playwright.config.ts` now keeps a failure's evidence, and `tests/unit/infra/e2e-evidence-config.test.ts`
+pins the configuration so it cannot revert to an unobservable intention.
+
+**The claim, watched rather than asserted.** A temporary failing spec ran on this box:
+
+| Spec | status | duration | trace produced |
+| :-- | :-- | :-- | :-- |
+| `deliberate failure for the trace check` | `failed` | **1 558 ms** | `test-results/…/trace.zip` ✓ |
+| `deliberate pass carrying a known sleep` | `passed` | **3 440 ms** | none (correct: only failures retain) |
+
+The throwaway spec was deleted in the same change. The durations arriving in `test-results/playwright.json`
+is the part that changes how this file gets written from now on: a near-miss (tap p95 47 ms, G-M3-4's drain
+at 4.6 s) is now visible across runs instead of being remembered from a console line.
+
+**Two provocations, each red on exactly one named test:**
+
+| Breakage | Result |
+| :-- | :-- |
+| `retain-on-failure` → `on-first-retry` (the dead setting) | `records a trace on failure rather than on a retry that never happens` — **red** |
+| `retries: 2` added to the config | `keeps retries off, so a red gate still means red` — **red** |
+| restored | 4/4 green |
+
+**What the guard caught on its first run was a defect in the guard, not in the config.** It asserted
+`not.toContain('on-first-retry')` against the raw file — and tripped on the block comment that *explains*
+why that setting was dead. A prose-sensitive guard is worse than none: it fails on documentation and passes
+on a real regression hidden in a comment. Fixed by scanning code with block comments stripped (and line
+comments stripped only when `//` is not preceded by `:`, so `"http://localhost:3001"` survives). The same
+file asserts its scan found >10 spec files including `sla.spec.ts` and `a11y.spec.ts`, which is the
+`finds the specs it claims to have scanned` lesson from #105 applied before it had to be learned twice.
+
+**Retries stay off, and that is the considered choice, not an oversight:** they would make the original
+`on-first-retry` setting work as intended *and* silently convert every flake into a green after one
+attempt. The card's whole premise is that red has to keep meaning red.

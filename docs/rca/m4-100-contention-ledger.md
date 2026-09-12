@@ -358,3 +358,15 @@ with zero reds**, which is more than any earlier branch can show *measured*.
 Worth stating precisely because it cuts both ways: the budget's verdict on this box swings with what the
 neighbours are doing, which is #92's point about the measurement needing a quieter denominator, not evidence
 that anything in the app improved. The 800 ms enforced ceiling is untouched and was never approached.
+| `100r4` | 0 ×8 | **61 passed (5.9 m)** | 45/430 · 11/64 | **25.8 ms** vs 50 (max 48.1) | p50 232.8 / p95 320.3 → MISSES | 3.19 3.99 5.12 → 6.85 5.61 5.27 | **4/5** |
+
+`100r4` began at 3.19 / 3.99 / 5.12 and ended with the 1-minute average at **6.85** — the load *rose* during
+the pass, peaked above the core count, and changed nothing: no red, no solo re-run, no `HARNESS` line. Its
+`/api/sync` p95 of 320.3 ms is the worst of the four and sits alongside the quietest tap numbers in the
+sequence (median 12.8 ms), which is a useful reminder that these two measurements do not move together:
+one is a local paint, the other is a round trip through a contended Postgres.
+
+(Counted from the e2e log rather than from the pass file: the only `✘`/`failed` lines in `100r4.log` are the
+six mutation-harness controls, which are *supposed* to fail — `CAUGHT exit=1` — and whose `RESTORED` step
+came back 6 passed. Quoting that count as "e2e reds" would be a mistake a reader of this ledger could make,
+so it is pre-empted here.)

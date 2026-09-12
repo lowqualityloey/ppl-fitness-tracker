@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { SyncRequestSchema } from '../../../../lib/contracts/sync';
-import { appSuccess } from '../../../../lib/contracts/envelope';
+import { SyncRequestSchema, SyncResponseSchema } from '../../../../lib/contracts/sync';
+import { appSuccess, validateOutgoing } from '../../../../lib/contracts/envelope';
 import { syncRateLimiter } from '../../../../lib/auth/rate-limit';
 import { requireUserContext } from '../../../../lib/auth/require-user';
 import { getDb } from '../../../../lib/db/client';
@@ -23,7 +23,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     const repository = new WorkoutRepository(getDb(), context.claims);
     const data = await repository.applySync(context.userId, parsed.data);
-    return NextResponse.json(appSuccess(data), { status: 200 });
+    /*
+     * The third consumer of the session graph, and the easy one to miss: `SyncResponseDataSchema.state`
+     * *is* a `SessionStateSchema` (#73), so every sync response carries the whole session — the
+     * runner's rejection-and-refetch path included, which is precisely mid-workout. Until this
+     * slice that field was an empty pass-through placeholder, so a state the client could not use
+     * was only noticed by the client.
+     *
+     * Validating here means the same drift that breaks `GET /api/sessions/[id]` breaks this route
+     * too, and with the same redacted 500 rather than a body the client has to reject.
+     */
+    return NextResponse.json(
+      validateOutgoing(SyncResponseSchema, appSuccess(data), 'POST /api/sync body'),
+      { status: 200 },
+    );
   } catch (error) {
     return routeErrorResponse(error);
   }

@@ -45,6 +45,7 @@ import {
   ProfileResponseSchema,
 } from '../../../lib/contracts/profile.js';
 import { RepsSchema as CommonRepsSchema, WeightKgSchema as CommonWeightKgSchema } from '../../../lib/contracts/common.js';
+import { mapperOutput } from './session-state-fixtures';
 import { RepsSchema as SyncRepsSchema, WeightKgSchema as SyncWeightKgSchema } from '../../../lib/contracts/sync.js';
 import { ExerciseSchema, ExercisesListQuerySchema, ExercisesListResponseSchema } from '../../../lib/contracts/exercises.js';
 import { ExerciseProgressParamsSchema, ExerciseProgressResponseSchema } from '../../../lib/contracts/progress.js';
@@ -164,11 +165,18 @@ describe('sync contracts', () => {
     expect(SyncRequestSchema.safeParse({ ...request, mutations: [setMutation] }).success).toBe(true);
     expect(SyncResponseSchema.safeParse({
       ok: true,
-      data: { serverSeq: 1, applied: [ids.mutation], rejected: [], state: {}, clockSkewMs: 0 },
+      data: { serverSeq: 1, applied: [ids.mutation], rejected: [], state: mapperOutput(), clockSkewMs: 0 },
     }).success).toBe(true);
     expect(SyncResponseSchema.safeParse({
       ok: true,
-      data: { serverSeq: -1, applied: [], rejected: [], state: {}, clockSkewMs: 0 },
+      data: { serverSeq: -1, applied: [], rejected: [], state: mapperOutput(), clockSkewMs: 0 },
+    }).success).toBe(false);
+    // #73: `state` used to be a `z.object({}).passthrough()`, so `state: {}` was accepted
+    // here and proved nothing. It is the session graph now, and an empty one is refused —
+    // which is the assertion that makes the line above worth running.
+    expect(SyncResponseSchema.safeParse({
+      ok: true,
+      data: { serverSeq: 1, applied: [], rejected: [], state: {}, clockSkewMs: 0 },
     }).success).toBe(false);
   });
 });
@@ -188,8 +196,18 @@ describe('session, exercise, and progress contracts', () => {
       localDate: '2026-09-08', startedAt: clientTs, completedAt: null, serverSeq: 0, updatedAt: clientTs,
     };
     expect(SessionsListResponseSchema.safeParse({ ok: true, data: { sessions: [summary], nextCursor: null } }).success).toBe(true);
-    expect(SessionStartResponseSchema.safeParse({ ok: true, data: {} }).success).toBe(true);
-    expect(SessionDetailResponseSchema.safeParse({ ok: true, data: {} }).success).toBe(true);
+    /*
+     * These two lines are the shape of what #73 found. They used to read
+     * `safeParse({ ok: true, data: {} }).success).toBe(true)` — a passing assertion that
+     * the session *graph* accepted an empty object, because `SessionStateSchema` was
+     * `z.object({}).passthrough()`. Flipping them to the real answer is tightening, not a
+     * loosened gate: the envelope still passes, and only with a state the mapper would
+     * recognize.
+     */
+    expect(SessionStartResponseSchema.safeParse({ ok: true, data: mapperOutput() }).success).toBe(true);
+    expect(SessionDetailResponseSchema.safeParse({ ok: true, data: mapperOutput() }).success).toBe(true);
+    expect(SessionStartResponseSchema.safeParse({ ok: true, data: {} }).success).toBe(false);
+    expect(SessionDetailResponseSchema.safeParse({ ok: true, data: {} }).success).toBe(false);
   });
 
   it('validates exercise output and the no-input library query', () => {

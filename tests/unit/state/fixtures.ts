@@ -46,17 +46,36 @@ export function setMutation(n: number, setIndex: number): SyncMutation {
   };
 }
 
-/** The server's view of one exercise with three unstarted sets. */
+/**
+ * The server's view of one exercise with three unstarted sets.
+ *
+ * It now carries **every field `mapSessionState` emits**, because as of #73 `SessionView` is
+ * `SessionStateSchema` — the whole contract, not the screen's subset. A fixture that omits a
+ * column no longer compiles, which is the fix earning its keep: this object used to claim to
+ * be "the server's view" while having no `clientId`, no `source`, no `serverSeq`, no
+ * `updatedAt`, and no `muscleGroups`. The server has never sent such a session, and a state
+ * fixture that is not the real shape is how a projection test agrees with itself and
+ * disagrees with the wire.
+ */
 export function serverView(): SessionView {
   return {
     id: SESSION,
     routineDayId: SESSION,
+    clientId: DEVICE,
     status: 'in_progress',
     phase: 'exercise',
+    source: 'app',
     localDate: '2026-09-11',
+    // #64: the view carries the session clock's endpoints, so the fixture must too.
+    startedAt: '2026-09-11T17:00:00.000Z',
+    completedAt: null as string | null,
+    serverSeq: 0,
+    updatedAt: '2026-09-11T17:00:00.000Z',
     routineDay: {
       id: SESSION,
+      slug: 'push',
       name: 'Push Day',
+      description: null,
       exercises: [
         {
           id: SESSION,
@@ -64,7 +83,21 @@ export function serverView(): SessionView {
           orderIndex: 0,
           targetSets: 3,
           targetReps: null,
-          exercise: { id: EXERCISE, slug: 'bench-press', name: 'Bench Press', kind: 'strength' },
+          targetRepsRange: '6-8',
+          restTime: '90s',
+          exercise: {
+            id: EXERCISE,
+            slug: 'bench-press',
+            name: 'Bench Press',
+            muscleGroups: ['chest'],
+            equipment: 'barbell',
+            formTips: null,
+            beginnerNotes: null,
+            videoUrl: null,
+            alternatives: [],
+            kind: 'strength',
+            durationSeconds: null,
+          },
         },
         {
           id: '55555555-5555-5555-8555-555555555555',
@@ -72,22 +105,29 @@ export function serverView(): SessionView {
           orderIndex: 1,
           targetSets: 2,
           targetReps: null,
-          exercise: { id: STRETCH_EXERCISE, slug: 'overhead-stretch', name: 'Overhead Stretch', kind: 'stretch' },
+          targetRepsRange: null,
+          restTime: null,
+          exercise: {
+            id: STRETCH_EXERCISE,
+            slug: 'overhead-stretch',
+            name: 'Overhead Stretch',
+            muscleGroups: ['shoulders'],
+            equipment: null,
+            formTips: null,
+            beginnerNotes: null,
+            videoUrl: null,
+            alternatives: [],
+            kind: 'stretch',
+            // `exercise_kind_duration_consistent` requires a duration on a stretch.
+            durationSeconds: 30,
+          },
         },
       ],
     },
     // Empty by default: like `sets`, task rows only exist once completed, so a session
-  // that has done nothing has none. Tests that need one pass it explicitly.
-  // #64: the view now carries the session clock's endpoints, so the fixture must too.
-  startedAt: '2026-09-11T17:00:00.000Z',
-  completedAt: null as string | null,
-  tasks: [] as {
-    id: string;
-    sessionId: string;
-    taskKey: 'warm_up' | 'main_workout' | 'stretch';
-    completedAt: string | null;
-  }[],
-  sets: [0, 1, 2].map((setIndex) => ({
+    // that has done nothing has none. Tests that need one pass it explicitly.
+    tasks: [] as SessionView['tasks'],
+    sets: [0, 1, 2].map((setIndex) => ({
       id: id(50 + setIndex),
       sessionId: SESSION,
       exerciseId: EXERCISE,
@@ -95,6 +135,8 @@ export function serverView(): SessionView {
       isCompleted: false,
       weightKg: null,
       reps: null,
+      clientTs: '2026-09-11T17:00:00.000Z',
+      updatedAt: '2026-09-11T17:00:00.000Z',
     })),
   };
 }

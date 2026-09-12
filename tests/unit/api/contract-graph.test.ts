@@ -42,6 +42,11 @@ function readRoute(path: string): string {
   return readFileSync(join(ROOT, path), 'utf8');
 }
 
+/** Counted rather than eyeballed: "exactly one" is the assertion that keeps a comment from satisfying it. */
+function countMatches(source: string, needle: string): number {
+  return source.split(needle).length - 1;
+}
+
 describe('contract graph: every API route is an adapter over lib/contracts', () => {
   it.each(GRAPH.map((entry) => [entry.route, entry] as const))(
     '%s imports its declared contracts and exports its declared methods',
@@ -69,6 +74,46 @@ describe('contract graph: every API route is an adapter over lib/contracts', () 
       expect(source, `${entry.route} must not import zod directly`).not.toMatch(/from ['"]zod['"]/);
       expect(source, `${entry.route} must not declare schemas inline`).not.toMatch(/\bz\.(object|array|enum|string|number|union|literal|discriminatedUnion)\(/);
     }
+  });
+
+  it('holds the three session-graph producers to the contract they serve (M3-09, #73)', () => {
+    /*
+     * `SessionStateSchema` stopped being a placeholder, and a contract its producers do
+     * not enforce is documentation: a mapper that drifts would still ship, and the first
+     * thing to notice would be a client refusing to render a workout. So each route that
+     * returns the graph must parse it on the way out. This is a source check because the
+     * alternative — importing a route handler into a node process — throws on
+     * `next/headers`, and the behavioral half is covered by
+     * `tests/unit/contracts/outgoing-validation.test.ts` plus the API suites.
+     *
+     * The check is a *forbidding* file's positive twin: without it, deleting a
+     * `validateOutgoing` call would leave every test in the repo green.
+     */
+    const producers: ReadonlyArray<readonly [string, string]> = [
+      ['src/app/api/sessions/route.ts', 'SessionStartResponseSchema'],
+      ['src/app/api/sessions/[id]/route.ts', 'SessionDetailResponseSchema'],
+      ['src/app/api/sync/route.ts', 'SyncResponseSchema'],
+    ];
+    for (const [route, schema] of producers) {
+      const source = readRoute(route);
+      expect(
+        source,
+        `${route} must validate its outgoing body through ${schema}`,
+      ).toContain(`validateOutgoing(${schema}`);
+      expect(source, `${route} must import the validator from lib/contracts`).toMatch(
+        /from '[^']*lib\/contracts\/envelope'/,
+      );
+    }
+
+    // And the exact inverse, because this route has a documented body-less answer: the
+    // `since === server_seq` short-circuit returns `{ notModified, serverSeq }` and *must
+    // not* be run through the session schema, or every poll would 500.
+    const detail = readRoute('src/app/api/sessions/[id]/route.ts');
+    expect(
+      detail,
+      'the notModified short-circuit carries no session body and must stay unwrapped',
+    ).toMatch(/const data: SessionNotModified = \{ notModified: true, serverSeq \};\s*return NextResponse\.json\(appSuccess\(data\)/);
+    expect(countMatches(detail, 'validateOutgoing('), 'exactly one assertion in the detail route').toBe(1);
   });
 
   it('ships a route for each contract that promises one (M3 additions)', () => {

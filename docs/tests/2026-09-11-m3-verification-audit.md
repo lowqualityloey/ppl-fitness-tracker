@@ -429,6 +429,104 @@ on this head went **61 passed / 0 failed in 6.2 m with the parity gate executed,
 the first time this gate has fired on a runner. `fetch-depth: 0` earned its keep: the gate is now
 real on both machines, which is the entire standard this milestone held itself to.
 
+## 19. The #73 session-state contract: two drifts injected, both caught — and the gate caught *me* first (feat/m3-073, unit + real routes)
+
+`SessionStateSchema` was `z.object({}).passthrough()` from M2-01 to now. Closing it (the
+graph, `.strict()`, enums reused from `contracts/common.ts`, tolerant timestamps in the
+contract, all three producers — `POST /api/sessions`, `GET /api/sessions/[id]`, `POST
+/api/sync` — parsing what they send) produced a set of green tests that mean nothing until
+each one is seen to fire. Two drifts injected into `mapSessionState`'s output, scratch only,
+reverted with `git checkout` immediately after each capture.
+
+**First, the gate fired on its own author.** Before any injection, `contract-graph.test.ts`
+went red on my new route comments, which quoted the old placeholder as `z.object({}).passthrough()`:
+
+```
+ FAIL  tests/unit/api/contract-graph.test.ts > keeps every schema declaration in lib/contracts — routes own none
+   → src/app/api/sessions/route.ts must not declare schemas inline   (matches /\bz\.(object|array|enum|…)\(/)
+```
+
+That is a static check hitting a false positive on prose, and the honest response was to reword
+the comments rather than narrow the regex: a route that *mentions* schema syntax is one grep away
+from owning it, and this file's whole job is refusing to let shape ownership leak into `src/app/`.
+Nothing was loosened.
+
+**Injection 1 — a required field stops being emitted** (`delete summary.serverSeq` inside
+`mapSessionState`, so the mapper returns a session with no version token):
+
+```
+Error: mapper output rejected by its own contract:
+  [{"expected":"number","code":"invalid_type","path":["serverSeq"],
+    "message":"Invalid input: expected number, received undefined"}]
+
+ Test Files  4 failed | 35 passed (39)
+      Tests  11 failed | 387 passed (398)      ← npm test
+```
+
+The 11 are not all mine, which is the useful part: 4 in
+`tests/integration/repository/workout-repository.test.ts` (`applies all sync metadata
+atomically…`, `rejects stale conflicts…`, `supports ordered lifecycle mutations…`,
+`serializes concurrent identical submissions…`), 2 in `contracts.test.ts` (the sync-response
+and session-response envelope assertions), 4 in the new `session-state.test.ts`, 1 in
+`outgoing-validation.test.ts`. `session-view.test.ts` stayed green — it hand-writes its
+payload, so it cannot see mapper drift, which is exactly why the mapper lock had to be built
+out of `…$inferSelect` row types instead of another literal.
+
+**The same injection through real routes** (`next dev` + the real database, not a mock):
+
+```
+AssertionError: expected 500 to be 200        ← POST /api/sessions (start)
+AssertionError: expected 500 to be 200        ← POST /api/sessions (idempotent clientId repeat)
+AssertionError: expected 500 to be 200        ← GET /api/sessions/[id]?since=<ahead>  (full-state branch)
+AssertionError: expected 500 to be 200        ← POST /api/sync ×3
+
+ Test Files  2 failed (2)
+      Tests  6 failed | 14 passed (20)        ← sessions.test.ts + sync.test.ts
+```
+
+So "a mapper that drifts fails at the boundary" is measured, not asserted, and it fails on
+**all three** consumers including `sync` — the one the spec called easy to miss. The
+`since === server_seq` short-circuit stayed 200 throughout: the body-less answer carries no
+graph, and `contract-graph.test.ts` now pins that it stays unwrapped (a second `validateOutgoing`
+call in that file would fail the gate).
+
+**Injection 2 — an enum value the database has never had** (`mapExercisePlan` emitting
+`kind: 'cardio'`, the exact class of mistake #73 was filed about):
+
+```
+Error: mapper output rejected by its own contract:
+  [{"code":"invalid_value","values":["strength","stretch"],
+    "path":["routineDay","exercises",0,"exercise","kind"],
+    "message":"Invalid option: expected one of \"strength\"|\"stretch\""}]
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  5 failed | 13 passed (18)
+```
+
+Note which assertion fires: `accepts exactly what mapSessionState produces`, not
+`rejects an exercise kind outside exercise_kind` — the rejection test passes under the
+injection *because it was already rejecting*, so the lock is the test doing the work, and the
+two together are what make the enum reusable rather than decorative.
+
+**Restored** (`git checkout lib/domain/sessions/mappers.ts`, `grep -c SCRATCH` → 0): green, and
+the branch's battery is lint 0/0 · typecheck 0 · unit 39 files/397 · api+security 10/60 ·
+mutation exit 0 · Playwright **61/0** (3.5 m).
+
+**The two e2e flakes this branch saw, recorded rather than smoothed.** The first full run failed
+`timers.spec.ts:277` (the CDP-freeze spec) inside `warmUpAndStart`: after `advance-phase`, the
+subtitle was still "Warming up" at the 5 s assertion. The second failed a *different* spec —
+`sla.spec.ts:282`, G-M3-3 — on its 30 s test budget, while printing `[G-M3-3 cross-device] n=5
+median=4339.0ms p95=4424.0ms`, i.e. the measurement passed and the wall clock ran out. Both passed
+solo (`timers.spec.ts` 5/5 in 1.1 m; `sla.spec.ts` 3/3 in 41.3 s with G-M3-3 at 25.4 s), and the
+third full run was 61/0. No budget moved, nothing was retried into a pass.
+
+Why they are not this change: a `validateOutgoing` rejection is deterministic, and in run 1 the
+same `advanceIntoRest` helper passed in `timers.spec.ts:224` and in every session-runner spec
+against the same build; the 60 api+security tests assert 200s and schema-valid bodies on the same
+routes with real rows; and G-M3-3's own numbers (median 4332–4346 ms, p95 4424–4454 ms) sit inside
+the band entry 17 recorded before #73 existed. The honest residue: neither flake was reproduced
+deliberately, so "contention" is the best explanation available, not a proven one.
+
 ## What the numbers said on the final recorded runs (2026-09-12, this branch, production build)
 
 Five full `npx playwright test` runs on the fixed tree: **61 passed / 0 failed** on the last four

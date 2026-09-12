@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   SessionDetailParamsSchema,
   SessionDetailQuerySchema,
+  SessionDetailResponseSchema,
   type SessionNotModified,
 } from '../../../../../lib/contracts/sessions';
-import { appSuccess, notFoundError } from '../../../../../lib/contracts/envelope';
+import { appSuccess, notFoundError, validateOutgoing } from '../../../../../lib/contracts/envelope';
 import { requireUserContext } from '../../../../../lib/auth/require-user';
 import { getDb } from '../../../../../lib/db/client';
 import { appErrorResponse, routeErrorResponse } from '../../../../../lib/http/route-error';
@@ -62,7 +63,22 @@ export async function GET(
 
     const data = await repository.findSession(context.userId, sessionId);
     if (!data) return appErrorResponse(notFoundError(), NO_STORE);
-    return NextResponse.json(appSuccess(data), { status: 200, headers: NO_STORE });
+    /*
+     * The full-session branch is the one that carries the session graph, so it is parsed
+     * through the contract that describes it before it is sent (#73). The `notModified`
+     * short-circuit above is deliberately untouched: it has no session body, and wrapping it
+     * would validate a shape this route is specified to omit.
+     *
+     * Inside the `try` on purpose. `validateOutgoing` throws `ContractViolationError`, which
+     * is not a `ZodError`, so `routeErrorResponse` renders it as the canonical redacted 500
+     * instead of blaming the caller for a producer-side defect. The alternative is shipping a
+     * body the client rejects, which surfaces as a broken workout screen a long way from the
+     * change that caused it.
+     */
+    return NextResponse.json(
+      validateOutgoing(SessionDetailResponseSchema, appSuccess(data), 'GET /api/sessions/[id] body'),
+      { status: 200, headers: NO_STORE },
+    );
   } catch (error) {
     return routeErrorResponse(error);
   }

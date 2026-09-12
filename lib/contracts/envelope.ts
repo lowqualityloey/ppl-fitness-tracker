@@ -89,3 +89,55 @@ export function rateLimitedError(message = 'Too many sign-in attempts.'): AppErr
 export function internalError(message = 'Internal server error.'): AppError {
   return { code: 'INTERNAL_ERROR', message, status: 500 };
 }
+
+/**
+ * Something the server was about to send does not match the contract that describes it.
+ *
+ * This is never the client's fault, so it is deliberately **not** a `ZodError`:
+ * `routeErrorResponse` maps a `ZodError` to 400 `VALIDATION_ERROR`, which would blame the
+ * caller for a producer-side defect. On its own type it falls through to the canonical
+ * redacted 500, and the detail stays on the thrown error — visible in the test failure
+ * that caught it, exactly as for every other unexpected internal error.
+ */
+export class ContractViolationError extends Error {
+  override readonly name: string = 'ContractViolationError';
+
+  readonly issues: readonly string[];
+
+  constructor(subject: string, issues: readonly string[]) {
+    super(`${subject} does not match the contract: ${issues.join('; ') || '(no issues reported)'}`);
+    this.issues = issues;
+  }
+}
+
+/**
+ * Parse a payload the server is about to **send** through the contract describing it.
+ *
+ * Why this exists: #73 found `SessionStateSchema` still a `z.object({}).passthrough()`, so
+ * the session routes could only ever have *claimed* to validate their own output.
+ * Tightening a contract is worthless unless its producer is held to it — a mapper that
+ * drifts has to fail at the boundary rather than ship a body the client then rejects, and
+ * a client that rejects one shows an error page in the middle of someone's set.
+ *
+ * Parsing normalizes too: the `Date` values the repository produced leave as ISO strings,
+ * so what gets validated and what gets sent are the same bytes.
+ *
+ * It lives in the contract layer rather than in a route because `contract-graph.test.ts`
+ * forbids routes from owning schema logic; a route that calls this is still a thin adapter.
+ */
+export function validateOutgoing<S extends z.ZodTypeAny>(
+  schema: S,
+  payload: unknown,
+  subject = 'outgoing response',
+): z.infer<S> {
+  const parsed = schema.safeParse(payload);
+  if (!parsed.success) {
+    throw new ContractViolationError(
+      subject,
+      parsed.error.issues.map(
+        (issue) => `${issue.path.join('.') || '(root)'}: ${issue.message}`,
+      ),
+    );
+  }
+  return parsed.data;
+}

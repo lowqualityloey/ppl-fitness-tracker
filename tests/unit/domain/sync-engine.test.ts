@@ -14,7 +14,6 @@ import type {
   SyncReservation,
   SyncStore,
 } from '../../../lib/domain/sync/types';
-import type { SessionState } from '../../../lib/domain/sessions/types';
 
 const sessionId = '11111111-1111-4111-8111-111111111111';
 const exerciseId = '22222222-2222-4222-8222-222222222222';
@@ -48,14 +47,24 @@ class FakeSyncStore implements SyncStore {
   readonly appliedMutations: string[] = [];
   readonly records = new Map<string, SyncMutationRecord>();
   readonly versions = new Map<string, SyncEntityVersion>();
-  state = { serverSeq: 0 } as unknown as SessionState;
+  /**
+   * A counter, not a session.
+   *
+   * This fake used to carry `state = { serverSeq: 0 } as unknown as SessionState`, and every
+   * other field of that type — id, status, phase, routineDay, sets, tasks — was absent behind a
+   * double assertion (`as unknown as`) whose purpose was to stop the compiler noticing. It
+   * existed because `SyncStore.getState` had to return a session graph so the batch answer could
+   * ship one; #105 removed the field, so the seam now asks for the one integer it actually uses
+   * and the fake has no lie left in it.
+   */
+  serverSeq = 0;
 
   constructor(deviceId = deviceA) {
     this.deviceId = deviceId;
   }
 
-  async getState(): Promise<SessionState> {
-    return this.state;
+  async currentServerSeq(): Promise<number> {
+    return this.serverSeq;
   }
 
   async reserveMutation(mutationInput: SyncMutation, payloadHash: string): Promise<SyncReservation> {
@@ -80,8 +89,8 @@ class FakeSyncStore implements SyncStore {
   }
 
   async allocateSequence(): Promise<number> {
-    this.state = { ...this.state, serverSeq: this.state.serverSeq + 1 };
-    return this.state.serverSeq;
+    this.serverSeq += 1;
+    return this.serverSeq;
   }
 
   async upsertEntityVersion(version: SyncEntityVersion): Promise<void> {
@@ -156,7 +165,18 @@ describe('SyncEngine policy', () => {
     expect(second.applied).toEqual([firstMutation.mutationId]);
     expect(first.rejected).toEqual([]);
     expect(store.appliedMutations).toEqual([firstMutation.mutationId]);
-    expect(store.state.serverSeq).toBe(1);
+    expect(store.serverSeq).toBe(1);
+    /*
+     * #105, counted rather than described: what a batch answers with, exactly.
+     *
+     * The shape used to be the contract's four fields *plus* a session graph the domain mapped and
+     * no client read. Asserting the key list here is what keeps the two halves of the removal
+     * honest — the domain result and the wire body are the same shape by construction, so a field
+     * added on one side and not the other is a `ContractViolationError` in the route, and this is
+     * the assertion that names the pair before a request has to be made to find out.
+     */
+    expect(Object.keys(first).sort()).toEqual(['applied', 'clockSkewMs', 'rejected', 'serverSeq']);
+    expect(first.serverSeq).toBe(1);
   });
 
   it('rejects changed payload reuse without invoking the domain mutation', async () => {

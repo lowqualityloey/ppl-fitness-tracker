@@ -329,9 +329,36 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
   `tests/unit/contracts/{session-state,outgoing-validation}.test.ts` plus growth in
   `contracts.test.ts`, `session-view.test.ts` and the routes-own-no-schemas guard.
   `tests/unit/state/fixtures.ts` had to grow, because it had been claiming to be *the server's view*
-  of a session the server has never sent. **Not closed by it:** `SyncResponseData.state` has no
-  runtime consumer, and `tests/e2e/session-runner.spec.ts:174` mocks that field in a shape the
-  contract never had — both carried into M4 at §7 item 22.
+  of a session the server has never sent. **The two limits this bullet disclosed are closed by
+  #105**, whose surface is the next bullet: `state` no longer exists on a sync response, and the
+  e2e mock that invented it is built through the contract instead of beside it.
+
+- **#105 surface, as built** (`feat/m4-105-drop-sync-response-state`): `SyncResponseData.state` is
+  deleted — from `lib/contracts/sync.ts`, from the domain result that used to be
+  `Omit<SyncResponseData,'state'> & { state: SessionState }` (`lib/domain/sync/types.ts`, now
+  `SyncApplyResult = SyncResponseData`), and from the seam that existed only to fill it:
+  `SyncStore.getState(): Promise<SessionState>` is `currentServerSeq(): Promise<number>`, so
+  `lib/repositories/workout-repository.ts` reads one column of a row its transaction already holds
+  `FOR UPDATE` instead of re-mapping sets, tasks, and the whole routine plan to throw the result
+  away an arm's length from the response. `.strict()` is what makes the removal self-enforcing: a
+  producer that still emitted `state` fails `validateOutgoing` with a redacted 500 rather than
+  shipping a key the contract stopped describing. Specs were re-aimed, not deleted — the claims
+  were about *stored* state, and stored state has one producer: three `SyncResponseSchema` cases in
+  `contracts.test.ts` plus a new one pinning the answer to four keys and refusing `state` as an
+  unknown key (in both the shape #73 shipped and the shape the mock invented);
+  `tests/unit/domain/sync-engine.test.ts`'s fake store lost its
+  `state = { serverSeq: 0 } as unknown as SessionState` cast and gained a counted key list;
+  `tests/unit/state/sync-engine.test.ts` builds every `SendOutcome` through the contract and drains
+  an old-format queue against the narrowed body; `tests/integration/api/sync.test.ts` asserts the
+  four keys **on the bytes**, re-reads its two re-aimed assertions through `GET /api/sessions/[id]`,
+  and POSTs a literal batch written the way the previous build's outbox writes one — 200, three
+  applied, one refused by name. The e2e fabrication at `session-runner.spec.ts:174` is replaced by
+  `tests/e2e/sync-fixtures.ts`, which `.parse`es every mock body through `SyncResponseDataSchema`
+  at build time, with `tests/unit/contracts/sync-response-fixture.test.ts` injecting the original
+  lie and requiring a throw — so the builder is a control that runs, not one that is described.
+  Same change, same species of fiction: that mock's `reason: 'ILLEGAL_TRANSITION'` was also a
+  string no server path emits, and now carries `CONFLICT`, which is what `rejectionReason` returns
+  for a lifecycle refusal.
 
 ---
 
@@ -366,7 +393,7 @@ Added by the M0 spike (ADR-0003 Amendment A1):
 20. **M2 repository methods keep `userId` first and map rows at the domain boundary.** Route handlers must not expose raw Drizzle rows or bypass `WorkoutRepository` for user data.
 
 21. **`since` is compared to `workout_sessions.server_seq` and nothing else, and `since >` current seq returns the FULL session.** Equality is the only "no change" answer; a client claiming to be ahead of the server is wrong about something, and "no change" would let it keep trusting state that never existed. `updated_at` and client clocks are never version tokens. *(M3-01 #58, locked in `lib/contracts/sessions.ts`, 2026-09-11.)*
-22. **`WeightKgSchema` and `RepsSchema` live in `lib/contracts/common.ts`; `sync.ts` re-exports them and `sessions.ts` must never import from `sync.ts`.** `sync.ts` already imports `SessionStateSchema` from `sessions.ts`, and Zod schemas are constructed at module scope — the reverse import is a cycle whose failure mode is an `undefined` at import time or a schema that quietly stops validating. *(Found while writing M3-00 on 2026-09-11; the bounds also mirror the `weight_sane`/`reps_sane` CHECK constraints so schema and database rejections stay one event.)*
+22. **`WeightKgSchema` and `RepsSchema` live in `lib/contracts/common.ts`; `sync.ts` re-exports them and `sessions.ts` must never import from `sync.ts`.** Written when `sync.ts` imported `SessionStateSchema` from `sessions.ts`, so the reverse import closed a cycle at module scope — failure mode an `undefined` at import time or a schema that quietly stops validating. **#105 deleted that import** (a sync response no longer carries a session graph), so the cycle hazard is gone; **the rule is kept regardless**, because what it actually protects is single ownership of the scalar bounds — `sync.ts` and `sessions.ts` both need `WeightKgSchema`, and a bound declared twice is two sources of truth that can disagree in silence. The invariant is unchanged; only its original justification is superseded, and `lib/contracts/common.ts` says so where the schemas live. *(Found while writing M3-00 on 2026-09-11; the bounds also mirror the `weight_sane`/`reps_sane` CHECK constraints so schema and database rejections stay one event.)*
 23. **`PATCH /api/profile` accepts only `displayName` and `preferredUnit`, and an unknown key is a 400, not an ignored field.** `email` is not client-editable at all: identity belongs to Supabase Auth and the app has no verification flow to back the claim. *(M3-00 #57.)*
 24. **The `preferredUnit` wire value is literally the DB enum: `('kg', 'lbs')`, not `('kg', 'lb')`.** Verified against `db/schema/index.ts:29`, migration `0000:5`, and a live `pg_type ⋈ pg_enum` query. No mapping layer, no `ALTER TYPE`: `"lb"` is a 400 pinned in unit and route specs (the RFC §4.1 snippet that guessed it is corrected by the spec's §8.7 erratum). A contract comment claiming to *mirror* storage is an unverified claim until a test reads the storage truth. *(M3-00 #57, 2026-09-11.)*
 25. **Migrations are hand-authored SQL in `supabase/migrations/`, applied in filename order by the Supabase CLI; drizzle-kit `generate`/`migrate` stay out of the migration loop.** The npm scripts are gone, `drizzle.config.ts` declares no `out:`, and `supabase/migrations/meta/` is deleted — each leg enforced by `tests/unit/migration-authority.test.ts`, which was watched failing on all four injected re-introductions (M4 audit entries 4–5). `db/schema/index.ts` is a runtime type view, not a codegen source: keep it in step with the SQL by hand and prove column-level truth with live-catalog tests. *(M4-00 #89, ADR-0006, 2026-09-12.)*
@@ -423,7 +450,7 @@ The narrower claim that survived — "non-interactive shells resolve `/usr/bin/n
   pins an explicit `--user-data-dir` under `/tmp` and fails if the run creates anything at the repo root,
   so the suite cannot repeat it even while the cause is unresolved.
 
-- **`SessionStateSchema` was `z.object({}).passthrough()`; #73 closed it, MERGED as PR #87 (`2d5edfb`, 2026-09-12T02:00Z).** For four milestones the session graph was never contract-validated: `GET /api/sessions/[id]` checked the envelope and every response built from the placeholder passed regardless of content, and `z.infer` of it was `Record<string, unknown>` — a screen typed against `SessionState` compiled while reading `undefined` weights. M3-04 had worked around it with a view-boundary schema (`lib/views/session-view.ts`) that parsed only what the session screen renders. The contract now states the graph — transcribed from `lib/domain/sessions/types.ts` as `mapSessionState` emits it, `.strict()` throughout, every enum reused from `lib/contracts/common.ts` (including the two the plan half needed, `ExerciseKindSchema` and `RoutineExercisePhaseSchema`), with the `Date`-or-ISO timestamp duality living in the contract rather than in a view — and `session-view.ts` is the re-export this bullet asked for. All three producers (`POST /api/sessions`, `GET /api/sessions/[id]`, `POST /api/sync`) parse what they send, so a mapper that drifts fails at the boundary; both drift classes were injected and observed to fail (audit entry 19). **What #73 did *not* close, and M4 inherits rather than discovers:** `SyncResponseData.state` still has no runtime consumer — the client casts it and refetches — and `tests/e2e/session-runner.spec.ts:174` mocks that field in a shape (`state.session.*`) the contract has never had, which only looks harmless because nothing parses it. Both are recorded on PR #87 and in the handoff; neither is a reason to reopen #73.
+- **`SessionStateSchema` was `z.object({}).passthrough()`; #73 closed it, MERGED as PR #87 (`2d5edfb`, 2026-09-12T02:00Z).** For four milestones the session graph was never contract-validated: `GET /api/sessions/[id]` checked the envelope and every response built from the placeholder passed regardless of content, and `z.infer` of it was `Record<string, unknown>` — a screen typed against `SessionState` compiled while reading `undefined` weights. M3-04 had worked around it with a view-boundary schema (`lib/views/session-view.ts`) that parsed only what the session screen renders. The contract now states the graph — transcribed from `lib/domain/sessions/types.ts` as `mapSessionState` emits it, `.strict()` throughout, every enum reused from `lib/contracts/common.ts` (including the two the plan half needed, `ExerciseKindSchema` and `RoutineExercisePhaseSchema`), with the `Date`-or-ISO timestamp duality living in the contract rather than in a view — and `session-view.ts` is the re-export this bullet asked for. All three producers (`POST /api/sessions`, `GET /api/sessions/[id]`, `POST /api/sync`) parse what they send, so a mapper that drifts fails at the boundary; both drift classes were injected and observed to fail (audit entry 19). **What #73 left open is now shut, by #105:** the second half of that three-producer sentence is history — `POST /api/sync` no longer ships a session graph at all, because `SyncResponseData.state` had no runtime consumer and the client that was supposed to read it refetches instead (§3's #105 bullet). The `tests/e2e/session-runner.spec.ts:174` mock, which invented a `state.session.*` shape the contract had never had *at any revision*, is now built through `SyncResponseDataSchema.parse` in `tests/e2e/sync-fixtures.ts`, with a unit control that injects the original fabrication and requires a throw. Neither was a reason to reopen #73, and #105 did not reopen it: the graph's two remaining producers still validate what they send, unchanged.
 
 - **The Lighthouse gate now audits the screens users actually train on — and one thing it still cannot see.** `#60` recorded a score of 100 "for `/`" when `/` was a page. Since `#61` made `/` a per-user screen, an unauthenticated audit is served a redirect, so the spec resolves the entry point, asserts it against a small allow-list, and labels the measurement with the pathname it audited (`score for /sign-in (reached from /): 100`). The **authenticated** audit that note deferred — a session attached to Lighthouse's request via `--extra-headers`, fed from the same cookie jar `tests/e2e/auth.ts` uses — **was built: #67 shipped it** (PR #86), and `tests/e2e/lighthouse.spec.ts` now scores 100 on `/history`, `/`, and `/session/[id]` as well as `/sign-in`, all four re-scored on every final run. **The hole M3 found but did not close:** an accessible name that is a **zero-width space** scores **100** (audit entry 11) — axe did not catch it either. "A link that renders as nothing" is invisible to both gates, so the fix is a structural DOM check, not a louder Lighthouse; it is handed to M4 (exit report §3.6) rather than papered over here.
 
@@ -459,7 +486,53 @@ The narrower claim that survived — "non-interactive shells resolve `/usr/bin/n
   `404 NOT_FOUND` mid-measurement in `#60`'s spec: another worker had deleted the session it was
   writing to. That file is now `mode: 'serial'` — which also stops a benchmark from measuring
   itself under a sibling's load — but the cross-file exposure stands, and the real fix is per-run
-  ids rather than more scheduling.
+  ids rather than more scheduling. **Two further reproductions on 2026-09-12 (#105's branch), and the
+  attribution first written here was wrong, so it is corrected rather than kept.**
+  `session-runner.spec.ts:111` failed inside `cleanup()` with
+  `Could not clean up M1-16 test user (500)` — first at Playwright's default **2 workers** (60 passed /
+  1 failed, while `--workers=1` was 61/0 printing median 14.8 ms / p95 20.2 ms), then **twice more at
+  `--workers=1`** in consecutive full runs, each time with the spec's own 100-tap measurement already
+  behind it: Playwright reports the first failure, and the failure was in the `finally`. So worker
+  count does not explain it and this bullet's original framing was too tidy. What is known: a bare
+  admin create-then-delete of a fresh user against the same still-running stack returns 200/200
+  minutes later, so nothing is persistently broken; and `tests/integration/api/fixtures.ts:120`
+  throws the **status** while discarding GoTrue's response body, which is precisely why the cause
+  cannot be named from test output — the shape can be described and the mechanism cannot. Naming it is
+  this card's work (per-run ids, and a fixture that says what the admin API answered), and #105
+  neither creates it nor fixes it. `--workers=1` is still the right local invocation, because it is
+  what makes the 404 above unreachable — not because it makes this go away.
+- **The four Lighthouse specs fail on this machine for a reason that is now identified, and the
+  mitigation in the spec cannot work because it aims at the wrong variable.**
+  `tests/e2e/lighthouse.spec.ts` forces `TMPDIR`/`TEMP`/`TMP` to `/tmp` so chrome-launcher cannot
+  create its Chrome profile inside the repository, and its comment records the origin of the
+  Windows path as "still unidentified". It is not unidentified: `chrome-launcher/dist/utils.js`
+  `makeTmpDir()` switches on `getPlatform()`, which returns `'wsl'` on this box, and the `'wsl'`
+  case **overwrites `process.env.TEMP`** with `getWSLLocalAppDataPath(process.env.PATH)` — a regex
+  scan of `$PATH` for `/x/Users/<name>/AppData/` — before falling through to `makeWin32TmpDir()`.
+  So the spec's override is discarded by the child, and on a WSL whose `PATH` carries
+  `/mnt/c/Users/…/AppData/Local/…` while `/mnt/c` is unwritable, all four Lighthouse runs die in
+  `mkdir` with `EACCES` — a red suite that says nothing about the code under test. Measured on
+  `feat/m4-105-drop-sync-response-state` (2026-09-12): the same four specs, same build, same
+  Chromium binary, **fail** under the inherited `PATH` and **pass at 100** with `/mnt/*` entries
+  removed from it. #105's e2e runs were taken with that sanitized `PATH`, which is disclosed rather
+  than treated as normal; the file was not touched, because changing a gate's environment to
+  retrieve green is not the same as fixing it and this is not #105's surface. What it needs is its
+  own card: filter the child's `PATH` in `runLighthouse`, replace the "origin unidentified" comment
+  with the mechanism above, and state the WSL prerequisite in §3's Verification Commands.
+- **A `next build` killed mid-write leaves a corrupted *generated* file that `next build` then
+  typechecks — so the failure looks like a code regression in whichever route the writer was
+  reaching.** Observed on #105's branch (2026-09-12): one full battery went red at its e2e step with
+  `Failed to type check` and nothing but
+  `.next/dev/types/validator.ts(188,1): error TS1434: Unexpected keyword or identifier`, while
+  `npm run typecheck` in the same pass had exited 0 minutes earlier. The file's line 188 read
+  `eof import("../../../src/app/api/sync/route.js")` — a torn write, the tail of a `// @ts-` comment
+  fused to the next statement. Cause: a stray `pkill` of a leftover server catching the build that
+  was still generating those types. `rm -rf .next` and rebuilding produced a clean build with no
+  source change, which is the whole diagnosis. Two rules follow for anyone scripting the battery:
+  never kill by process name in a shell whose own command line matches that name (it killed the
+  script's process twice here), and clear `.next` before letting `playwright.config.ts`'s
+  `webServer` rebuild, because a reused stale build silently measures the wrong tree and a torn one
+  fails for reasons that have nothing to do with the diff.
 - **Unexplained: a `window`-bubble `pointerdown` listener with `{ once: true }` that never fired**
   while four pointerdowns in the same document were seen by a `document`-capture listener and by a
   spy on `window`, with no cleanup having run. Diagnosed by instrumentation, not inference — and the
@@ -861,18 +934,41 @@ Carried forward, still open:
       ceiling is M2-06's 800 ms and it holds; the 200 ms figure stayed *documented, never enforced*.
       The 50 rps condition the master RFC specifies is still untested, and the **rate limiters are
       process-local** (N instances = N × every budget).
-    - **The two disclosed #73 limits** (both in PR #87's body and audit entry 19): `SyncResponseData.state`
-      has **no runtime consumer** — the client casts it and refetches, so the new strictness is
-      enforced only server-side; and `tests/e2e/session-runner.spec.ts:174` mocks that field in a
-      shape (`state.session.*`) the contract has never had. It is inert **only because nothing parses
-      it**: the first real consumer makes that mock red, which is the correct outcome but means today
-      it evidences nothing. Fix the mock when you add the consumer, in the same change.
+    - **The two disclosed #73 limits are closed, and the way they were told to be closed.** The
+      owner ratified *drop the field* rather than wire a consumer, so `SyncResponseData.state` no
+      longer exists to have no consumer, and the `session-runner.spec.ts:174` mock is built through
+      `SyncResponseDataSchema.parse` (`tests/e2e/sync-fixtures.ts`) in the same change that deleted
+      it — which is what "fix the mock when you add the consumer, in the same change" was
+      protecting against. The second half of the card's Option B is what remains open: an old
+      queue against the narrowed server is asserted at the route and the client seam, and the
+      deployment itself is not observable from this battery. See §3's #105 bullet.
     - **Playwright contention flakes, with the protocol that goes with them**: `timers.spec.ts:277`
       (CDP-freeze spec, subtitle still "Warming up" at 5 s) and `sla.spec.ts:282` (G-M3-3 exhausting
       its 30 s *test* budget while printing a passing p95) each failed once in full-suite runs on
       #73's branch, passed solo, and the third run was 61/0. Neither was reproduced deliberately, so
       "contention" is the best available explanation, not a proven one (audit 19; same family as
-      `a11y.spec.ts:102` and `sla.spec.ts:69` in audit 17). **Protocol: re-run a red timing gate solo
+      `a11y.spec.ts:102` and `sla.spec.ts:69` in audit 17). **A third name arrived on #105's branch
+      (2026-09-12): `sla.spec.ts:144`, G-M3-4's 5 s drain budget** — red once in a full `--workers=1`
+      suite, green solo at median **1 752 ms** against that 5 000 ms, and green in the counted passes
+      that followed; same treatment, same caveat (not reproduced deliberately). **`session-runner.spec.ts:201`
+      — the full-workout walk, a *flow* gate rather than a latency one — went red in the same branch's
+      second counted suite** (`Expected "Stretching"`, received `"2026-09-12 · Resting"`, **14 identical
+      locator resolutions** inside the assertion's default 5 s) and green solo in 16.2 s. That is #89's
+      audit entry 11 signature verbatim, including the 14: a phase advance crossing the engine's ~4 s
+      visible poll while the box is still settling. It is named here and in PROMPTKIT §3 — green solo,
+      so it meets that list's claim — and its budget was not touched, because the seam behind it belongs
+      to #96's queue work, not to a number in a spec.
+       **And CI is not immune to the family.** On 2026-09-12 `a11y.spec.ts:102` — on PROMPTKIT §3's
+       list since audit entry 17 — went red in PR #116's first `test` job with the same string
+       (`Expected "Stretching"`, received `"2026-09-12 · Resting"`), 1 failed / 60 passed, and a
+       re-run of that exact SHA came back **61/0**. The workflow runs `npm run test:e2e`, which is
+       bare `playwright test` with no `--workers` cap, so a hosted runner's four cores can meet the
+       same seam as this laptop. What the runner does buy is headroom: the same production-build
+       measurements read sync **p50 96.7 / 108.4 ms** and tap **p95 16.8 / 19.4 ms** there against
+       **191–200 ms** and **~21 ms** here — which also means this box misses the documented 200 ms
+       `POST /api/sync` budget *on `main`*, and did so before #105 existed. A local e2e timing red
+       is therefore worth roughly half a CI one, and neither is worth a budget edit.
+      **Protocol: re-run a red timing gate solo
       before believing it, and move no budget without a re-run proving the reality changed.** M4's
       load test is what decides whether any of these tails is real.
     - **The Lighthouse gate is blind to a zero-width-space accessible name** — it scores such a link
@@ -943,6 +1039,8 @@ Carried forward, still open:
 | 2026-09-12 | Agent (DSH, `pk:checkpoint`) | **M3 closed — post-merge state sync** | PRs **#86** (issue #67, M3-10) and **#87** (issue #73) are merged; milestone #3 reads **open=0 / closed=19**. This is the convention those two merges trigger: the tracker described branches that no longer exist. **§1** milestone/working-branch/last-updated/gate-status now describe `main` with nothing in flight; **§2**'s M3 row is `[x]` and the #59/#60/#67 task lines read MERGED with their PRs and SHAs (#71 `3b0ffbf`, #72 `9f98f83`, #86 `8704c19`, #87 `2d5edfb`), with a row added for #73 so the milestone's 19 closed items are all visible; **§3**'s active-spec line, the retired-`pending-handlers.ts` claim and the M3-10 "in review" heading are corrected, and the Verification-Commands baseline is re-measured rather than inherited; **§5**'s Lighthouse bullet (the authenticated audit #67 built), #73 bullet, `--accent-legs` and package-manager "open questions", the D3 debt row, the "D2/D3/D4/D6/D7 open" list, the "unmerged findings from #63" heading, and the stale 23-file/196-test baseline are all corrected; **§7** items 5–21 lost their `awaiting merge` / `in review` tenses, item 22 is now the M4 start line, and **items 21–22 were moved back into §7** — a previous session appended them after the §8 table, so the file's own section numbering was lying. **§8** carries this row. No source touched, no gate weakened, `docs/tests/…-m3-verification-audit.md` left exactly as written. **Re-measured on merged `main` (`2d5edfb`), stack up**: lint 0/0 · typecheck 0 · `npm test` **39 files / 398 tests** · `test:api` **10 / 60 / 0 skipped** · Playwright **61 passed / 0 failed (3.1 m)** · `test:mutation` **exit 0**. Two numbers the record disagreed on, resolved by measurement rather than by preferring a document: audit entry 19 and §8's #73 row say **397** while PR #87's evidence table says **398** — the merged tree measures **398**, so the older figures stand as the branch-time reading and are not edited. And the `POST /api/sync` p95 carried forward here is the exit report's **234–282 ms**, not a narrower band: the CI figure is 222.0 ms and the first local one was 272.8 ms, so the miss is quoted as the full measured range with each run attributed. Housekeeping the owner still owes: **GitHub milestone #3 is still `state: open`** despite zero open issues (milestone #2 was closed the same way after M2), **39 merged local branches** (`git branch --merged main`, excluding `main` and this docs branch), and D6's `tsconfig.json` — which churned again during this sync's API and Playwright runs and is, by rule, left unstaged. |
 
 | 2026-09-12 | Agent (DSH) | `M4-00` (#89) implemented: D4 settled as hand-authored, cascade shipped | Settled the p0 gate M4-20/M4-21 sit behind. **The decision was evidence, not taste**: `db:generate` was *run on purpose* on `793db53` and emitted a phantom destructive `0004` (`DROP INDEX routine_exercises_day_order`, re-`CREATE`s of shipped tables, NOT NULL relaxations) plus a journal rewrite — **exit 0** — while the applier (Supabase CLI, filename order) had been ignoring the journal all along and `drizzle.__drizzle_migrations` sat empty; journal-authoritative would mean fabricating snapshots drizzle later trusts. **Model (b) recorded**: ADR-0006; `db:generate`/`db:migrate` deleted from scripts, `out:` deleted from `drizzle.config.ts` (bare generate falls back to gitignored `./drizzle/` — measured), `supabase/migrations/meta/` deleted; `tests/unit/migration-authority.test.ts` gates all four re-introduction classes and was watched RED on each (#89 audit 4–5). **Cascade layer = the database**: `0007_auth_user_cascade.sql` adds `profiles_id_auth_users_fkey → auth.users(id) ON DELETE CASCADE` behind a guarded stranded-row cleanup (old local DB: 2 026 orphans; fresh `db reset` apply: zero), `tests/integration/auth-user-cascade.test.ts` executes deletion through the real GoTrue admin API (a role with zero `public.*` privileges — the cascade works anyway, measured, not quoted from Supabase docs) plus owner SQL, asserts the 23503 refusal, carries an in-transaction rolled-back negative control reproducing the leak first, and checks `supabase_migrations.schema_migrations` so a committed-but-unapplied migration is red; drop-the-FK became `test:mutation`'s sixth permanent control (5 of 6 red while broken). `schema-constraints.test.ts`'s synthetic profile learned to have an identity. Gates on this branch, twice: lint 0/0 · typecheck 0 · `npm test` **41/408** · api **10/60/0** · mutation exit 0 (6 controls) · Playwright pass 1 **61/0** ×2, pass 2 (against a fresh-volume DB) **60/1 → 61/0 → 61/0** — `timers.spec.ts:224`, an undocumented third member of the load-sensitive family, went red in the full suite and on its first solo, then green on four solos and two more full runs; event log = audit entry 11, budgets untouched, the red reported not smoothed · Lighthouse 100 on all four routes. One existing gate caught its own author mid-slice: `next build` typechecks test files, `vitest run` does not — TS2365 on a `count(*)` string, red before any spec ran, fixed not fudged (audit 10). The CI-parity question was closed by measurement, not presumption: deleting the volume and re-running `supabase start` applied and stamped `0000`–`0007` exactly as `db reset` had (audit Limits 2). Not verified: hosted-project FK privileges into `auth` (re-assert at first production migration). D6 churned as always, unstaged. |
+
+| 2026-09-12 | Agent (DSH) | `M4-16` (#105) implemented: the sync answer narrows to four fields, and the mock that invented a fifth dies with it | Executed the owner's ratified **drop**, not the wiring alternative. `SyncResponseData.state` is deleted from `lib/contracts/sync.ts`, from `SyncApplyResult` (was `Omit<SyncResponseData,'state'> & { state: SessionState }`, now the contract's own type), and from the seam that existed only to fill it: `SyncStore.getState()` → `currentServerSeq()`, so `workout-repository.ts` reads one column of a row its transaction already holds `FOR UPDATE` instead of mapping sets, tasks and the routine plan a fourth time to serialize a copy no client parsed. `.strict()` is what turns a deletion into a live gate, and it was watched: **re-adding the field to the schema** made typecheck name four files and 5 unit controls in three guard files go red; **making the producer keep emitting it** made `validateOutgoing` answer 500 four times (redacted, as designed) with 4 API specs red; **removing `.strict()`** took the two controls that exist to refuse an unknown key down with it (`expected true to be false`, and the fixture builder stopped throwing); **deleting the builder's `.parse`** red three fixture specs; **pasting the original fabricated mock back** red the scan control while `tsc --noEmit` stayed *clean* — the measurement that makes that scan load-bearing rather than tidy; and **`void envelope.data?.state` in `provider.tsx`** failed the source guard by filename, which is the read side of "no consumer existed" being checked instead of asserted. Every re-aimed claim moved to the route that actually promises it — `api/sync.test.ts` counts the four keys **on the bytes** and re-reads stored state through `GET /api/sessions/[id]` — and its new spec executes the deployment claim instead of asserting it: a literal batch written the way the previous build's outbox writes one posts 200, three applied, one refused `INVALID_MUTATION`, `serverSeq 3`, with the graph read back from the authoritative route. The e2e fabrication at `session-runner.spec.ts:174` is now `tests/e2e/sync-fixtures.ts`, which `.parse`es every body through `SyncResponseDataSchema` at build time, and its `reason` was corrected from `'ILLEGAL_TRANSITION'` — a string no path in `lib/domain/` emits — to `CONFLICT`, the code `rejectionReason` returns for a lifecycle refusal. With the original mock pasted back in, **`tsc --noEmit` is clean** and ESLint fires only incidentally on the newly-unused import, so the scan control added in `sync-response-fixture.test.ts` (no spec's code may contain `clockSkewMs`, a required response field no request carries) is the one gate that fails for the right reason. One red in an early full-suite pass turned out to belong to this branch, and chasing it is why the row is long: re-aiming an assertion at `GET /api/sessions/[id]` also moved that route's *first* request — under `next dev`, an on-demand compile — inside a spec's 5 s budget, measured at **2 039 ms** against **587 ms** for the same read once warm. The fix is a warm-up request in `beforeAll`, where `vitest.config.ts` already says infrastructure startup belongs, and no budget or expectation moved; the spec now runs **521 ms**. `sla.spec.ts:144` (G-M3-4) went red in that same early pass and green solo at median **1 752 ms** of its 5 000 ms budget, which is §7 item 22's contention family, not this change. Gates, with the whole ledger rather than the flattering half of it: lint 0/0 · typecheck 0 · `check-set-config.sh` 0 · preflight green · `npm test` **42/419** (was 41/408) · api **10/61/0** (was 60) · mutation exit 0 with all 6 controls CAUGHT · Playwright `--workers=1` **61/0**. Eleven full batteries ran on this branch; the two counted ones are passes J and K, back to back and last, 61/0 in 5.8 m and 6.0 m with Lighthouse 100 on four routes. The nine before them produced five reds and one invalidation, each recorded in §5 or §7 item 22 with its solo re-run: one was **this branch's** (the re-aimed sync spec absorbing a cold route compile inside a 5 s budget, fixed by moving the compile into `beforeAll`, not by widening the number); three were timing gates in specs already documented as load-sensitive or newly named into that family; one was a GoTrue admin-API 500 from a shared fixture's `cleanup()`; one pass was invalidated by a corrupted generated `.next/dev/types/validator.ts` that this session's own `pkill` tore mid-write. `POST /api/sync` in the e2e latency spec read p50 **191.4 / 192.8 ms** across the branch's counted passes against **199.5 ms** on a same-box control run of `main` — one control sample, so that is direction, not delta, and it is the only performance claim this row makes. CI in the same shape, and reported the same way: PR #116's first `test` job passed lint, typecheck, the set-config guard, preflight, **42/419** and **10/61**, then went **1 failed / 60 passed** in e2e on `a11y.spec.ts:102` — PROMPTKIT §3's own documented phase-advance seam, the `Resting`-instead-of-`Stretching` string — and a re-run of that exact SHA returned **61/0**. The counted pair above is still local; the job is the gate that decides, and its status on the final tree is what the checks page says. Two environment findings, reported not smoothed: `session-runner.spec.ts:111` now hits that cleanup 500 at **2 workers and at 1** — §5's #80 bullet carries both and says plainly that `--workers=1` keeps the *other* collision out, not this one; and all four **Lighthouse** specs die inside `chrome-launcher`'s WSL branch, which overwrites `process.env.TEMP` from a regex scan of `$PATH` — the origin of the Windows path `lighthouse.spec.ts`'s comment still calls unidentified — so these runs took a `PATH` with `/mnt/*` entries removed, disclosed in the PR with the file left byte-identical and the mechanism filed in §5 as its own card's work. Not done and not hidden: **no 7th `test:mutation` control**, because that harness mutates DDL only and a source-mutation control is a different tool (the injections above are its substitute, run by hand and quoted); and the pre-deploy queue is proven at the route and at the client seam, **not** in a browser holding an old IndexedDB. `tsconfig.json` churned (D6) and is, as always, unstaged. |
 
 23. **M4 STATE OF PLAY — 2026-09-12 checkpoint. Read this before planning anything.**
     - **All 7 deferred spec decisions are RATIFIED**, recorded as owner-decision comments on each

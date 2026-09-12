@@ -24,14 +24,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const repository = new WorkoutRepository(getDb(), context.claims);
     const data = await repository.applySync(context.userId, parsed.data);
     /*
-     * The third consumer of the session graph, and the easy one to miss: `SyncResponseDataSchema.state`
-     * *is* a `SessionStateSchema` (#73), so every sync response carries the whole session — the
-     * runner's rejection-and-refetch path included, which is precisely mid-workout. Until this
-     * slice that field was an empty pass-through placeholder, so a state the client could not use
-     * was only noticed by the client.
-     *
-     * Validating here means the same drift that breaks `GET /api/sessions/[id]` breaks this route
-     * too, and with the same redacted 500 rather than a body the client has to reject.
+     * Validation here is not a leftover from the session-graph era — it is the opposite. #73 made
+     * this route parse the graph it shipped; #105 deleted that field, because no client read it and
+     * the drain behind every queued mutation paid for it. What remains is the reason the call
+     * exists: `.strict()` means a body that grows a key the contract stopped describing — including
+     * `state`, if someone puts it back — fails here with a redacted 500 rather than shipping bytes
+     * nobody owns. Authoritative session state is `GET /api/sessions/[id]`'s to carry, and the
+     * runner's rejection-and-refetch path (#63) is the consumer that reads it.
      */
     return NextResponse.json(
       validateOutgoing(SyncResponseSchema, appSuccess(data), 'POST /api/sync body'),

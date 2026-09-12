@@ -41,8 +41,8 @@
 - **State & Data Fetching**: client sync island under `src/app/state/` (M3-05, PR #75; wired through M3-06/07): IndexedDB-backed `outbox.ts`, `sync-engine.ts` (one in-flight batch, jittered backoff, visibility-aware polling at 4 s visible / 30 s hidden, reconnect drain — `notifyConnectivityRestored()` clears offline-grown windows, `9ca17cc`), `provider.tsx`, `reconcile.ts`, `timer-controller.ts` (absolute-deadline arithmetic), `unit-display.ts`, `device-identity.ts`, `audio-cue.ts`. Set-taps are optimistic with the server as sole truth; Server Actions remain unused (deliberate, spec §3.2).
 - **Backend & Database**: Supabase — PostgreSQL **17.6** (measured on the local stack 2026-09-08; earlier drafts said 16), Supabase Auth (email magic link) — ADR-0002. **Realtime is not in use**: zero `.channel(`/realtime references in application code, and `npm run db:up` starts the stack with `-x realtime,...`, so the local stack does not even run it.
 - **ORM**: Drizzle (`db/schema/index.ts`), connecting as a non-owner `app_authenticated` role — ADR-0003. `db/seed/` loads exercise and stretch content.
-- **Validation**: Zod at every boundary (`lib/contracts/` — envelope, auth, sessions, sync, progress, exercises, legacy import). Since **#73** the session graph is one of those boundaries rather than the exception: `SessionStateSchema` is a `.strict()` description of what `mapSessionState` emits, `lib/views/session-view.ts` is a **re-export** of it, and the three producers (`POST /api/sessions`, `GET /api/sessions/[id]`, `POST /api/sync`) validate what they send through `validateOutgoing` in `envelope.ts`.
-- **Testing**: Vitest — **51 `.test.ts` files** (counted with `find` on the #89 branch 2026-09-12): **26** under `tests/unit/`, **15** DB-backed under `tests/integration/` (13 at its root, 2 in `repository/`), **10** route-handler suites under `tests/integration/api/`. `npm test` runs the first two groups — **41 files / 408 tests**, stack up — because the API directory boots real servers; `npm run test:api` runs those **10 files / 60 tests**. **Playwright E2E exists and is the merge gate for anything user-visible** — 13 spec files / 61 tests (M3-03 harness, PR #72; grown by M3-06…10), run by `npm run test:e2e` in CI against a **production** build, including `lighthouse.spec.ts` (Lighthouse is a devDependency; the CI job installs browsers `--with-deps` for exactly this; it scores `/sign-in` plus `/history`, `/` and `/session/[id]`, the last three authenticated). Every latency claim this repo makes is quoted from these logs — see `docs/tests/2026-09-11-m3-verification-audit.md` and `docs/tests/2026-09-12-m4-089-break-each-gate-audit.md` for what each gate prints and how it was proven capable of failing. D3 is resolved.
+- **Validation**: Zod at every boundary (`lib/contracts/` — envelope, auth, sessions, sync, progress, exercises, legacy import). Since **#73** the session graph is one of those boundaries rather than the exception: `SessionStateSchema` is a `.strict()` description of what `mapSessionState` emits, `lib/views/session-view.ts` is a **re-export** of it, and the two producers that ship it (`POST /api/sessions`, `GET /api/sessions/[id]`) validate what they send through `validateOutgoing` in `envelope.ts`. `POST /api/sync` validated the graph too until **#105** deleted `SyncResponseData.state`; it still calls `validateOutgoing`, and its contract is `.strict()`, which is what turns a producer that resurrected the field into a redacted 500 instead of an undocumented key on the wire.
+- **Testing**: Vitest — **52 `.test.ts` files** (counted with `find` on the #105 branch 2026-09-12): **27** under `tests/unit/`, **15** DB-backed under `tests/integration/` (13 at its root, 2 in `repository/`), **10** route-handler suites under `tests/integration/api/`. `npm test` runs the first two groups — **42 files / 416 tests**, stack up — because the API directory boots real servers; `npm run test:api` runs those **10 files / 61 tests**. **Playwright E2E exists and is the merge gate for anything user-visible** — 13 spec files / 61 tests (M3-03 harness, PR #72; grown by M3-06…10), run by `npm run test:e2e` in CI against a **production** build, including `lighthouse.spec.ts` (Lighthouse is a devDependency; the CI job installs browsers `--with-deps` for exactly this; it scores `/sign-in` plus `/history`, `/` and `/session/[id]`, the last three authenticated). Every latency claim this repo makes is quoted from these logs — see `docs/tests/2026-09-11-m3-verification-audit.md` and `docs/tests/2026-09-12-m4-089-break-each-gate-audit.md` for what each gate prints and how it was proven capable of failing. D3 is resolved.
 
 ---
 
@@ -144,7 +144,23 @@ each serving correctly, zero collision.
   before declaring green: the 15 s hang ceilings in `sla.spec.ts` are load-sensitive by design.
   Known load-sensitive specs on this box, all green solo and in CI, none of whose budgets moved:
   `a11y.spec.ts:102`, `sla.spec.ts:69` (audit entry 17) and `timers.spec.ts:277`, `sla.spec.ts:282`
-  (audit entry 19). **Documented protocol: a red *timing* gate gets a solo re-run before anyone
+  (audit entry 19). **`sla.spec.ts:144` (G-M3-4) joins that list from #105's branch, 2026-09-12:**
+  red once in a full `--workers=1` suite, green solo printing median **1 752 ms** against its
+  **5 000 ms** budget. And so does **`session-runner.spec.ts:201`** (the full-workout walk), same
+  date: red once in a full `--workers=1` suite on `Resting` where `Stretching` was expected,
+  **14 identical locator resolutions inside the assertion's default 5 s**, green solo in 16.2 s —
+  the exact signature #89's audit entry 11 logged for `timers.spec.ts:224`, and the same seam: a
+  phase advance crossing the engine's ~4 s visible poll under Playwright's per-assertion default.
+  It is a *flow* gate, not a latency gate, which is why it belongs here and not in a budget
+  discussion: no budget moved, and one spec's 5 s default is not this suite's weak point — the
+  shared-poll race behind it is, and #96 owns that. Pass `--workers=1` to a local e2e run
+  regardless of timing luck: at Playwright's default 2 workers on a 4-CPU box this suite also
+  collides on the shared fixture ids (§5's #80) — a different failure with a different cause, and
+  one `--workers=1` does not fully avoid either: #105's ledger saw
+  `Could not clean up M1-16 test user (500)` from `session-runner.spec.ts:111`'s `finally` twice at
+  1 worker as well as once at 2, with that spec's own measurement already passed each time. §5's
+  #80 bullet carries what is and is not known about it.
+  **Documented protocol: a red *timing* gate gets a solo re-run before anyone
   believes it** — that is the convention, not a rationalization.
 - **Typecheck**: `npm run typecheck` (runs `next typegen` first, then
   `tsc --noEmit`; **verified exit 0 on merged `main` 2026-09-12**, and verified to reject implicit `any`

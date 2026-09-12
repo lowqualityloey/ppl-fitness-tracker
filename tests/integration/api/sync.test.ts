@@ -1,8 +1,17 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppEnvelopeSchema } from '../../../lib/contracts/envelope.js';
-import { SyncResponseSchema } from '../../../lib/contracts/sync.js';
+import {
+  SyncRequestSchema,
+  SyncResponseDataSchema,
+  SyncResponseSchema,
+} from '../../../lib/contracts/sync.js';
+import {
+  SessionDetailResponseSchema,
+  SessionStartResponseSchema,
+  type SessionState,
+} from '../../../lib/contracts/sessions.js';
 import { authHeaders, clientTs, createTestSession, ids, seedSessionFixtures, type SessionFixture, type TestSession } from './fixtures.js';
-import { jsonRequest, responseBody, startApiServer, stopApiServer } from './test-server.js';
+import { apiRequest, jsonRequest, responseBody, startApiServer, stopApiServer } from './test-server.js';
 
 const setMutation = {
   op: 'set.upsert' as const,
@@ -51,6 +60,13 @@ async function expectAppError(response: Response, status: number, code: string):
   if (parsed.success && !parsed.data.ok) expect(parsed.data.error.code).toBe(code);
 }
 
+/** The four fields a narrowed sync answer is allowed to carry, read off the **bytes**. */
+function wireFields(body: unknown): string[] {
+  return Object.keys((body as { data: Record<string, unknown> }).data).sort();
+}
+
+const SYNC_WIRE_FIELDS = ['applied', 'clockSkewMs', 'rejected', 'serverSeq'];
+
 describe('M2-04: POST /api/sync', () => {
   let owner!: TestSession;
   let fixtures!: SessionFixture;
@@ -59,6 +75,31 @@ describe('M2-04: POST /api/sync', () => {
     await startApiServer();
     owner = await createTestSession('sync');
     fixtures = await seedSessionFixtures(owner);
+    /*
+     * Warm the read route once, as infrastructure — not to make a gate pass.
+     *
+     * #105 re-aimed this file's stored-state assertions at `GET /api/sessions/[id]`, which moved a
+     * first request to that route into the specs' own budgets. Measured on this branch: the spec
+     * that pays it takes **2 039 ms**, the identical read after the route is compiled takes
+     * **587 ms**, and vitest's per-test budget is **5 000 ms** — so 1.5 s of `next dev`'s
+     * on-demand compile (this suite boots a dev server; there is no production build here) now
+     * sits inside a gate that has nothing to do with compilation. In a full-suite pass that
+     * exposure produced one real red, and "re-run until it passes" would have been smoothing.
+     *
+     * The fix is the one the config already endorses: `vitest.config.ts` raises `hookTimeout` to
+     * 35 s and says so — "a budget for infrastructure startup, not a test gate: no assertion
+     * timeout was changed, and nothing that is *checked* got more tolerant." This is that same
+     * distinction applied to the request. No budget moved, no expectation softened: the specs
+     * still read the route, still assert 200, and now measure the answer rather than the compiler.
+     */
+    const warmup = await apiRequest(`/api/sessions/${ids.session}`, { headers: authHeaders(owner) });
+    if (warmup.status !== 200) {
+      throw new Error(
+        `Warming GET /api/sessions/[id] failed before any spec ran (status ${warmup.status}). ` +
+        'This is a server-startup problem, not a sync result.',
+      );
+    }
+    await warmup.body?.cancel();
   });
 
   afterAll(async () => {
@@ -66,6 +107,29 @@ describe('M2-04: POST /api/sync', () => {
     if (owner) await owner.cleanup();
     await stopApiServer();
   });
+
+  /**
+   * The session as the server has it, read from the route whose contract says it carries it.
+   *
+   * Until #105 these specs asserted a batch's outcome against `data.state` on the sync response
+   * itself. That field was real — strictly validated, and `SessionStateSchema` since #73 — and was
+   * read by no client, which is the whole reason it was deleted rather than wired up. The claims
+   * those assertions made were about *stored* state, and stored state has one producer, so they
+   * are re-aimed rather than dropped: identical expectations, read through
+   * `GET /api/sessions/[id]`, which is where the graph is actually promised.
+   */
+  async function authoritativeState(sessionId = ids.session): Promise<SessionState> {
+    const response = await apiRequest(`/api/sessions/${sessionId}`, { headers: authHeaders(owner) });
+    expect(response.status).toBe(200);
+    const parsed = SessionDetailResponseSchema.safeParse(await responseBody(response));
+    if (!parsed.success || !parsed.data.ok) {
+      throw new Error(
+        'GET /api/sessions/[id] did not satisfy its own contract: ' +
+        JSON.stringify(parsed.success ? parsed.data : parsed.error.issues),
+      );
+    }
+    return parsed.data.data;
+  }
 
   it('returns item-level results for all four mutation operations', async () => {
     const response = await jsonRequest('/api/sync', syncBody([setMutation, taskMutation, phaseMutation, finishMutation]), {
@@ -83,7 +147,13 @@ describe('M2-04: POST /api/sync', () => {
     ]);
     expect(parsed.data.data.serverSeq).toBe(2);
     expect(parsed.data.data.clockSkewMs).toEqual(expect.any(Number));
-    expect(parsed.data.data.state).toMatchObject({
+    // #105, read off the bytes rather than off the schema. `safeParse` above proves the contract
+    // no longer *describes* `state`; this proves the route stopped *emitting* it. Put the field
+    // back in the producer and this is the line that goes red first.
+    expect(wireFields(body)).toEqual(SYNC_WIRE_FIELDS);
+    // What `data.state` used to be asserted from — the stored outcome of the batch — read from
+    // the route that promises stored outcomes.
+    expect(await authoritativeState()).toMatchObject({
       id: ids.session,
       phase: 'exercise',
       status: 'in_progress',
@@ -92,7 +162,7 @@ describe('M2-04: POST /api/sync', () => {
     });
   });
 
-  it('applies valid ordered phase and finish operations with authoritative sequence state', async () => {
+  it('applies valid ordered phase and finish operations and advances the authoritative sequence', async () => {
     const setOne = {
       op: 'set.upsert' as const,
       mutationId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
@@ -152,7 +222,10 @@ describe('M2-04: POST /api/sync', () => {
     ]);
     expect(parsed.data.data.rejected).toEqual([]);
     expect(parsed.data.data.serverSeq).toBe(8);
-    expect(parsed.data.data.state).toMatchObject({
+    // Six mutations, six sequence numbers, one lifecycle walked end to end — asserted against
+    // the authoritative read rather than against a copy shipped alongside the answer. #105's
+    // point is that this route was never a second source of truth; now it cannot look like one.
+    expect(await authoritativeState()).toMatchObject({
       id: ids.session,
       status: 'completed',
       phase: 'post_workout',
@@ -201,6 +274,93 @@ describe('M2-04: POST /api/sync', () => {
       { ...setMutation, mutationId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', sessionId: ids.foreignSession },
     ]), { method: 'POST', headers: authHeaders(owner) });
     await expectAppError(response, 400, 'VALIDATION_ERROR');
+  });
+
+  /*
+   * #105 Option B — the deployment claim, executed.
+   *
+   * Deleting a response field is a deploy, not an edit: the mutations a device queued before this
+   * change drain against the server after it. What makes that safe is that the *request* half is
+   * untouched — `StoredMutation['payload']` is a `SyncMutation`, and `provider.tsx` assembles
+   * `{deviceId, sinceSeq, mutations}` from those records — so a stale IndexedDB holds a batch this
+   * route still understands. "Untouched" is a claim about bytes, so the literal below is written
+   * the way that queue writes it, and asserted against `SyncRequestSchema` before it is sent.
+   *
+   * The batch gets its own session (started through `POST /api/sessions`, whose `clientId`
+   * idempotency means it cannot return the fixture session the specs above own). Three mutations
+   * apply, one is refused, and both halves of the claim are in the same response: 200 rather than
+   * a 500, and a named mutation with a reason rather than a silent discard.
+   */
+  it('drains a batch queued by the previous build and answers it in the narrowed shape', async () => {
+    const started = await jsonRequest(
+      '/api/sessions',
+      { routineDayId: ids.routineDay, clientId: ids.freshDevice },
+      { method: 'POST', headers: authHeaders(owner) },
+    );
+    expect(started.status).toBe(200);
+    const startParsed = SessionStartResponseSchema.safeParse(await responseBody(started));
+    expect(startParsed.success).toBe(true);
+    if (!startParsed.success || !startParsed.data.ok) return;
+    // The fresh session starts where the fixture one cannot: proof this batch is landing on a
+    // row none of the specs above has a sequence number pinned to.
+    expect(startParsed.data.data.phase).toBe('pre_workout');
+    const sessionId = startParsed.data.data.id;
+
+    const warmUp = {
+      op: 'task.complete' as const,
+      mutationId: '9aaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      clientTs, sessionId, taskKey: 'warm_up' as const, completedAt: clientTs,
+    };
+    const startMainWorkout = {
+      op: 'phase.advance' as const,
+      mutationId: '9bbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      clientTs, sessionId, phase: 'exercise' as const,
+    };
+    const loggedSet = {
+      op: 'set.upsert' as const,
+      mutationId: '9ccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      clientTs, sessionId, exerciseId: ids.exercise, setIndex: 0,
+      isCompleted: true, weightKg: 50, reps: 5,
+    };
+    // Refused by the lifecycle (the fixture day plans three sets), not by the narrowing — which
+    // is the point: a queue containing something the server will not accept still has to come
+    // back as an item-level verdict the runner can render.
+    const beyondThePlan = {
+      op: 'set.upsert' as const,
+      mutationId: '9ddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      clientTs, sessionId, exerciseId: ids.exercise, setIndex: 9,
+      isCompleted: true, weightKg: 50, reps: 5,
+    };
+    const queuedByThePreviousBuild = {
+      deviceId: ids.device,
+      sinceSeq: 0,
+      mutations: [warmUp, startMainWorkout, loggedSet, beyondThePlan],
+    };
+    expect(SyncRequestSchema.safeParse(queuedByThePreviousBuild).success).toBe(true);
+
+    const response = await jsonRequest('/api/sync', queuedByThePreviousBuild, {
+      method: 'POST', headers: authHeaders(owner),
+    });
+    // Never a 500 for a queue it can no longer answer with a graph.
+    expect(response.status).toBe(200);
+    const body = await responseBody(response);
+    expect(SyncResponseSchema.safeParse(body).success).toBe(true);
+    expect(wireFields(body)).toEqual(SYNC_WIRE_FIELDS);
+    const data = SyncResponseDataSchema.parse((body as { data: unknown }).data);
+    expect(data.applied).toEqual([warmUp.mutationId, startMainWorkout.mutationId, loggedSet.mutationId]);
+    expect(data.rejected).toEqual([{ mutationId: beyondThePlan.mutationId, reason: 'INVALID_MUTATION' }]);
+    expect(data.serverSeq).toBe(3);
+
+    // And the state the deleted field used to hand back is readable, correct, and arrives from the
+    // one route that promises it.
+    expect(await authoritativeState(sessionId)).toMatchObject({
+      id: sessionId,
+      status: 'in_progress',
+      phase: 'exercise',
+      serverSeq: 3,
+      tasks: [{ taskKey: 'warm_up' }],
+      sets: [{ exerciseId: ids.exercise, setIndex: 0, weightKg: 50, reps: 5, isCompleted: true }],
+    });
   });
 
   // Live since #42 wired `syncRateLimiter` into the route. Declared last on

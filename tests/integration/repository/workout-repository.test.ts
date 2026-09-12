@@ -674,10 +674,21 @@ describe('WorkoutRepository', () => {
       serverSeq: 1,
       applied: [mutation.mutationId],
       rejected: [],
-      state: { id: sessionId, serverSeq: 1, sets: [{ exerciseId, setIndex: 0, weightKg: 60 }] },
     });
     expect(replay).toMatchObject({ serverSeq: 1, applied: [mutation.mutationId], rejected: [] });
-    expect((await repository.findSession(userId, sessionId))?.sets).toHaveLength(1);
+    /*
+     * #105: `first.state` used to satisfy the two assertions below from inside the batch answer —
+     * i.e. the response that reported the write was also the thing being checked for the write.
+     * `findSession` is where stored state is promised, so the same expectations now run against
+     * it. Nothing was weakened to get here: the row-count line was already reading the database.
+     */
+    const persisted = await repository.findSession(userId, sessionId);
+    expect(persisted).toMatchObject({
+      id: sessionId,
+      serverSeq: 1,
+      sets: [{ exerciseId, setIndex: 0, weightKg: 60 }],
+    });
+    expect(persisted?.sets).toHaveLength(1);
 
     const metadata = await owner.query<{ status: string; server_seq: number; entity_key: string }>(
       `SELECT m.status, m.server_seq, c.entity_key
@@ -721,7 +732,7 @@ describe('WorkoutRepository', () => {
       sinceSeq: 0,
       mutations: [replayMutation],
     });
-    expect(replay).toMatchObject({ applied: [replayMutation.mutationId], rejected: [], state: { status: 'completed' } });
+    expect(replay).toMatchObject({ applied: [replayMutation.mutationId], rejected: [] });
 
     const newMutation = { ...replayMutation, mutationId: randomUUID() };
     const rejected = await repository.applySync(userId, {
@@ -732,8 +743,14 @@ describe('WorkoutRepository', () => {
     expect(rejected).toMatchObject({
       applied: [],
       rejected: [{ mutationId: newMutation.mutationId, reason: 'CONFLICT' }],
-      state: { status: 'completed' },
     });
+    /*
+     * #105 deleted `state` from both answers above, and each of them asserted
+     * `state: { status: 'completed' }` — that the batch answer *reported* the session was still
+     * closed. One read says it for both paths: a replay and a refused new mutation leave a
+     * terminal session terminal, which is the claim the field was standing in for.
+     */
+    expect((await repository.findSession(userId, terminal.id))?.status).toBe('completed');
   });
 
   it('uses legacy set timestamps as the conflict baseline before version backfill', async () => {
@@ -841,8 +858,15 @@ describe('WorkoutRepository', () => {
     expect(result.serverSeq).toBe(1);
     expect(result.applied).toEqual([task.mutationId]);
     expect(result.rejected).toEqual([{ mutationId: invalidPhase.mutationId, reason: 'CONFLICT' }]);
-    expect(result.state.phase).toBe('exercise');
-    expect(result.state.tasks.map(({ taskKey }) => taskKey)).toContain('main_workout');
+    /*
+     * #105 deleted `result.state`, and the two claims it carried are still worth making — about
+     * stored state, read from where stored state is authoritative. The spec below already checks
+     * persistence through `findSession` after a rolled-back batch; the batch answer was never a
+     * second opinion on it, whatever the deleted field implied.
+     */
+    const persisted = await repository.findSession(userId, sessionId);
+    expect(persisted?.phase).toBe('exercise');
+    expect(persisted?.tasks.map(({ taskKey }) => taskKey)).toContain('main_workout');
   });
 
   it('rolls back the set, PR, sequence, and sync ledger on unexpected progression failure', async () => {

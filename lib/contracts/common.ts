@@ -11,8 +11,11 @@ export const NonNegativeIntegerSchema = z.number().int().nonnegative();
  * schemas and one rejected by the database are the same event.
  *
  * They live here rather than in `sync.ts` because both the sync write path and
- * the M3-00 prefill read path need them, and `sync.ts` already imports
- * `SessionStateSchema` from `sessions.ts` — importing back would be a cycle.
+ * the M3-00 prefill read path need them, and a scalar with two declarations is
+ * two sources of truth. `STATE §4` item 22 pairs that with the reverse rule —
+ * `sessions.ts` never imports `sync.ts`. #105 deleted the import that used to make
+ * the ban a cycle hazard (`sync.ts` no longer needs the session graph at all), so
+ * the rule now rests on single ownership alone. It still holds.
  */
 export const WeightKgSchema = z.number().min(0).max(1000).multipleOf(0.01);
 export const RepsSchema = z.number().int().min(0).max(1000);

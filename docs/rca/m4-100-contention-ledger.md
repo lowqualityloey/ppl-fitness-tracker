@@ -264,3 +264,14 @@ taking 12.2 s and 13.5 s on an idle box. Under the same contention that produced
 with no product meaning at all. The ceiling is now `LIGHTHOUSE_RUN_TIMEOUT_MS`, named once and applied to
 all four specs; verified 4/4 green in 1.1 m. This is *scoping*, not arithmetic — the G-M3-3 bug was a sum
 that exceeded its clock, and this one was a clock that never applied.
+
+## #100's counted sequence — five consecutive full batteries, zero solo re-runs
+
+Criterion, from the card: five consecutive full-battery greens on this machine with **no spec re-run in
+isolation to rescue it**, each pass reporting its denominator. Code tip: `89f0281`, rebased onto merged
+`main` (`dac6b44`, which contains #80). Per-step exits are lint / typecheck / check-set-config /
+api:preflight / unit / api / mutation / e2e.
+
+| Pass | Per-step exits | e2e result | unit / api | set-tap p95 | `/api/sync` p50 | `nproc` · load before → after | Counts? |
+| :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
+| `100q1` | 0 ×8 | **61 passed (5.9 m)** | 44/427 · 11/64 | **33.1 ms** vs 50 | 251.1 ms vs 200 (MISSES, #92) | 4 cores · **3.79 / 4.37 / 3.87 → 3.15 / 4.23 / 4.04** | **1/5** |

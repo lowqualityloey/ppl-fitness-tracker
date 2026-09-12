@@ -3,19 +3,23 @@
 ## 1. Executive Summary & Current Position
 
 - **Project Name**: PPL Fitness Tracker
-- **Current Milestone / Epic**: **M3: Presentation — COMPLETE (19/19).** Milestone #3 reads **open=0 / closed=19** (`gh api repos/lowqualityloey/ppl-fitness-tracker/milestones/3`, read 2026-09-12). M2 remains as it was: M2-00 → M2-06 merged (PRs #43–#47, #51, #53). All of M3's build slices merged 2026-09-11 — #57/#58 (PR #69), #59 (PR #71), #60 (PR #72), #61 (PR #74), #62 (PR #75), #63 (PR #79), #64 (PR #81), #65 (PR #83), #66 (PR #85). **#67 (M3-10, the verification gate) is MERGED as PR #86 (`8704c19`, 2026-09-11T19:23Z)**, and the milestone's last open issue, **#73 (`SessionStateSchema`), is MERGED as PR #87 (`2d5edfb`, 2026-09-12T02:00Z)**. M3's exit report and M4 handoff are `docs/releases/2026-09-12-m3-exit-report-and-m4-handoff.md`; the break-each-gate evidence is `docs/tests/2026-09-11-m3-verification-audit.md` (entries 9–19). **M4 is the next milestone** — §7 item 22 is its start line. **Wave 0 has started:** #89 (M4-00) is decided and implemented — ADR-0006 records hand-authored migration authority, `0007` ships the auth→profiles cascade — on `feat/m4-089-migration-authorship` with its PR open.
+- **Current Milestone / Epic**: **M3: Presentation — COMPLETE (19/19).** Milestone #3 reads **open=0 / closed=19** (`gh api repos/lowqualityloey/ppl-fitness-tracker/milestones/3`, read 2026-09-12). M2 remains as it was: M2-00 → M2-06 merged (PRs #43–#47, #51, #53). All of M3's build slices merged 2026-09-11 — #57/#58 (PR #69), #59 (PR #71), #60 (PR #72), #61 (PR #74), #62 (PR #75), #63 (PR #79), #64 (PR #81), #65 (PR #83), #66 (PR #85). **#67 (M3-10, the verification gate) is MERGED as PR #86 (`8704c19`, 2026-09-11T19:23Z)**, and the milestone's last open issue, **#73 (`SessionStateSchema`), is MERGED as PR #87 (`2d5edfb`, 2026-09-12T02:00Z)**. M3's exit report and M4 handoff are `docs/releases/2026-09-12-m3-exit-report-and-m4-handoff.md`; the break-each-gate evidence is `docs/tests/2026-09-11-m3-verification-audit.md` (entries 9–19). **M4 is the next milestone** — §7 item 22 is its start line. **Wave 0 is under way:** #89 (M4-00) is merged — ADR-0006 records hand-authored migration authority, `0007` ships the auth→profiles cascade — and **#105 (M4-16) is merged as PR #116**, and **#105 (M4-16) is merged as PR #116**, the first of the seven ratified spec decisions to be executed rather than carried as a comment on an issue. Milestone #4 reads **open=28 / closed=3** (`gh api repos/lowqualityloey/ppl-fitness-tracker/milestones/4`, read 2026-09-12). Nothing is in flight; no PR is open.
 - **Overall Status**: ACTIVE <!-- Options: ACTIVE | PAUSED | STABILIZING | RELEASE_CANDIDATE -->
 - **Target Release**: v1.0.0, no date committed
-- **Current Working Branch**: `main` @ `0d221cf` (#89 merged). **M4 in progress** — milestone 4, 29 open / 2 closed. All 7 deferred spec decisions are now OWNER-RATIFIED (see §7 item 23).
-  is implemented on it, PR open, awaiting review; per this repo's one-active-branch rule, no other
-  M4 card starts until it merges.** Before this branch, M3 was closed and nothing was in flight:
-  both M3 exit PRs are merged (#86 → `8704c19`, #87 → `2d5edfb`) and `main`'s own `test` check is
-  `success` on both merge commits. The branch is based on `793db53`; #113 later added only
-  `docs/tasks/m4/*.md`, which does not overlap it. Do not continue on an M3 branch; there is no M3
-  work left to continue.
+- **Current Working Branch**: `main`. **M4 in progress** — milestone #4 reads **open=28 / closed=3**, measured 2026-09-12 (it read 29 open / 2 closed until #105's merge closed a card). All 7 deferred
+  spec decisions are OWNER-RATIFIED (see §7 item 23), and one of them is now *executed* rather than
+  decided: #105 shipped in PR #116. **Nothing is in flight** — no open PR, no active branch — so the
+  next card starts by cutting its own branch from `main`, per this repo's one-active-branch rule.
+  The SHA this field used to name is three merges behind the tree it described, which is the failure
+  the rule immediately below it exists to prevent; read `git log --oneline -1` when the hash matters.
+  Both M3 exit PRs remain merged (#86 → `8704c19`, #87 → `2d5edfb`) and there is no M3 work left to
+  continue.
 
 > **Do not pin the current `main` SHA in this field.** It was tried three times and went stale three times, because the merge commit that lands the correction advances `main` past the value being recorded. Describe the state, not the hash. Run `git log --oneline -1` if you need the exact commit.
-- **Last Updated**: 2026-09-12 (**M3 closed**: milestone 3 `state=closed`, 19/19. #86→`8704c19`, #87→`2d5edfb`, #88→`793db53`, #113→`e9925b5`, #114→`0d221cf`. **M4 started**: milestone #4 created, 24 cards filed #89–#112 + 6 parked re-milestoned; #89 (D4 migration authorship + auth-FK cascade) merged as ADR-0006.)
+- **Last Updated**: 2026-09-12 (**M3 closed**: milestone 3 `state=closed`, 19/19. #86→`8704c19`, #87→`2d5edfb`, #88→`793db53`, #113→`e9925b5`, #114→`0d221cf`, #115→`69d86cd`. **M4 started**: milestone #4 created, 24 cards filed #89–#112 + 6 parked re-milestoned; #89 (D4 migration authorship + auth-FK cascade) merged as ADR-0006. **The first of those seven ratified decisions executed**:
+  #105 → PR **#116** → `6043990`, #105 closed; post-merge gate re-measure on `main` → PR **#117** →
+  `89ce24d`. #116's first CI attempt was red on a documented load-sensitive spec and its re-runs
+  green, which is recorded in §7 item 22 and PR #116 rather than smoothed.)
 - **Gate status**: #48 (D5 route-handler coverage + D1 lint enforcement) and #49 (this intake
   record) are **merged to `main`**, and `main`'s own Actions runs are green (4m32s and 4m40s).
   `npm run lint` exits 0 there. Consequence for the text below: the gates are no longer pending
@@ -1082,3 +1086,12 @@ Carried forward, still open:
       `db:generate`/`db:migrate` are **deleted**, `supabase/migrations/meta/` removed, and
       `tests/unit/migration-authority.test.ts` fails CI on any re-introduction. Never generate a
       migration; never stage `tsconfig.json` (D6).
+    - **Addendum, same day, after this checkpoint was written: #105 is merged.** PR **#116** →
+      `6043990` — the first of the seven ratified decisions to be executed rather than carried — plus
+      PR **#117** → `89ce24d`, which re-measured §3's gates on merged `main` instead of trusting
+      #116's branch table. So the "suggested next implementables" line above is now **#93 or #96
+      first**. #116's CI record is one red followed by three greens, the red on `a11y.spec.ts:102`,
+      and the load-sensitive family named here grew: two more local names (both solo-green, §7 item
+      22) and one that fired in CI. The orphan-artifact line above still stands — those worktree and
+      branch deletions were not performed by this session, and `docs/m4-spec-plan` plus `/tmp/m4plan`
+      are still there.

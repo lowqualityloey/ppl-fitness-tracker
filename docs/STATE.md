@@ -3,24 +3,32 @@
 ## 1. Executive Summary & Current Position
 
 - **Project Name**: PPL Fitness Tracker
-- **Current Milestone / Epic**: **M3: Presentation — verification complete, exit PR in review.** M2 remains as it was: M2-00 → M2-06 merged (PRs #43–#47, #51, #53). All of M3's build slices merged 2026-09-11 — #57/#58 (PR #69), #59 (PR #71), #60 (PR #72), #61 (PR #74), #62 (PR #75), #63 (PR #79), #64 (PR #81), #65 (PR #83), #66 (PR #85). **#67 (M3-10, the verification gate) is in review with this commit**; its exit report and M4 handoff are `docs/releases/2026-09-12-m3-exit-report-and-m4-handoff.md`, and the break-each-gate evidence is `docs/tests/2026-09-11-m3-verification-audit.md` (entries 9–18).
+- **Current Milestone / Epic**: **M3: Presentation — COMPLETE (19/19).** Milestone #3 reads **open=0 / closed=19** (`gh api repos/lowqualityloey/ppl-fitness-tracker/milestones/3`, read 2026-09-12). M2 remains as it was: M2-00 → M2-06 merged (PRs #43–#47, #51, #53). All of M3's build slices merged 2026-09-11 — #57/#58 (PR #69), #59 (PR #71), #60 (PR #72), #61 (PR #74), #62 (PR #75), #63 (PR #79), #64 (PR #81), #65 (PR #83), #66 (PR #85). **#67 (M3-10, the verification gate) is MERGED as PR #86 (`8704c19`, 2026-09-11T19:23Z)**, and the milestone's last open issue, **#73 (`SessionStateSchema`), is MERGED as PR #87 (`2d5edfb`, 2026-09-12T02:00Z)**. M3's exit report and M4 handoff are `docs/releases/2026-09-12-m3-exit-report-and-m4-handoff.md`; the break-each-gate evidence is `docs/tests/2026-09-11-m3-verification-audit.md` (entries 9–19). **M4 is the next milestone** — §7 item 22 is its start line.
 - **Overall Status**: ACTIVE <!-- Options: ACTIVE | PAUSED | STABILIZING | RELEASE_CANDIDATE -->
 - **Target Release**: v1.0.0, no date committed
-- **Current Working Branch**: `feat/m3-10-verification-gate` — **#67 (M3-10) PR OPENED, awaiting owner merge.** Everything §7 item 21 demanded is done, with evidence; when this PR merges, **M4 is the next milestone and its handoff is already written** (§3's release-report pointer). Do not start M4 work on this branch.
+- **Current Working Branch**: `main` — **M3 is closed; nothing is in flight.** Both exit PRs are merged (#86 → `8704c19`, #87 → `2d5edfb`) and `main`'s own `test` check is `success` on both merge commits. The next branch is M4's first slice, cut from `main` only **after** M4's spec (`pk:plan`) and decomposition (`pk:tasks`) exist — §7 item 22 names the handoff to read first. Do not continue on an M3 branch; there is no M3 work left to continue.
 
 > **Do not pin the current `main` SHA in this field.** It was tried three times and went stale three times, because the merge commit that lands the correction advances `main` past the value being recorded. Describe the state, not the hash. Run `git log --oneline -1` if you need the exact commit.
-- **Last Updated**: 2026-09-12 (**M3-10 complete**: break-each-gate audit done — nine deliberate breakages captured and restored, two permanent gate controls kept, one real defect found and fixed by the suite's own hang ceiling. Final battery: `npm test` **37 files / 380 tests**, api **10 files / 60 tests**, Playwright **61 passed / 0 failed on three consecutive final runs** (one earlier post-fix run carried the timing flake §5 and audit entry 17 record), Lighthouse 100 ×4. G-M3-4 measured **1643–1838 ms post-fix — PASSES**; its earlier MISS was real and is kept in the record.)
+- **Last Updated**: 2026-09-12 (**M3 closed — this is the post-merge sync for PRs #86 and #87**). Battery re-measured **on merged `main` (`2d5edfb`) with the stack up**, not quoted from either PR: `npm test` **39 files / 398 tests**, `test:api` **10 files / 60 tests / 0 skipped**, Playwright **61 passed / 0 failed** (3.1 m), `npm run lint` **0 errors / 0 warnings**, `npm run typecheck` **exit 0**, `npm run test:mutation` **exit 0**. G-M3-4 measured **1643–1838 ms post-fix — PASSES**; its earlier MISS was real and is kept in the record. (M3-10's own tree measured 37 files / 380 tests; #73 added two contract files and 18 tests on top of it. The break-each-gate audit — nine deliberate breakages captured and restored, two permanent gate controls kept, one real defect found and fixed by the suite's own hang ceiling — is `docs/tests/2026-09-11-m3-verification-audit.md` entries 9–19.)
 - **Gate status**: #48 (D5 route-handler coverage + D1 lint enforcement) and #49 (this intake
   record) are **merged to `main`**, and `main`'s own Actions runs are green (4m32s and 4m40s).
   `npm run lint` exits 0 there. Consequence for the text below: the gates are no longer pending
-  but enforced — a PR that reintroduces an `any`, drops an env var, or leaves a stale
-  pending-handler entry now fails in CI, so claims marked closed are backed by a gate.
+  but enforced — a PR that reintroduces an `any`, drops an env var, or breaks a declared skip
+  now fails in CI, so claims marked closed are backed by a gate.
   #51 (M2-05 importer) is merged on top of them, so the importer's 5 route specs are now
   gate-enforced on the default branch rather than only on a branch that claimed to pass.
+  **M3's two exit PRs are merged on top of all of that — #86 (`8704c19`) and #87 (`2d5edfb`) — and
+  `main`'s own `test` check is `success` on both merge commits**, so the E2E job, the contrast gate,
+  the Lighthouse gate and the legacy-parity scan are all executing on the default branch, not only
+  on a branch that claimed to pass.
   Still open as debt: D2, D4, D6, D7 (D3 closed: the E2E suite exists, is CI-gated,
   and `PROMPTKIT.md` §3 now describes the real harness, traps included).
 
-**Where things actually stand.** M1 schema, RLS, auth, contracts, exercise/stretch seeds, and the M1-16 route baseline are on `main`. M2-00 adds the runtime app-role Drizzle client, verified auth-to-RLS context, session domain mappers, and user-scoped repository; M2-01 adds the sessions API; M2-02 adds the pure lifecycle transition table, transaction-scoped set/task/phase/finish mutations, and rollback coverage; M2-03 adds pure Epley e1RM calculation and transaction-scoped personal-record recomputation with app-role ownership/rollback coverage; M2-04 adds bounded transactional sync, replay-safe mutation metadata, per-session sequencing/change rows, deterministic clock/device conflict resolution, and the authenticated `/api/sync` adapter.
+**Where things actually stand.** M1 schema, RLS, auth, contracts, exercise/stretch seeds, and the M1-16 route baseline are on `main`. M2-00 adds the runtime app-role Drizzle client, verified auth-to-RLS context, session domain mappers, and user-scoped repository; M2-01 adds the sessions API; M2-02 adds the pure lifecycle transition table, transaction-scoped set/task/phase/finish mutations, and rollback coverage; M2-03 adds pure Epley e1RM calculation and transaction-scoped personal-record recomputation with app-role ownership/rollback coverage; M2-04 adds bounded transactional sync, replay-safe mutation metadata, per-session sequencing/change rows, deterministic clock/device conflict resolution, and the authenticated `/api/sync` adapter. M3 put a real app on top of it: the dashboard, the
+session runner with the durable outbox, absolute-deadline timers, history and per-exercise
+progress, settings with the legacy-import report, and the Playwright/axe/Lighthouse/contrast/
+legacy-parity gates that defend all of it in CI — merged as PRs #69–#87, with the measured
+residuals listed in §5 rather than smoothed.
 
 **What does not exist yet, stated plainly (2026-09-12)**: production email delivery (issue #16, deferred since M1); telemetry, Sentry, correlation ids, and the 50 rps load test (all M4, per spec §2.2); Realtime (deferred by owner decision — §5's poll-margin note says what that costs); a service worker, which means G-M3-1's "reopen with no network" is proven with the *API* dead rather than the document unfetchable (handoff §3.4 owns the difference); volume/streak analytics, body-measurement import, and export (named non-goals, each on a card). What does exist now: the full UI — dashboard, runner, history, progress, settings — with its measured claims in `docs/releases/2026-09-12-m3-exit-report-and-m4-handoff.md` §1. The legacy vanilla-JS app still runs unchanged alongside the target stack (M4's decommission, guarded meanwhile by `tests/e2e/legacy-parity.spec.ts`), and `npm run build` still emits zero JavaScript — re-verified 2026-09-11, not inherited from the old note.
 
@@ -34,12 +42,8 @@
 - [x] **M0**: De-risk spike — RLS enforcement proven through Drizzle (Complete — 2026-09-08, **gate lifted**)
 - [/] **M1**: Contracts & Seams — code, contracts, seeds, RLS, auth, and RED baseline complete; production SMTP/delivery remains deferred under issue #16
 - [x] **M2**: Core Domain Engine — issues #36–#42 all merged (PRs #43–#47, #51, #53). **Complete 2026-09-11.**
-- [/] **M3**: Presentation — all ten slices built; **#67 (M3-10, the verification gate) is the
-  open exit PR**. M3-00…M3-09 merged 2026-09-11 as PRs #69, #71, #72, #74, #75, #79, #81, #83, #85.
-  The gate's own verdict: seven goals measured, two documented misses kept rather than relabelled,
-  and every gate in the suite watched to fail (audit entries 9–15).
-- [ ] **M4**: Hardening, telemetry, decommission the legacy static app (Queued — **the handoff is
-  already written**: `docs/releases/2026-09-12-m3-exit-report-and-m4-handoff.md`)
+- [x] **M3**: Presentation — **Complete 2026-09-12.** Milestone #3 is **open=0 / closed=19**. M3-00…M3-09 merged 2026-09-11 as PRs #69, #71, #72, #74, #75, #79, #81, #83, #85; **#67 (M3-10, the verification gate) merged as PR #86 (`8704c19`, 2026-09-11T19:23Z)**, and the milestone's last open child, **#73 (`SessionStateSchema`), merged as PR #87 (`2d5edfb`, 2026-09-12T02:00Z)** — so the milestone closed with nothing parked under it. The gate's own verdict: seven goals measured, two documented misses kept rather than relabelled, and every gate in the suite watched to fail (audit entries 9–19).
+- [ ] **M4**: Hardening, telemetry, decommission the legacy static app (**Next milestone** — **the handoff is already written**: `docs/releases/2026-09-12-m3-exit-report-and-m4-handoff.md`; start at §7 item 22)
 
 ### Completed Milestone Task Breakdown (M0)
 
@@ -101,15 +105,16 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
 
 - [x] `#57` `M3-00`: profile endpoints + session prefill reads (p1) — **done**, merged as **PR #69** (`8d2b696`), CI green, issue closed. `GET`/`PATCH /api/profile` and `GET /api/sessions/prefill` ship with 14 route specs; the contract's guessed `z.enum(['kg','lb'])` was corrected to the real DB enum `('kg','lbs')` en route — see §4 item 24. Index decision made on measured `EXPLAIN (ANALYZE, BUFFERS)` evidence: **no new index** (plans in the PR description).
 - [x] `#58` `M3-01`: real `since` deltas on session detail — hard prerequisite of the poller (p1) — **done** on the same PR. The `since` discard and its false "M2-04 owns true deltas" comment are gone (contract-graph guard now forbids their return); `since === server_seq` answers `{notModified,serverSeq}` with no body — measured **53 B vs 2 035 B** full (~38×) — and every detail response is now `no-store`, the inherited gap fixed while this work was in the file. The M3-05 poller's hard prerequisite is now a shipped control.
-- [x] `#59` `M3-02`: Tailwind/shadcn foundation + contrast-gated tokens, incl. the `--accent-pull` failure fix (p0) — **implemented** on `feat/m3-02-design-tokens`, PR pending (never merge your own). `--accent-pull` redefined by measurement: `#c2410c` (5.18:1 white / 4.96:1 page) replaces `#fb6514` (3.01/2.88 — fails both bars), which survives as decorative-only `--accent-pull-bright`; `--accent-legs #7a3ff2` ships as the documented DESIGN.md extension. The gate is `scripts/check-contrast.ts` reading the hexes **out of `globals.css`** (26 measured pairs, all pass) with the regression to 2.88:1 kept failing permanently as a spec'd negative control — Scenario 2 observed red, then green at the real value. Day accents are structurally confined to `badge.tsx` + border utilities; `#ecf3ff` and `outline-none` are banned by test, not by promise.
-- [x] `#60` `M3-03`: Playwright + axe harness with a deliberately-failing control first — **implemented on `feat/m3-03-e2e-harness`: 9 specs green against the production build, the axe control observed firing, the first prod-mode latency numbers taken. PR pending** (p0, closes D7)
+- [x] `#59` `M3-02`: Tailwind/shadcn foundation + contrast-gated tokens, incl. the `--accent-pull` failure fix (p0) — **merged as PR #71 (`3b0ffbf`)**. `--accent-pull` redefined by measurement: `#c2410c` (5.18:1 white / 4.96:1 page) replaces `#fb6514` (3.01/2.88 — fails both bars), which survives as decorative-only `--accent-pull-bright`; `--accent-legs #7a3ff2` ships as the documented DESIGN.md extension. The gate is `scripts/check-contrast.ts` reading the hexes **out of `globals.css`** (26 measured pairs then, **35 as of M3-10**, all pass) with the regression to 2.88:1 kept failing permanently as a spec'd negative control — Scenario 2 observed red, then green at the real value. Day accents are structurally confined to `badge.tsx` + border utilities; `#ecf3ff` and `outline-none` are banned by test, not by promise.
+- [x] `#60` `M3-03`: Playwright + axe harness with a deliberately-failing control first — **merged as PR #72 (`9f98f83`)**: 9 specs green against the production build, the axe control observed firing, the first prod-mode latency numbers taken (p0, closes D7). Grown by every slice since: **13 spec files / 61 tests**.
 - [x] `#61` `M3-04`: dashboard `/` (p1) — **merged as PR #74 (`33d1eb7`)**: server-aggregated day cards, keyboard-reachable start, `/session/[id]` as a read-only target, `/` flipped to an interactive route in the a11y gate. It also closed a gap it inherited by surfacing it: the Lighthouse gate had been printing a score for `/` while auditing the page `/` redirects to.
 - [x] `#62` `M3-05`: durable IndexedDB outbox + reconciliation (p0) — **merged as PR #75 (`df6db14`)** — — **implemented on `feat/m3-05-outbox`: `Outbox` over an injected storage seam, pure `reconcile`/`projectPending`, `SyncEngine` with the single-in-flight guard, jittered backoff that gates sends, and rejection → full refetch. 37 unit tests on the §4.3 invariants. **Nothing user-reachable yet**: no provider, no runner, no browser run of the IndexedDB adapter — all of that is #63.**
 - [x] `#63` `M3-06`: session runner with optimistic tap and prefill (p0) — **merged as PR #79 (`5cf3b7e`)** —
 - [x] `#64` `M3-07`: `TimerController` absolute deadlines, background-tab recovery (p1) — **merged as PR #81 (`0278634`)** —
 - [x] `#65` `M3-08`: history + progress views on existing endpoints (p1) — **merged as PR #83 (`0adf233`)** —
 - [x] `#66` `M3-09`: settings, `UnitDisplay`, legacy-import report surfaced in full (p1) — **merged as PR #85 (`6420e5a`)**
-- [/] `#67` `M3-10`: M3 verification gate — **in review**, exit report and M4 handoff written; see §7 item 21 for what it proved
+- [x] `#67` `M3-10`: M3 verification gate — **MERGED as PR #86 (`8704c19`, 2026-09-11T19:23Z)**, issue closed; exit report and M4 handoff written; see §7 item 21 for what it proved. `main`'s own `test` check is `success` on that merge commit.
+- [x] `#73` *(filed by #61 under milestone #3, not a slice card)*: `SessionStateSchema` was a `z.object({}).passthrough()` placeholder — **MERGED as PR #87 (`2d5edfb`, 2026-09-12T02:00Z)**, issue closed; it was the last open child under the milestone, so M3 closed with nothing parked under it. Its two disclosed limits are carried into M4 at §7 item 22.
 
 **Process note, so this stops recurring**: issues `#6`, `#7`, `#9`, `#10` were done on `main` well before they were closed, because the branches that shipped them were stacked on each other instead of on `main`, and none of the PR bodies said "Closes #N". Going forward: branch from `main`, not from a feature branch, unless there's a real dependency; and every PR body must name the issue it closes.
 
@@ -150,7 +155,7 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
 
 - **Target Workspace / Package**: N/A (standalone repo)
 - **Active RFC / Spec**: `docs/specs/2026-09-08-spec-fullstack-migration.md`
-- **Active Task Spec**: `docs/specs/2026-09-11-spec-m3-presentation.md` (M3 — grilled, §8 amendments binding; §8.7 added by the #57 implementation), decomposed into `docs/tasks/m3/README.md` with eleven slice cards `M3-00`…`M3-10` published as issues #57–#67 under milestone #3. #57–#66 all merged (PRs #69–#85); #67 is in review and M3's spec work is finished — the next spec to write is M4's, from `docs/releases/2026-09-12-m3-exit-report-and-m4-handoff.md`. The completed M2 record is `docs/specs/2026-09-08-m2-core-domain-engine.md` with `docs/tasks/m2/`.
+- **Active Task Spec**: `docs/specs/2026-09-11-spec-m3-presentation.md` (M3 — grilled, §8 amendments binding; §8.7 added by the #57 implementation), decomposed into `docs/tasks/m3/README.md` with eleven slice cards `M3-00`…`M3-10` published as issues #57–#67 under milestone #3. **#57–#67 are all merged (PRs #69–#86) and the milestone's extra child #73 merged as PR #87: M3 is complete, open=0 / closed=19.** There is no active M3 spec; **the next spec to write is M4's**, from `docs/releases/2026-09-12-m3-exit-report-and-m4-handoff.md`. The completed M2 record is `docs/specs/2026-09-08-m2-core-domain-engine.md` with `docs/tasks/m2/`.
 - **M3-00/M3-01 surface, as built** (merged PR #69): `lib/repositories/profile-repository.ts` (ADR-0003-compliant, no conversion anywhere — ADR-0005), `src/app/api/profile/route.ts` (GET/PATCH, `no-store` incl. 404 via `appErrorResponse`'s new optional headers), `src/app/api/sessions/prefill/route.ts` + `WorkoutRepository.getPrefill` (`('completed','archived')` source, `desc(localDate), desc(id)`, both-null omitted, `excludeSessionId`), `WorkoutRepository.getSessionServerSeq` + the delta short-circuit in `src/app/api/sessions/[id]/route.ts` (seq read **before** `findSession`, user-scoped, stale comment deleted), `lib/contracts/profile.ts` enum corrected to the DB literal `('kg','lbs')`, specs `tests/integration/api/{profile,prefill,session-deltas}.test.ts` + `tests/unit/api/contract-graph.test.ts` (routes-as-adapters guard; bans local `z.` shapes and the deleted comment's return), plus the new blocks in `contracts.test.ts`. The M3 spec carries the §4.1 erratum and §8.7. No migration shipped — the index decision is on measured `EXPLAIN` evidence (PR #69 §4). D6 (`next dev` rewriting `tsconfig.json`) fired twice during the work and was reverted twice — it remains open.
 - **M2-05 surface, as built**: `lib/domain/import/legacy-importer.ts` (pure parse→plan:
   per-key isolation, `legacySlotToOrderIndex` as the single 1-based→0-based seam,
@@ -165,7 +170,7 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
   payloads now get their collapsed key stripped before it reaches `BooleanMapSchema` — the contract
   itself was left strict on purpose, since rejecting a `""` key is right for every *other* map.
   `db/schema` and migrations: untouched, no `db:generate` ran.
-- **Merged M2 surface, for orientation**: `lib/domain/sessions/` (transition table + mappers), `lib/domain/progression/` (Epley e1RM + PR recomputation), `lib/domain/sync/` (reducer, `types.ts`), `lib/domain/import/` (legacy planner, `LegacyImporter`, `LegacyImportStore` port), `lib/http/route-error.ts`, `src/app/api/{sessions,sessions/[id],sync,import/legacy}`, migrations `0004`–`0006`. Every route handler above has specs that run in CI; the routes still missing are `#42`'s (signout, exercises, progress), declared individually in `tests/integration/api/pending-handlers.ts` as counted skips rather than hidden by a glob.
+- **Merged M2 surface, for orientation**: `lib/domain/sessions/` (transition table + mappers), `lib/domain/progression/` (Epley e1RM + PR recomputation), `lib/domain/sync/` (reducer, `types.ts`), `lib/domain/import/` (legacy planner, `LegacyImporter`, `LegacyImportStore` port), `lib/http/route-error.ts`, `src/app/api/{sessions,sessions/[id],sync,import/legacy}`, migrations `0004`–`0006`. Every route handler above has specs that run in CI, and so do the three that used to be missing: `#42` shipped `POST /auth/signout`, `GET /api/exercises` and `GET /api/progress/:exerciseSlug`, which **retired `tests/integration/api/pending-handlers.ts` and its anti-rot guard** — there are no declared-pending skips on `main` (see D5, closed). M3 added `src/app/api/{profile,sessions/prefill}` on top.
 - **Spike sandbox — throwaway, delete once M1's integration suite covers the same ground**:
   - `spikes/m0-drizzle-rls/sql/001-setup.sql` — role, tables, 8 policies, `handle_new_user`. Comments record the measured surprises. **Creates `unprotected_future_table` on purpose**; do not copy it.
   - `spikes/m0-drizzle-rls/src/db.ts` — `withUserHardened()` is the version M1 must adopt. `withUserLeaky()` is a negative control, never to be imported.
@@ -176,26 +181,32 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
   - `push-day-workout/index.html` — 6 exercises, 17 set checkboxes, 5 stretches, hardcoded
   - `legs-day-workout/index.html` — same shape
   - `pull-day-workout/app.js:47-223` — the only module with structured exercise/stretch data arrays
-- **Verification Commands** (measured 2026-09-11 on `origin/main`; all must run inside WSL):
+- **Verification Commands** (current baseline re-measured 2026-09-12 **on merged `main` (`2d5edfb`)**, stack up; all must run inside WSL):
   - Legacy dev: `npm run dev` (3000). Target dev: `npm run next:dev` (3001).
   - `npm run typecheck` → **exit 0, clean** (`next typegen && tsc --noEmit`; never run bare `tsc`).
   - `npm run lint` → **exit 0**, 0 errors / 0 warnings, re-verified on merged `main`. It was
     exit 1 (24 errors + 2 warnings) until D1; the step now runs **in CI directly after `npm ci`**
     and the script is `eslint --max-warnings=0 .`, so warnings fail too. Reintroducing an `any`
     is a build break, not a style opinion. See D1 (closed).
-  - `npx vitest run tests/unit` → **67 passed / 6 failed** with the stack down. All 6 are
-    `tests/unit/with-user.test.ts` reaching real Postgres (`ECONNREFUSED :54322`). See D2.
+  - `npx vitest run tests/unit` fails **offline by construction**, not because the code is wrong: all
+    the failures are `tests/unit/with-user.test.ts` reaching real Postgres (`ECONNREFUSED :54322`) —
+    6 of them, at intake, out of "67 passed / 6 failed". The layer has grown since (25 files / 276
+    tests as of 2026-09-12), so treat the pass count as intake-era and the failure mode as current.
+    See D2 (open).
   - Full gate, measured sequence that actually works (verified 2026-09-11 with the stack
     up): `npm run db:up` → `npm run test:api:preflight` → `npm run typecheck` →
     `npm test` → `npm run test:api` → `npm run test:mutation` → `npm run db:down`.
-    Results, re-measured **on merged `main`** (`ce1c5d9`) with the stack up (2026-09-11), after PR #53 landed:
-    **`npm test` 24 files / 217 tests green**; **`test:api` 7 files / 40 passed / 0 skipped**
-    (from intake's 25/225 + 36 passed/7 declared-skipped: the pending-handler guard file retired with
-    the registry, and the sync budget skip went live when the limiter was wired in); preflight green;
-    **`npm run test:mutation` exit 0**; `check-set-config.sh` exit 0; lint and typecheck exit 0.
-    *Correction on the record:* while #53 was open this block sat under a heading reading "on merged
-    `main`" while carrying the branch's numbers. Same values, wrong warrant — the sentence was false
-    until this merge, which is why re-measuring after merge is a step and not a formality.
+    Results, re-measured **on merged `main`** (`2d5edfb`) with the stack up (2026-09-12), after the two M3
+    exit PRs landed: **`npm test` 39 files / 398 tests green**; **`test:api` 10 files / 60 passed / 0
+    skipped**; **`npx playwright test` 61 passed / 0 failed (3.1 m)**; preflight green;
+    **`npm run test:mutation` exit 0**; `check-set-config.sh` exit 0; lint **0 errors / 0 warnings** and
+    typecheck exit 0. *The same block read 24 files / 217 tests and 7 API files / 40 passed at `ce1c5d9`
+    after PR #53; the growth is M3's, and the pending-handler guard file retired with the registry.*
+    *Correction on the record, kept because it is a rule and not a receipt:* while #53 was open this block sat
+    under a heading reading "on merged `main`" while carrying the branch's numbers. Same values, wrong
+    warrant — the sentence was false until that merge, which is why re-measuring after merge is a step and
+    not a formality, and it is why the numbers above were produced on this checkout rather than copied from
+    PR #86's or PR #87's own evidence tables.
     `npm run test:mutation` has been run here, and note the gap it exposed: that script is bare `tsx
     scripts/mutation-check.ts` with **no `--env-file-if-exists`**, unlike the test scripts, so it
     aborts with `MIGRATION_DATABASE_URL environment variable required` unless `.env.local` is
@@ -205,7 +216,7 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
     `.env.local` first, or DB-backed files fail or silently skip.
   - `npm run test:red` is an alias for `npm run test:api` (kept so older notes still resolve),
     and **CI runs the API suites as their own step**, so `tests/integration/api/` is inside the
-    merge gate with the still-unbuilt handlers declared individually. See D5 (closed).
+    merge gate. Nothing is declared-pending there any more — see D5 (closed).
 
   - Repository integration tests need a tenant-qualified local Supavisor URL on 54329
     (`app_authenticated.pooler-dev`); the direct app-role port 54322 also passes the suite.
@@ -216,10 +227,11 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
     for reference.
 - **Known-broken**: `npm run build` (legacy Vite) — **re-verified 2026-09-11**: exits 0 and
   writes **0 `.js` files**; `dist/index.html` still references the untouched classic script
-  paths. By design until M4. The route-handler suites under `tests/integration/api/` remain
-  excluded from `npm test` on `main`; those handlers largely exist now, so the exclusion is
-  stale (D5) rather than an intentional RED baseline, and the 11 specs whose handlers
-  genuinely do not exist are now declared individually on the gate branch.
+  paths. By design until M4. The route-handler suites under `tests/integration/api/` are
+  excluded from `npm test` **because they boot a real `next dev` server**, not because any
+  handler is missing: every M1 route shipped its handler in `#42`, which retired
+  `tests/integration/api/pending-handlers.ts` and its anti-rot guard, and **CI runs those 10
+  files as their own step** (D5, closed). Nothing on `main` is declared-pending.
 - **Side effect to watch**: running the API suite boots `next dev`, which **rewrites the
   tracked `tsconfig.json`** (appends a generated-types include and reformats arrays). Revert
   before committing — it is formatter noise, not your change. See D6.
@@ -234,7 +246,7 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
     `parseSessionView`, unit, prefill); `runner.tsx` is the writable screen. `src/components/ui/input.tsx`
     is vendored (no local focus classes — ADR-0004's ring is global; `h-11`; `rounded-md` → `--radius-input`).
   - `lib/domain/units.ts` gained `parseWeightToKg` / `parseReps`, the return trip for ADR-0005.
-  - Gates measured on this branch, stack up: `lint` 0 / 0, `typecheck` 0, `check-set-config.sh` 0,
+  - Gates measured on that slice's branch (`feat/m3-06-runner`), stack up: `lint` 0 / 0, `typecheck` 0, `check-set-config.sh` 0,
     `git diff --check` 0, `npx vitest run tests/unit` **199 passed (18 files)**,
     `tests/integration/api` + `security` **60 passed (10 files)**, `npx playwright test`
     **20 passed** (14 before this slice; the six new specs are `tests/e2e/session-runner.spec.ts`).
@@ -254,7 +266,7 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
     `startedAt` (non-null) and `completedAt`.
   - `role="timer"` with `aria-live="off"` for the digits; milestones (last ten seconds, finish once)
     go through `#63`'s polite region.
-  - Gates on this branch: lint 0 / 0, typecheck 0, `next:build` 0, unit **219 passed (20 files)**,
+  - Gates on that slice's branch (`feat/m3-07-timers`): lint 0 / 0, typecheck 0, `next:build` 0, unit **219 passed (20 files)**,
     api + security **60 passed (10 files)**, Playwright **25 passed** (20 before #64), set-config and
     `git diff --check` clean. #63's tap gate still holds with the session clock repainting every
     second, because `paints a tap in under 50 ms` is one of the 25.
@@ -271,11 +283,11 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
   - Reads go through `WorkoutRepository.listSessions` / `findSession` and
     `ProgressRepository.getExerciseProgress` — the same functions the endpoints call. **No new
     server route was added.**
-  - Gates on this branch: lint 0 / 0, typecheck 0, `next:build` 0, unit **243 passed (22 files)**,
+  - Gates on that slice's branch (`feat/m3-08-history-progress`): lint 0 / 0, typecheck 0, `next:build` 0, unit **243 passed (22 files)**,
     api + security **60 passed (10 files)**, Playwright **37 passed (2.2m)**, set-config and
     `git diff --check` clean. **Lighthouse accessibility on authenticated `/history`: 100** — the
     first authenticated audit, which #60's spec had deliberately left unbuilt.
-- **M3-10 surface, as built** (this branch, in review as the #67 PR): mostly a branch that
+- **M3-10 surface, as built** (merged as **PR #86, `8704c19`**, 2026-09-11T19:23Z): mostly a branch that
   *measured* — `9591fd4`/`f8a7242`/`7454585`/`7d17b87` added the production-build SLA specs, the
   keyboard-only + colour audits, the legacy-parity scan, and Lighthouse on `/` and `/session/[id]`.
   The break-each-gate pass then changed three products, each because an injection or an
@@ -285,16 +297,34 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
   separately from the glyph (a differential text check is satisfiable by `○→✓` alone — measured,
   not theorized); **`9ca17cc`** `notifyConnectivityRestored()` clears the offline-grown backoff
   window on `online`, which is what G-M3-4's "miss" actually was. The evidence lives in
-  `docs/tests/2026-09-11-m3-verification-audit.md` (entries 9–18: nine captured breakages, two
+  `docs/tests/2026-09-11-m3-verification-audit.md` (entries 9–18 for this slice, entry 19 for what #73 then did to
+  the same gates: nine captured breakages, two
   honest non-observations, one real defect, two recorded timing flakes, one reproduction
   sequence); the exit verdict and M4 scope live in
-  `docs/releases/2026-09-12-m3-exit-report-and-m4-handoff.md`. Gates on the final tree: lint 0/0,
+  `docs/releases/2026-09-12-m3-exit-report-and-m4-handoff.md`. Gates on #67's own final tree: lint 0/0,
   typecheck 0, unit 37 files/380, api+security 10/60, mutation exit 0, contrast 35/35,
   Playwright 61/0 on four consecutive final runs (one earlier post-fix run flaked a timing gate —
-  recorded in audit 17, budgets unmoved), Lighthouse 100 ×4 on each. The last red this slice
+  recorded in audit 17, budgets unmoved), Lighthouse 100 ×4 on each. **Those are #67's numbers.**
+  The tree moved under them when #73 merged as PR #87, so they are no longer the baseline: `main`
+  measures 39 files / 398 unit tests now, with `test:api`, Playwright, lint, typecheck and
+  mutation unchanged — see the bullet below and §3's Verification Commands. The last red this slice
   produced was its own parity gate failing on CI's shallow checkout — entry 18, fixed so CI really
   executes it (`f37813e`). `tsconfig.json` churned (D6) and is, as always,
   unstaged.
+- **#73 surface, as merged** (PR #87, `2d5edfb`, 2026-09-12T02:00Z): `lib/contracts/sessions.ts`
+  now carries the session graph — `.strict()` objects transcribed from what `mapSessionState`
+  emits, with `ExerciseKindSchema` and `RoutineExercisePhaseSchema` added to
+  `lib/contracts/common.ts` so no enum is hand-copied; `lib/views/session-view.ts` is a 47-line
+  **re-export** of it (was 166 lines of a second opinion); and `validateOutgoing` in
+  `lib/contracts/envelope.ts` throws a non-`ZodError` `ContractViolationError` from
+  `POST /api/sessions`, the full-session branch of `GET /api/sessions/[id]`, and `POST /api/sync`,
+  so a producer defect cannot be billed to a caller as a 400. New specs:
+  `tests/unit/contracts/{session-state,outgoing-validation}.test.ts` plus growth in
+  `contracts.test.ts`, `session-view.test.ts` and the routes-own-no-schemas guard.
+  `tests/unit/state/fixtures.ts` had to grow, because it had been claiming to be *the server's view*
+  of a session the server has never sent. **Not closed by it:** `SyncResponseData.state` has no
+  runtime consumer, and `tests/e2e/session-runner.spec.ts:174` mocks that field in a shape the
+  contract never had — both carried into M4 at §7 item 22.
 
 ---
 
@@ -341,22 +371,25 @@ Added by the M0 spike (ADR-0003 Amendment A1):
 - ~~**M3-00/M3-01 (#57/#58) are half-built and unverified.**~~ **Resolved 2026-09-11: the endpoints exist and every promise above is now a watched control.** The RED steps were observed RED first (profile spec failed 7/7 against the absent route; prefill spec failed the happy paths while the `[id]` route shadowed it, exactly as the trap note predicted). Measured green: lint 0 under `--max-warnings=0`, typecheck 0, `check-set-config.sh` 0, unit **25 files / 236 tests**, API **10 files / 60 tests** (twice — the first full run exposed a substring assertion in `prefill.test.ts` that flaked on random UUID hex containing "500"; it was replaced with a field-level assertion, and the pass cited here is the post-fix run). The traps: `/api/sessions/prefill` non-shadowing is load-borne on its 200 spec; `no-store` now covers the `[id]` route's 200s **and** 404s; the delta byte claim is measured (53 B vs 2 035 B). The last open risk — "a gate that only ran locally is not yet a gate" — is closed: PR #69's CI `test` job **passed (5m53s)** on the exact merged tree before the Owner merged it. No blocker remains in M3-00/M3-01 territory.
 
 
-**No immediate coding blocker. M2 is complete:** M2-00 → M2-06 are merged, the last as PR #53
-(`ce1c5d9`), and issue #42 is closed. Nothing in M2 remains. What the milestone left behind are two
-named residual risks rather than absorbed ones: the **documented 200 ms p95 budget is now measured in
-production mode, and it MISSES** — 50 sequential authenticated `POST /api/sync` writes on the production
-build give **p50 188.3 ms / p95 272.8 ms / max 609.9 ms**, against a 30-request no-auth
-`GET /api/exercises` baseline on the same server of p50 8.7 / p95 16.9 / max 24.2. That ~16x p95 gap
-attributes the cost to the authenticated write path (two `getUser()` round trips plus the per-user
-transaction), not to Next's prod server or to Postgres being slow that day. The enforced 800 ms ceiling
-holds and the miss is printed on every E2E run, so it cannot be quietly forgotten. **PR #72's CI run
+**No immediate coding blocker. M2 and M3 are both complete:** M2-00 → M2-06 are merged (the last as
+PR #53, `ce1c5d9`), M3-00 → M3-10 are merged (the last two as PRs #86 and #87), and issues #42, #67
+and #73 are closed. Nothing in either milestone remains. What M3 left behind are two named residual
+risks rather than absorbed ones: the **documented 200 ms p95 budget is measured in production mode,
+and it MISSES** — 50 sequential authenticated `POST /api/sync` writes on the production
+build give **p50 188.3 ms / p95 272.8 ms / max 609.9 ms** on the first production-mode run, and
+**p50 187.5–199.0 / p95 234.2–282.1 / max 268.6–302.2 ms** on M3-10's re-runs (the exit report's
+number), against a 30-request no-auth `GET /api/exercises` baseline on the same server of p50 8.7 /
+p95 16.9 / max 24.2. That ~14–16x p95 gap attributes the cost to the authenticated write path (two
+`getUser()` round trips plus the per-user transaction), not to Next's prod server or to Postgres
+being slow that day. The enforced 800 ms ceiling holds and the miss is printed on every E2E run, so
+it cannot be quietly forgotten. **PR #72's CI run
 reproduced it independently**: p50 117.8 ms / p95 222.0 ms against a no-auth p95 of 7.2 ms on a clean GitHub
 runner (vs 272.8 / 16.9 here) — so the miss is not an artifact of this dev box, and the authenticated-path
-attribution holds on both machines (a ~19x p95 gap on CI, ~16x locally). The 50 rps condition
-§3 actually specifies is still untested** — that is M4's load test, and nothing here satisfies it),
+attribution holds on both machines (a ~19x p95 gap on CI, ~16x locally). **The 50 rps condition
+§3 actually specifies is still untested** — that is M4's load test, and nothing here satisfies it —
 and the **rate limiters are process-local**, so N instances multiply the budget by N. A production-mode
 measurement (`next:build` + `next:start`) is the natural M4/telemetry task. See the remediation list
-below and `docs/tasks/2026-09-11-intake-debt-index.md.
+below and `docs/tasks/2026-09-11-intake-debt-index.md`.
 
 *Resolved 2026-09-08 — `M0-00`, Node runtime.* Initially filed as "WSL Node is 18.19.1, too old for Next.js 16." That was overstated. `~/.nvm/versions/node/` already contained v22.19.0 and v24.18.0, and the `PATH` prepend at `~/.zshrc:119-122` selects the highest, so the **interactive** shell was already on Node 24 and Next.js 16 would have run fine.
 
@@ -382,22 +415,14 @@ The narrower claim that survived — "non-interactive shells resolve `/usr/bin/n
   pins an explicit `--user-data-dir` under `/tmp` and fails if the run creates anything at the repo root,
   so the suite cannot repeat it even while the cause is unresolved.
 
-- **`SessionStateSchema` was `z.object({}).passthrough()`; #73 closed it on `feat/m3-073-session-state-contract`.** For four milestones the session graph was never contract-validated: `GET /api/sessions/[id]` checked the envelope and every response built from the placeholder passed regardless of content, and `z.infer` of it was `Record<string, unknown>` — a screen typed against `SessionState` compiled while reading `undefined` weights. M3-04 had worked around it with a view-boundary schema (`lib/views/session-view.ts`) that parsed only what the session screen renders. The contract now states the graph — transcribed from `lib/domain/sessions/types.ts` as `mapSessionState` emits it, `.strict()` throughout, every enum reused from `lib/contracts/common.ts` (including the two the plan half needed, `ExerciseKindSchema` and `RoutineExercisePhaseSchema`), with the `Date`-or-ISO timestamp duality living in the contract rather than in a view — and `session-view.ts` is the re-export this bullet asked for. All three producers (`POST /api/sessions`, `GET /api/sessions/[id]`, `POST /api/sync`) parse what they send, so a mapper that drifts fails at the boundary; both drift classes were injected and observed to fail (audit entry 19). **What #73 did *not* close:** `SyncResponseData.state` still has no runtime consumer — the client casts it and refetches — and `tests/e2e/session-runner.spec.ts:174` mocks that field in a shape (`state.session.*`) the contract has never had, which only looks harmless because nothing parses it.
+- **`SessionStateSchema` was `z.object({}).passthrough()`; #73 closed it, MERGED as PR #87 (`2d5edfb`, 2026-09-12T02:00Z).** For four milestones the session graph was never contract-validated: `GET /api/sessions/[id]` checked the envelope and every response built from the placeholder passed regardless of content, and `z.infer` of it was `Record<string, unknown>` — a screen typed against `SessionState` compiled while reading `undefined` weights. M3-04 had worked around it with a view-boundary schema (`lib/views/session-view.ts`) that parsed only what the session screen renders. The contract now states the graph — transcribed from `lib/domain/sessions/types.ts` as `mapSessionState` emits it, `.strict()` throughout, every enum reused from `lib/contracts/common.ts` (including the two the plan half needed, `ExerciseKindSchema` and `RoutineExercisePhaseSchema`), with the `Date`-or-ISO timestamp duality living in the contract rather than in a view — and `session-view.ts` is the re-export this bullet asked for. All three producers (`POST /api/sessions`, `GET /api/sessions/[id]`, `POST /api/sync`) parse what they send, so a mapper that drifts fails at the boundary; both drift classes were injected and observed to fail (audit entry 19). **What #73 did *not* close, and M4 inherits rather than discovers:** `SyncResponseData.state` still has no runtime consumer — the client casts it and refetches — and `tests/e2e/session-runner.spec.ts:174` mocks that field in a shape (`state.session.*`) the contract has never had, which only looks harmless because nothing parses it. Both are recorded on PR #87 and in the handoff; neither is a reason to reopen #73.
 
-- **The Lighthouse gate audits `/sign-in`, not the dashboard, and says so.** `#60`
-  recorded a score of 100 "for `/`" when `/` was a page. Since `#61` made `/` a per-user
-  screen, an unauthenticated audit is served a redirect, so the spec now resolves the
-  entry point, asserts it against a small allow-list, and labels the measurement with
-  the pathname it audited (`score for /sign-in (reached from /): 100`). An
-  **authenticated** audit needs a session attached to Lighthouse's request
-  (`--extra-headers`, fed from the same cookie jar `tests/e2e/auth.ts` uses); that is
-  #67's work, and until it exists the milestone must not claim a Lighthouse number for
-  the screens users actually train on.
+- **The Lighthouse gate now audits the screens users actually train on — and one thing it still cannot see.** `#60` recorded a score of 100 "for `/`" when `/` was a page. Since `#61` made `/` a per-user screen, an unauthenticated audit is served a redirect, so the spec resolves the entry point, asserts it against a small allow-list, and labels the measurement with the pathname it audited (`score for /sign-in (reached from /): 100`). The **authenticated** audit that note deferred — a session attached to Lighthouse's request via `--extra-headers`, fed from the same cookie jar `tests/e2e/auth.ts` uses — **was built: #67 shipped it** (PR #86), and `tests/e2e/lighthouse.spec.ts` now scores 100 on `/history`, `/`, and `/session/[id]` as well as `/sign-in`, all four re-scored on every final run. **The hole M3 found but did not close:** an accessible name that is a **zero-width space** scores **100** (audit entry 11) — axe did not catch it either. "A link that renders as nothing" is invisible to both gates, so the fix is a structural DOM check, not a louder Lighthouse; it is handed to M4 (exit report §3.6) rather than papered over here.
 
 ### Open Questions
 
-- **`--accent-legs` has no assigned colour.** `DESIGN.md` offers no third accent that can be legitimately spent; `tertiary #667085` is reserved for disabled states, so reusing it would make disabled controls read as Legs day. One new hue must be added to `DESIGN.md` as a documented extension. *Blocks M3, not M1.*
-- **Package manager for the target app.** Legacy is npm. Low-stakes; decide at M1 scaffold and record it in PROMPTKIT.md §3.
+- ~~**`--accent-legs` has no assigned colour.**~~ **Resolved 2026-09-11 by #59 (PR #71)**: `#7a3ff2` ships in `src/app/globals.css` as a *documented DESIGN.md extension* — measured 5.50:1 on white / 5.26:1 on the page, inside the contrast gate's matrix. `DESIGN.md` offers no third accent that could be legitimately spent (`tertiary #667085` is reserved for disabled states), which is why it is an extension rather than a pick. It blocked M3; M3 is closed.
+- ~~**Package manager for the target app.**~~ **Resolved at the M1 scaffold**: **npm** (`package-lock.json` present, no `packageManager` field), and `PROMPTKIT.md` §3 records it with the instruction not to run `pnpm`/`yarn` here.
 - **Dark mode deferred.** `DESIGN.md` ships no dark tokens. Light-only in v1 per ADR-0005, with tokens authored under one `:root` so adding a `.dark` block stays additive. Revisit immediately post-v1 — this app gets used in dim gyms at night.
 
 ### #65's three findings, all from tests that were right
@@ -437,7 +462,7 @@ The narrower claim that survived — "non-interactive shells resolve `/usr/bin/n
   listener. The unexplained residue is recorded here rather than deleted, because "a window listener
   that does not receive window events" is not a thing I know how to dismiss.
 
-### Unmerged findings from #63 (all filed, none absorbed)
+### Open findings from #63 (all filed, none absorbed by a later slice)
 
 - **#76 — no API path produces an `archived` session.** `getPrefill` already queries
   `inArray(status, ['completed','archived'])`, so production code branches on a value nothing can
@@ -457,8 +482,9 @@ The narrower claim that survived — "non-interactive shells resolve `/usr/bin/n
 ### Technical Debt & Risks
 
 **Remediation items — found by running, not reading (intake 2026-09-11).** Full cards with
-Gherkin AC in `docs/tasks/2026-09-11-intake-debt-index.md`. **D1 and D5 are closed and merged** (PR #48, green on `main`).
-D2, D3, D4, D6 and D7 remain open.
+Gherkin AC in `docs/tasks/2026-09-11-intake-debt-index.md`. **D1 and D5 are closed and merged** (PR #48, green on `main`),
+and **D3 closed with M3** (PR #72 stood the harness up; #86 made it the CI merge gate for everything user-visible).
+**D2, D4, D6 and D7 remain open** — all four are M4's, none of them blocks closing M3.
 
 - ~~**D1 · `npm run lint` is red and CI never runs it.**~~ **CLOSED (merged, #48)**:
   all 24 `no-explicit-any` errors in `app-role`,
@@ -482,9 +508,12 @@ D2, D3, D4, D6 and D7 remain open.
   socket to `:54322`), so the fastest feedback loop is red offline by construction.
   Confirmed harmless-but-misclassified: with a working environment it passes, and the whole
   non-API suite is green.
-- **D3 · Playwright is configured for `tests/e2e/`, which does not exist** — zero E2E specs
-  anywhere. Do not describe E2E as coverage. Docs-only half is closed; create the directory
-  with its first spec in M3/M4.
+- ~~**D3 · Playwright is configured for `tests/e2e/`, which does not exist** — zero E2E specs
+  anywhere. Do not describe E2E as coverage.~~ **CLOSED in M3**: `tests/e2e/` exists with
+  **13 spec files / 61 tests**, `npm run test:e2e` runs them against a **production** build, and
+  CI runs the job last on every push (PR #72, hardened by #86 — audit entry 18 fixed the parity
+  gate so CI really executes it rather than skipping on a shallow checkout). E2E *is* coverage now,
+  and it is a merge gate rather than a suggestion.
 - **D4 · `meta/_journal.json` covers migrations `0000`–`0003` only**; `0004`, `0005` and
   `0006` are hand-authored and unrecorded, while `drizzle.config.ts` still generates into
   that same directory. The next `db:generate` reasons from a stale snapshot. Choose and
@@ -509,9 +538,12 @@ this repo's own migration `0001`, not from `supabase status`. Corrected locally,
 seconds. Two residual risks from it are recorded on the index: a committed app-role password
 literal with no local-only guard, and CI running the full service set that `db:up` excludes.
 
-**Baselines now on record** (stack up, Node 24.20.0): `npm test` 23 files / **196 tests
-green**; `npm run test:api` 20 passed / 12 declared-skipped; `npm run lint` and
-`npm run typecheck` exit 0.
+**Baselines now on record** (stack up, Node 24.20.0), re-measured **on merged `main` (`2d5edfb`)
+2026-09-12**: `npm test` **39 files / 398 tests green**; `npm run test:api` **10 files / 60 passed /
+0 skipped**; `npx playwright test` **61 passed / 0 failed**; `npm run test:mutation` exit 0;
+`npm run lint` **0 errors / 0 warnings** and `npm run typecheck` exit 0. *(The intake recorded
+23 files / 196 tests with 20 passed / 12 declared-skipped API specs; everything between those
+numbers and these ones is M3, and the declared-skip layer no longer exists — see D5.)*
 
 Carried forward, still open:
 
@@ -560,8 +592,17 @@ Carried forward, still open:
   moved. These are the same family as the `session-deltas.test.ts` 5 s-coupling fix and the
   `hookTimeout` fix recorded above — the honest statement is that the gates measure the *box*,
   and CI has headroom this WSL box sometimes does not: the E2E job is green on every merged M3
-  PR, most recently #85's `test` SUCCESS. If a timing gate goes red in review, re-run the suite alone before
-  believing it — that is the documented protocol now, not a rationalization: see audit entry 17.
+  PR, and `main`'s own `test` check is `success` on both M3 exit merges (#86 `8704c19`, #87 `2d5edfb`).
+  **Two more arrived on #73's branch, same family (audit entry 19):** `timers.spec.ts:277` (the
+  CDP-freeze spec) failed inside `warmUpAndStart` — after `advance-phase` the subtitle was still
+  "Warming up" at the 5 s assertion — and `sla.spec.ts:282` (G-M3-3) ran out its 30 s **test** budget
+  *while printing a passing measurement* (`n=5 median 4339.0 ms / p95 4424.0 ms` against the 5000 ms
+  goal). Both passed solo (`timers.spec.ts` 5/5 in 1.1 m; `sla.spec.ts` 3/3 in 41.3 s) and the third
+  full run was 61/0. Neither flake was reproduced deliberately, so **"contention" is the best
+  explanation available, not a proven one** — that residue is recorded rather than deleted.
+  **The documented protocol, still in force for M4:** a red *timing* gate on this machine gets a solo
+  re-run before anyone believes it (audit entries 17 and 19); no budget moves without a re-run proving
+  the reality — not the wish — changed.
 - **An unexplained ordering observation (not filed as a bug, because it is not substantiated).** A
   set tick flips to `Logged`, `aria-pressed=true` is asserted, and the queue reports "All changes
   synced" — yet a snapshot taken *after* that reconciliation can show the same row back as
@@ -614,24 +655,28 @@ Carried forward, still open:
    `PROMPTKIT.md` §3 and §3/§5 here**: they described `main` and went stale on merge, which is the
    §8 row below this one.
 5. **Decide D4 (journal vs hand-authored migrations) before any `db:generate`** and record
-   the chosen authorship model in `PROMPTKIT.md` §3; decide D7 (typed rows in the security
-   suites) before M2-06 writes its negative controls.
+   the chosen authorship model in `PROMPTKIT.md` §3. ~~Decide D7 before M2-06 writes its negative
+   controls.~~ → **D7 (typed rows in the security suites) is still open, and M2-06 long since wrote
+   those controls**: it is an M4 item now, because the 50 rps load test and the hardening pass will
+   pile more assertions onto the same untyped foundation.
 6. **Keep schema-risk work explicit.** Retain the missing Auth/profile FK as a tracked
-   hardening risk; keep `--accent-legs` unresolved-but-flagged since it blocks M3, not M2.
+   hardening risk. ~~Keep `--accent-legs` unresolved-but-flagged since it blocks M3, not M2.~~
+   **Resolved: #59 shipped `--accent-legs #7a3ff2` as a documented `DESIGN.md` extension (PR #71),
+   measured and inside the contrast gate.**
 7. **Keep issue #16 deferred.** Custom SMTP/provider/DNS remains the separate M1 production-release blocker and must not block M2 coding or be described as complete.
-8. **Preserve the M3 boundary.** Do not delete legacy source folders or begin UI/design-system implementation until M2-06 closes the backend/API hardening gate.
+8. ~~**Preserve the M3 boundary.** Do not delete legacy source folders or begin UI/design-system implementation until M2-06 closes the backend/API hardening gate.~~ **Retired by the world it described:** M2-06 closed that gate, and M3 shipped the whole UI *beside* the legacy app with `tests/e2e/legacy-parity.spec.ts` measuring that no M3 code wrote a legacy key. **The boundary now points the other way** — M4 owns deleting the legacy modules, and that spec is built to fire when it happens; flipping it is a deliberate step, not a green-suite chore (exit report §3.3).
 9. ~~**Plan M3 before writing any M3 code.**~~ **Done 2026-09-11:** `docs/specs/2026-09-11-spec-m3-presentation.md` records the RFC — goals with measurement methods, non-goals, deep-module seams (`Outbox`, `SyncEngine`, `TimerController`, `UnitDisplay`), FMEA, and six milestones M3-00…M3-05. Four decisions were settled with the Owner and are recorded in §2.4 of that spec.
 10. ~~**Grill the M3 spec, then decompose it.**~~ **Done 2026-09-11**, manually: `pk:grill` is advertised in `AGENTS.md` but `.promptkit/workflows/grill.md` is absent from this installation. The pass found four defects in the RFC — recorded as §8 with two Owner decisions settled (Start requires connectivity; `--accent-pull` is redefined rather than duplicated).
 11. ~~**Run `pk:tasks` on the amended RFC.**~~ **Done 2026-09-11**: eleven slices in `docs/tasks/m3/`, published as issues #57–#67 under milestone #3 (M3: Presentation). The breakdown carries the §8 dependency facts: #58 before #62, #60 before any screen is *called* accessible, #59 before every screen.
 12. ~~**Finish #57 and #58 on `feat/m3-00-m3-01-client-reads` (contracts committed at `14b8be2`).**~~ **Done and merged 2026-09-11 as PR #69 (`8d2b696`), CI green, issues #57/#58 closed**, in exactly the named order and watched RED before each step. The stale comment and its discard are deleted; the delta spec asserts measured byte sizes (53 B vs 2 035 B) instead of claiming shrinkage; the #48 precedent is honored — one PR, two atomic commits (`feat(api)` for #57, `feat(sessions)` for #58).
 13. ~~**Start #59 (M3-02): Tailwind/shadcn foundation + contrast-gated tokens (p0).**~~ **Done 2026-09-11** exactly as written there: installed with npm, `next:build` (exit 0) and the legacy Vite build (exit 0, CSS bytes unchanged) both measured, `--accent-pull`/`--accent-legs` shipped at measured-passing values, the gate's Scenario-2 red state kept as a permanent spec assertion, and the `/` first-load baseline recorded in the PR. **Next: wait for "done merging"; then #60 (M3-03, Playwright + axe with the deliberately-failing control first) — #60's axe checks need #59's shipped tokens, which is why it sits behind this merge.**
-14. **Review and merge #60, then take #61 (M3-04, dashboard `/`).** The harness it depends on exists now, so `tests/e2e/a11y.spec.ts` should be edited as part of #61: `/` is registered `interactive: false` because the route is still the M1 placeholder (a heading and a paragraph, nothing focusable), and flipping that flag to `true` is what converts the lenient assertion into the real keyboard gate. Leaving the flag false after #61 ships would be the silent-hole failure mode again.
-15. **Review and merge #61, then take #62 (M3-05, the outbox).** Two things #61 left for it, both of which are this branch's evidence that the seam is real: `StartButton` is the only mutation in the app that goes straight to the network (RFC §8.1 — `session.start` is not a sync op), and the 409 path in it already follows §4.3's rule by calling `router.refresh()` instead of merging state client-side. The E2E spec with "another tab" in its name proves that branch runs; the outbox must obey the same rule on every rejection, not just this one.
-16. **Review and merge #62, then take #63 (M3-06, the runner).** #62 shipped the mechanism and deliberately not the usage; three things it left that #63 cannot invent for itself, all of them documented in `docs/tasks/m3/M3-05-outbox-and-reconciliation.md`:
+14. ~~**Review and merge #60, then take #61 (M3-04, dashboard `/`).**~~ **Done: #60 merged as PR #72 (`9f98f83`) and #61 as PR #74 (`33d1eb7`), and the flag was flipped as demanded** — `/` is registered `interactive: true` in `tests/e2e/a11y.spec.ts` now. The instruction this item carried — edit `tests/e2e/a11y.spec.ts` as part of #61 rather than letting `/` stay registered `interactive: false` after it stopped being a placeholder — was followed, and the silent-hole failure mode it was guarding did not arrive.
+15. ~~**Review and merge #61, then take #62 (M3-05, the outbox).**~~ **Done: #62 merged as PR #75 (`df6db14`).** Two things #61 left for it, which were that branch's evidence that the seam is real: `StartButton` is the only mutation in the app that goes straight to the network (RFC §8.1 — `session.start` is not a sync op), and the 409 path in it already follows §4.3's rule by calling `router.refresh()` instead of merging state client-side. The E2E spec with "another tab" in its name proves that branch runs; the outbox must obey the same rule on every rejection, not just this one.
+16. ~~**Review and merge #62, then take #63 (M3-06, the runner).**~~ **Done: #63 merged as PR #79 (`5cf3b7e`).** #62 shipped the mechanism and deliberately not the usage; three things it left that #63 cannot invent for itself, all of them documented in `docs/tasks/m3/M3-05-outbox-and-reconciliation.md`:
     - **`deviceId` has no owner.** `SyncRequestSchema` requires one, and the engine takes it as injected config. Nothing in the app mints or persists it yet. It is *not* the queue, so §4.3's ban on `localStorage`-as-queue does not cover it — but the decision still has to be made deliberately (a `meta` store in the same IndexedDB database is the choice consistent with §8.5), not dropped into the first file that needs it.
     - **`IndexedDBOutboxStorage` has never run.** The unit suite tests `Outbox` against a memory store, which is the point of the seam — and also means the browser half is unproven. The first execution of that file must be a test, not a user's phone. The card itself assigns that proof to M3-06's `offline-session.spec.ts`.
     - **The queue is invisible until #63 renders it.** `pendingCount()`/`pending()` are the interface; the "N waiting to sync" copy and the rejection banner are the runner's job. Until then no user can observe any of §4.3 holding, which is why this PR claims plumbing and not the offline goal.
-    **Done 2026-09-11 on `feat/m3-06-runner` (nine commits, `8cd8a02..7f06381`), awaiting merge.** All
+    **Done 2026-09-11 on `feat/m3-06-runner` (nine commits, `8cd8a02..7f06381`), merged as PR #79 (`5cf3b7e`).** All
     three inherited items landed as code, not intentions: the device id has an owner
     (`device-identity.ts` + the `meta` store), `IndexedDBOutboxStorage` executed in a browser for the
     first time in `tests/e2e/session-runner.spec.ts` (its reload spec is the durability proof #62
@@ -659,14 +704,14 @@ Carried forward, still open:
 
 
 17. ~~**Review and merge #63, then take #64 (M3-07, rest and elapsed timers).**~~ **Done 2026-09-11
-    on `feat/m3-07-timers` (seven commits, `ab47ac2..1c08dc3`), awaiting merge as PR #81.** The three
+    on `feat/m3-07-timers` (seven commits, `ab47ac2..1c08dc3`), merged as PR #81 (`0278634`).** The three
     inherited constraints all held: absolute anchors with no counter anywhere, `visibilitychange`
     recomputing from `now()`, and the clock injected so the background-tab case is a unit test
     (`fires: 'none' | 3` in `tests/unit/state/timer-controller.test.ts`). #63's own follow-ups stayed
     parked rather than being smuggled in: #76, #77, #78 untouched by this slice.
 
 18. ~~**Review and merge #64, then take #65 (M3-08, history and per-exercise progress).**~~ **Done
-    2026-09-11 on `feat/m3-08-history-progress`, awaiting merge as PR #83.** All three inherited
+    2026-09-11 on `feat/m3-08-history-progress`, merged as PR #83 (`0adf233`).** All three inherited
     constraints held: the `archived` question was answered by *rendering* every status the storage
     layer can hold rather than by inventing a route that produces it (#76 still open, still #66's
     neighbour); progress reads `ProgressRepository.getExerciseProgress` and never recomputes e1RM
@@ -674,7 +719,8 @@ Carried forward, still open:
     durations come from `startedAt`/`completedAt`, formatted by #64's `formatDuration`.
 
 19. ~~**Review and merge #65, then take #66 (M3-09, settings and the legacy import UI).**~~ **Done —
-    merged as PR #83 (`0adf233`), CI green (9m25s).** #66 is now the active card. What it inherits:
+    merged as PR #83 (`0adf233`), CI green (9m25s), and #66 itself followed as PR #85 (`6420e5a`) — see
+    item 20.** What item 19 inherited, and what became of it:
     - **`/history` is the destination for imported sessions, and it already renders them.** #66's
       import flow can therefore assert "the rows appear in the log" against a screen that exists
       instead of building its own list. `loadCoverage` is the shared answer to "did this session
@@ -682,11 +728,14 @@ Carried forward, still open:
     - **`tests/e2e/history-fixtures.ts` seeds rows through `MIGRATION_DATABASE_URL`.** Import specs
       will need legacy-shaped data (NULL weight, `source = 'legacy_import'`); that helper already
       produces it, and its comment explains why the owner role is the only connection that can.
-    - **#82 is #66's or #67's to settle** if the import screen wants a date range; do not implement
-      filtering client-side over cursor pages.
+    - ~~**#82 is #66's or #67's to settle** if the import screen wants a date range; do not implement
+      filtering client-side over cursor pages.~~ **Neither settled it, and both issues are now closed,
+      so #82 is M4's** (item 22). The rule still holds and nothing in M4 may quietly break it: no
+      client-side filtering over cursor pages — `SessionsListQuerySchema` is `{ cursor? }.strict()`,
+      so a date range is a contract decision taken before any UI.
 
 
-20. **M3-09 (`#66`, in review as PR #85) — the seam decisions that are not in the diff.**
+20. **M3-09 (`#66`, merged as PR #85, `6420e5a`) — the seam decisions that are not in the diff.**
     - **`src/app/state/unit-display.ts` is a façade, not a second converter.** The card's invariant
       ("`UnitDisplay` is the only place a kg↔lb conversion exists") was already satisfied by
       `lib/domain/units.ts`, which the server imports too; a second `KG_PER_LB` would have been the
@@ -710,9 +759,84 @@ Carried forward, still open:
     - **Import never deletes a legacy key** (M4's call), reports `userStats` as *left alone* rather
       than skipping it silently, and refuses to render an unparseable report instead of paraphrasing
       it. Counts are read out of the dialog and `/history` is asserted against that number.
-    - **Known limit carried into #67:** the "switch units with 3 queued mutations" scenario has no
-      test, because Vitest here is `environment: "node"` with no jsdom. The protection is structural
-      (no sync path can import a display module), not observed. Do not let #67's gate claim it.
+    - **Known limit carried into #67 — and #67 honoured the instruction:** the "switch units with
+      3 queued mutations" scenario has no test, because Vitest here is `environment: "node"` with no
+      jsdom. The protection is structural (no sync path can import a display module), not observed.
+      Verified rather than assumed: that scenario appears nowhere in
+      `docs/tests/2026-09-11-m3-verification-audit.md` or the exit report, so no gate claims it.
+      It is an M4 item if jsdom (or a browser-run spec) ever makes it observable.
+
+21. **#67 (M3-10) — CLOSED and MERGED as PR #86 (`8704c19`, 2026-09-11T19:23Z); the evidence is
+    external to this file, as it should be.** `main`'s own `test` check is `success` on that merge commit.
+    All five items done, each with a captured artifact: **(1)** legacy parity — four module dirs
+    untouched on `main...HEAD`, five keys never written (audit table; the scan caught its own
+    author's bug first, entry 3). **(2)** Lighthouse on `/` and `/session/[id]` — both added, both
+    100, all four routes re-scored on both final runs. **(3)** break-each-gate — nine deliberate
+    breakages captured and restored (audit 9–14: G-M3-2 delay → red; mouse guard throw → red;
+    Lighthouse empty-name → 95 + `link-name`; never-drain → hang guard red at :225; colour-alone →
+    the gate *missed* it and was strengthened, then red; alias re-point → red) plus two
+    zero-width-space non-observations recorded honestly because Lighthouse scores them 100
+    (entry 11). **(4)** audit record with the one reproduction sequence (entry 16). **(5)** M4
+    handoff: `docs/releases/2026-09-12-m3-exit-report-and-m4-handoff.md` names every item the
+    bullet above lists, with numbers and file references. **The owner's call on #73 landed:** it
+    stayed under milestone 3 and merged as PR #87 (`2d5edfb`) on 2026-09-12, so M3 closed
+    open=0 / closed=19 rather than "complete" with an open child still under it — the outcome §3.4
+    asked for, reached by finishing it instead of moving it.
+    - **What the gate audit left in the tree permanently:** the G-M3-6 word-carrier assertions
+      (`4ca87e5`), the contrast gate's `var()` resolution + alias rows + two permanent negative
+      controls (`96b5202`), the connectivity-clears-backoff fix + its two-direction unit control
+      (`9ca17cc`). Every *injection* was removed; every *hole an injection found* was fixed
+      instead of kept as a passing test — Scenario 2 honoured, and the alias hole is closed here
+      rather than handed off, with entry 14 as its proof.
+    - **Locked by measurement, do not re-litigate:** G-M3-4's budget stayed 5 s through the whole
+      investigation and the ceiling — not the budget — is what caught the defect; a red *timing*
+      gate on this machine gets a solo re-run before anyone believes it (audit 17), and no budget
+      moves without a re-run proving the reality, not the wish, changed.
+    - **Known commands:** unchanged (reproduction sequence now in audit entry 16 verbatim).
+22. **M4 — START HERE.** M3 is closed (milestone #3: open=0 / closed=19) and **nothing is in
+    flight**: cut M4's first branch from `main`, not from an M3 branch — there is no M3 branch left to
+    continue. Read, in order: §1 above; the handoff **`docs/releases/2026-09-12-m3-exit-report-and-m4-handoff.md`**
+    (its §3 is M4's raw material); and audit entry 16 for the one command sequence that regenerates
+    every M3 number. Open M4's cards the way M3 did — `pk:plan` spec, then `pk:tasks` decomposition
+    under a new milestone — and carry these forward as **starting facts, not discoveries**:
+    - **Parked issues with their evidence** (§3.5 of the handoff — raise them, do not re-derive):
+      **#76** no API path produces an `archived` session, so the archived branch is untestable;
+      **#77** sync rejections carry a code with no message, so the client cannot explain a refusal;
+      **#78** two same-millisecond writes to one entity are ordered by a random UUID;
+      **#80** the API/E2E fixture layer shares one hardcoded id set, which is the underlying cause
+      of the contention flakes below; **#82** `/history` wants `?from=`/`?to=`, and
+      `SessionsListQuerySchema` is `{ cursor? }.strict()`, so it is a contract decision first;
+      **#84** the weight ceiling rejects thousands-grouped input (`2,000 lb`). Plus **#16** —
+      production SMTP, open since M1, still the deploy blocker.
+    - **`POST /api/sync` p95 misses the documented 200 ms budget, and that is the honest current
+      state, not a regression**: production-build p95 **234–282 ms** on M3-10's runs (exit report
+      §3.1), 222.0 ms on PR #72's CI runner, 272.8 ms when M3-03 first measured. The **enforced**
+      ceiling is M2-06's 800 ms and it holds; the 200 ms figure stayed *documented, never enforced*.
+      The 50 rps condition the master RFC specifies is still untested, and the **rate limiters are
+      process-local** (N instances = N × every budget).
+    - **The two disclosed #73 limits** (both in PR #87's body and audit entry 19): `SyncResponseData.state`
+      has **no runtime consumer** — the client casts it and refetches, so the new strictness is
+      enforced only server-side; and `tests/e2e/session-runner.spec.ts:174` mocks that field in a
+      shape (`state.session.*`) the contract has never had. It is inert **only because nothing parses
+      it**: the first real consumer makes that mock red, which is the correct outcome but means today
+      it evidences nothing. Fix the mock when you add the consumer, in the same change.
+    - **Playwright contention flakes, with the protocol that goes with them**: `timers.spec.ts:277`
+      (CDP-freeze spec, subtitle still "Warming up" at 5 s) and `sla.spec.ts:282` (G-M3-3 exhausting
+      its 30 s *test* budget while printing a passing p95) each failed once in full-suite runs on
+      #73's branch, passed solo, and the third run was 61/0. Neither was reproduced deliberately, so
+      "contention" is the best available explanation, not a proven one (audit 19; same family as
+      `a11y.spec.ts:102` and `sla.spec.ts:69` in audit 17). **Protocol: re-run a red timing gate solo
+      before believing it, and move no budget without a re-run proving the reality changed.** M4's
+      load test is what decides whether any of these tails is real.
+    - **The Lighthouse gate is blind to a zero-width-space accessible name** — it scores such a link
+      **100**, and axe did not catch it either (audit entry 11). Closing this needs a structural DOM
+      check, not a louder Lighthouse (handoff §3.6). The same section notes the contrast matrix
+      measures only *enumerated* tokens: a new alias must be added to `GATE_MATRIX` by hand, or the
+      rows generated from the `@theme inline` mapping.
+    - **And the four things whose measured reality differs from their prose today**: the 200 ms miss
+      above, the process-local limiter, G-M3-3's margin being the 4 s poll interval rather than engine
+      speed, and the missing service worker — G-M3-1's "reopen with no network" is proven with the
+      *API* dead, not the document unfetchable.
 
 ---
 
@@ -769,34 +893,4 @@ Carried forward, still open:
 
 | 2026-09-12 | Agent (DSH) | #73 closed: `SessionStateSchema` describes the session graph | The M2-01 placeholder is gone. Shape transcribed from `lib/domain/sessions/types.ts` as `mapSessionState` emits it (design spec `docs/specs/2026-09-12-73-session-state-contract.md`, not memory), `.strict()` on every object, `ExerciseKindSchema` + `RoutineExercisePhaseSchema` added to `contracts/common.ts` because a hand-copied enum is this issue's documented birth defect, and the `Date`-or-ISO coercion moved out of `lib/views/session-view.ts` into the contract — required, since the server components validate mapper output holding `Date`s and the runner validates the same columns as strings. `session-view.ts` is now the re-export §5 asked for (166 lines → 47), and `SessionView` stopped being a subset, which is why `tests/unit/state/fixtures.ts` had to grow: that fixture claimed to be "the server's view" of a session with no `clientId`, no `source`, no `serverSeq`, and no `updatedAt`. Producers are held to it: `validateOutgoing` in `contracts/envelope.ts` parses the outgoing body in `POST /api/sessions`, the full-session branch of `GET /api/sessions/[id]`, and `POST /api/sync` — throwing `ContractViolationError`, which is deliberately not a `ZodError` so a producer defect cannot be billed to the caller as a 400. Two drift classes injected and watched to fail (audit 19: 11 unit + 6 route tests red on a deleted `serverSeq`, 5 red on `kind:'cardio'`), and the routes-own-no-schemas gate fired on my own comment first — reworded, not loosened. Battery: lint 0/0, typecheck 0, unit 39/397, api+security 10/60, mutation 0, Playwright 61/0 (two prior runs carried one timing-gate flake each, both green solo, budgets untouched). Not verified: `SyncResponseData.state` has no runtime consumer, so its new strictness is enforced only server-side. `tsconfig.json` churned (D6), unstaged as ever.
 
-21. **#67 (M3-10) — CLOSED by this branch; the evidence is external to this file, as it should be.**
-    All five items done, each with a captured artifact: **(1)** legacy parity — four module dirs
-    untouched on `main...HEAD`, five keys never written (audit table; the scan caught its own
-    author's bug first, entry 3). **(2)** Lighthouse on `/` and `/session/[id]` — both added, both
-    100, all four routes re-scored on both final runs. **(3)** break-each-gate — nine deliberate
-    breakages captured and restored (audit 9–14: G-M3-2 delay → red; mouse guard throw → red;
-    Lighthouse empty-name → 95 + `link-name`; never-drain → hang guard red at :225; colour-alone →
-    the gate *missed* it and was strengthened, then red; alias re-point → red) plus two
-    zero-width-space non-observations recorded honestly because Lighthouse scores them 100
-    (entry 11). **(4)** audit record with the one reproduction sequence (entry 16). **(5)** M4
-    handoff: `docs/releases/2026-09-12-m3-exit-report-and-m4-handoff.md` names every item the
-    bullet above lists, with numbers and file references — #73's placement under a closing
-    milestone is in §3.4/§3.5 of it and needs the owner's call, not mine.
-    - **What the gate audit left in the tree permanently:** the G-M3-6 word-carrier assertions
-      (`4ca87e5`), the contrast gate's `var()` resolution + alias rows + two permanent negative
-      controls (`96b5202`), the connectivity-clears-backoff fix + its two-direction unit control
-      (`9ca17cc`). Every *injection* was removed; every *hole an injection found* was fixed
-      instead of kept as a passing test — Scenario 2 honoured, and the alias hole is closed here
-      rather than handed off, with entry 14 as its proof.
-    - **Locked by measurement, do not re-litigate:** G-M3-4's budget stayed 5 s through the whole
-      investigation and the ceiling — not the budget — is what caught the defect; a red *timing*
-      gate on this machine gets a solo re-run before anyone believes it (audit 17), and no budget
-      moves without a re-run proving the reality, not the wish, changed.
-    - **Known commands:** unchanged (reproduction sequence now in audit entry 16 verbatim).
-22. **M4 — START HERE, not here.** Read §1, the handoff doc named in item 21, and audit entry 16's
-    sequence. The branch you are on belongs to #67; M4 opens its own cards the way M3 did
-    (`pk:tasks` against a `pk:plan` spec — M4 is hardening + telemetry + decommission per the master
-    RFC, and §3 of the handoff is its raw material, including the four things whose measured
-    reality differs from their prose today: the 200 ms documented p95 miss, the process-local
-    limiter, G-M3-3's poll-interval margin, and the service-worker hole under G-M3-1's "reopen with
-    no network").
+| 2026-09-12 | Agent (DSH, `pk:checkpoint`) | **M3 closed — post-merge state sync** | PRs **#86** (issue #67, M3-10) and **#87** (issue #73) are merged; milestone #3 reads **open=0 / closed=19**. This is the convention those two merges trigger: the tracker described branches that no longer exist. **§1** milestone/working-branch/last-updated/gate-status now describe `main` with nothing in flight; **§2**'s M3 row is `[x]` and the #59/#60/#67 task lines read MERGED with their PRs and SHAs (#71 `3b0ffbf`, #72 `9f98f83`, #86 `8704c19`, #87 `2d5edfb`), with a row added for #73 so the milestone's 19 closed items are all visible; **§3**'s active-spec line, the retired-`pending-handlers.ts` claim and the M3-10 "in review" heading are corrected, and the Verification-Commands baseline is re-measured rather than inherited; **§5**'s Lighthouse bullet (the authenticated audit #67 built), #73 bullet, `--accent-legs` and package-manager "open questions", the D3 debt row, the "D2/D3/D4/D6/D7 open" list, the "unmerged findings from #63" heading, and the stale 23-file/196-test baseline are all corrected; **§7** items 5–21 lost their `awaiting merge` / `in review` tenses, item 22 is now the M4 start line, and **items 21–22 were moved back into §7** — a previous session appended them after the §8 table, so the file's own section numbering was lying. **§8** carries this row. No source touched, no gate weakened, `docs/tests/…-m3-verification-audit.md` left exactly as written. **Re-measured on merged `main` (`2d5edfb`), stack up**: lint 0/0 · typecheck 0 · `npm test` **39 files / 398 tests** · `test:api` **10 / 60 / 0 skipped** · Playwright **61 passed / 0 failed (3.1 m)** · `test:mutation` **exit 0**. Two numbers the record disagreed on, resolved by measurement rather than by preferring a document: audit entry 19 and §8's #73 row say **397** while PR #87's evidence table says **398** — the merged tree measures **398**, so the older figures stand as the branch-time reading and are not edited. And the `POST /api/sync` p95 carried forward here is the exit report's **234–282 ms**, not a narrower band: the CI figure is 222.0 ms and the first local one was 272.8 ms, so the miss is quoted as the full measured range with each run attributed. Housekeeping the owner still owes: **GitHub milestone #3 is still `state: open`** despite zero open issues (milestone #2 was closed the same way after M2), **39 merged local branches** (`git branch --merged main`, excluding `main` and this docs branch), and D6's `tsconfig.json` — which churned again during this sync's API and Playwright runs and is, by rule, left unstaged. |

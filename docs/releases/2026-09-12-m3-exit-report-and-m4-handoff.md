@@ -12,6 +12,12 @@ injection nine times and, once, by catching a real defect unaided (§3, audit en
 `docs/STATE.md` describes what exists, and the legacy modules are untouched with parity *measured*
 rather than assumed.
 
+> **Status, added 2026-09-12 in the post-merge state sync:** this report merged as **PR #86
+> (`8704c19`, 2026-09-11T19:23Z)** and **#73 merged on top of it as PR #87 (`2d5edfb`,
+> 2026-09-12T02:00Z)**, so milestone #3 now reads **open=0 / closed=19 — M3 is closed, not closing**.
+> §3.4's #73 bullet is superseded (see the erratum there); everything else in §3 stands as M4's
+> starting facts, and `docs/STATE.md` §7 item 22 is the start line.
+
 ## 1. The seven goals
 
 | Goal | Verdict | Where measured | Numbers (recorded run) |
@@ -106,6 +112,16 @@ satisfies "surfaced" or a real metric channel is needed.
   milestone M3* while the milestone closes. The view layer (`lib/views/session-view.ts`) is the
   seam that carries the real typing today. Move it to M4 or finish it; do not let milestone 3
   "complete" by ignoring an open child.
+  > **Erratum, added 2026-09-12 after this report merged — the bullet above is no longer true.**
+  > The owner took the call the bullet asked for: #73 **stayed under milestone 3 and was
+  > finished**, merging as **PR #87 (`2d5edfb`, 2026-09-12T02:00Z)**. `SessionStateSchema` now
+  > describes the session graph (`.strict()`, enums reused from `contracts/common.ts`),
+  > `lib/views/session-view.ts` is a re-export of it rather than a second opinion, and all three
+  > producers validate what they send. **M4 does not own the schema.** What it *does* own are the
+  > two limits #73 disclosed and did not close — `SyncResponseData.state` has no runtime consumer,
+  > and `tests/e2e/session-runner.spec.ts:174` mocks that field in a shape the contract never had
+  > — both carried in `docs/STATE.md` §7 item 22. The text above is left as written because it is
+  > the state of the milestone at the moment this report was authored.
 
 ### 3.5 Open issues parked with their evidence (raise them, don't re-derive them)
 

@@ -313,3 +313,66 @@ Two consequences for how the rest of this file should be read:
   req/min budget, yet 429=0 … Read the AUTH line.` Without it, "0 rejections by the limiter" reads as health.
 - **AUTH recovery discriminator**: fired in both, and is the line that answered the question this section is
   about. The one user who never recovered in the 30-user run is left open on the issue, not smoothed over.
+
+## §4 item 16 control: the harness watched failing on a deliberate slowdown
+
+Reproduction: `/tmp/ppl-battery/control-run.sh` (ladder → baseline → inject → rebuild → measure → revert →
+rebuild → measure; the injection is applied to the working tree by a script that **reverts it in the same
+run**, and the run's own last line prints `git status` to prove only `tsconfig.json` (D6) remained).
+
+### First, what this box can actually deliver
+
+| Config | offered vs target | max in flight | backpressure | p50 | p95 | n |
+| :-- | :-- | :-- | :-- | :-- | :-- | :-- |
+| 1 user, 1 rps | **1.0 vs 1.0 ✓** | 1 | 0 | 235.4 | 545.3 | 15 |
+| 2 users, 2 rps | **2.0 vs 2.0 ✓** | 1 | 0 | 205.8 | 267.3 | 31 |
+| 5 users, 5 rps | **4.9 vs 5.0 ✓** | 3 | 0 | 211.5 | 327.4 | 76 |
+
+Up to ~5 rps the client delivers the target rate and the route costs **≈210–235 ms**. Beyond that the same
+route collapses (earlier: 13 rps offered → p50 5.7 s; 34 rps → p50 12.6 s), which is where the
+`INCONCLUSIVE` verdicts came from. So the control had to be run at a delivered rate, and it was.
+
+### The three numbers, same config (`--users=1 --rps=1 --duration=20`)
+
+| State | p50 | p95 | max | n | verdict |
+| :-- | :-- | :-- | :-- | :-- | :-- |
+| unmodified build | **221.7 ms** | 261.3 | 283.9 | 21 | MISS (already over 200 ms at 1 rps) |
+| **+500 ms sleep injected** in the measured path | **711.6 ms** | 739.0 | 905.8 | 20 | MISS |
+| reverted + rebuilt | **205.0 ms** | 312.6 | 459.4 | 20 | MISS |
+
+**The control rests on p50, not p95, and that distinction is the honest part.** The injected sleep moved the
+median by **+489.9 ms** and the 95th percentile by **+477.7 ms** — within noise of the injected 500 ms — and
+the revert moved both back inside the unmodified spread. But at n≈20 the "p95" is the **second-largest
+observation** (`ceil(20 × 0.95) − 1 = 18`), which is #121's degenerate-statistic complaint in my own tool:
+across the three runs p95 read 261 / 312 / 545 while p50 read 221 / 205 / 235. A statistic that swings 2× on
+identical code is not a gate. So the control's claim is *"the median moved by the amount injected, and moved
+back"*, not *"the verdict word changed"* — the baseline was already a MISS, so no PASS→MISS transition exists
+to observe here, and pretending otherwise would be exactly the flattering-direction error this project keeps
+correcting.
+
+### What the control proves, and what it does not
+
+Proves: the harness's numbers track the thing they claim to measure, end to end through a real production
+build, a real session, a real write — an injected 500 ms in the handler shows up as ~500 ms and disappears
+when reverted. That is what makes every other number in this file worth reading.
+
+Does not prove: that the 200 ms budget is achievable, or that the route is healthy. **At one request per
+second with nothing else on the box, `/api/sync` costs ~210–235 ms and already misses the documented 200 ms**,
+which means #92's gap is not purely a concurrency story — concurrency multiplies it (~5.7 s at 13 rps) but the
+floor is over budget by itself. The `p50 ~220 ms` floor is also consistent with the api-gate's historical
+199–405 ms readings, so this is not a surprise the harness invented.
+
+### ADR-0003's "scales with RTT" caution — verdict
+
+**Confirmed in shape, with one part undetermined by this instrument.** Confirmed: cost is not per-request
+constant — ~210 ms at 1–5 rps with in-flight ≤3 becomes ~5 700 ms at 13 rps and ~12 600 ms at 34 rps, i.e.
+**27× and 60× for 2.6× and 6.8× the load**, while `pg_stat_activity` never showed more than 14–19 active
+backends and repeatedly showed **10 `idle in transaction`** — pg's default pool maximum, with one
+process-wide pool (`lib/db/client.ts:26`, `:37-47`) and the only transaction site holding a connection across
+`await`s (`lib/db/with-user.ts:48`). Queueing in front of ten connections is the mechanism the caution
+describes, and it is now observed rather than assumed.
+
+Undetermined, and named so it stays a question: **this instrument cannot split pool exhaustion from the
+per-request `getUser()` hop to GoTrue** (`#125`), because both are serial resources acquired before the write
+and neither reports queue depth to an external client. Separating them needs the cause that #125 says is
+currently discarded, or in-process pool metrics — the surface this card explicitly declined to invent.

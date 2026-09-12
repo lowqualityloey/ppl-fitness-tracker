@@ -38,6 +38,12 @@ budget, or SLA is weakened by it.
 | `80passB` | 0/0/0/0/0/0/0/0 | green, e2e 61 passed | 6.2 m | kiro-server cluster already resident |
 | `80passC` | 0/0/0/0/0/0/0/**1** | **4 failed / 57 passed** | **8.5 m** | 5-min load **6.47–6.88 on 4 cores** — **excluded by the rule below**, written minutes after it excused this run |
 | `80passD` | 0/0/0/0/0/0/0/0 | **green, 61 passed** | 5.8 m | `nproc=4`, load **1.88 / 3.99 / 4.85** before, **2.38 / 2.69 / 3.80** after → **counts** |
+| `80passE` | 0/0/0/0/0/0/0/0 | **green, 61 passed** | 6.0 m | load **1.67 / 2.15 / 3.43** before, **6.12 / 5.44 / 4.54** after — arrived mid-run, went green anyway (see the rule's second refinement) |
+
+**#80's merge gate is D + E: two consecutive full-battery greens on code tree `8b5d974`.** Verified rather
+than asserted: `git diff --name-only 8b5d974..HEAD` returns only `docs/STATE.md` and this file, so every
+commit after the code tip is markdown and cannot move a battery result. Passes A and B were greens on the
+same code tree with no denominator recorded; they are history, not the counted pair.
 
 Pass C's measurements, which show the shape rather than a breach: set-tap **median 21.5 / p95 53.5 /
 max 69.9 ms** against a 50 ms gate (passes A and B printed 27.4 and 24.9 ms p95 on the same build), and

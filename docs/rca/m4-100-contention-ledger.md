@@ -275,3 +275,13 @@ api:preflight / unit / api / mutation / e2e.
 | Pass | Per-step exits | e2e result | unit / api | set-tap p95 | `/api/sync` p50 | `nproc` · load before → after | Counts? |
 | :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
 | `100q1` | 0 ×8 | **61 passed (5.9 m)** | 44/427 · 11/64 | **33.1 ms** vs 50 | 251.1 ms vs 200 (MISSES, #92) | 4 cores · **3.79 / 4.37 / 3.87 → 3.15 / 4.23 / 4.04** | **1/5** |
+| `100q2` | 0 ×8 | **61 passed (5.7 m)** | 44/427 · 11/64 | **30.6 ms** vs 50 (max tap 56.3 — the gate is p95) | 226.2 ms vs 200 (MISSES, #92) | 4 cores · 2.17 / 3.82 / 3.91 → 2.55 / 4.11 / 4.07 | **2/5** |
+
+`100q2` ran at `HEAD=cf2372a`, one markdown commit above the code tip: `git diff --name-only 89f0281..HEAD`
+returns this file alone, so the counted pair shares code tree `89f0281` — the same discipline #80's gate used,
+and for the same reason: a ledger row must not invalidate the pass it is recording.
+
+**Zero solo re-runs across both passes.** Nothing was re-run in isolation, because nothing went red; the
+protocol §7 still recommends ("re-run a red timing gate solo before believing it") stayed unused, which is
+the first time in this project's history that the recommendation has been *satisfiable* rather than merely
+followed.

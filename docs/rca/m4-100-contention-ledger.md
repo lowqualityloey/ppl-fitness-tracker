@@ -77,14 +77,20 @@ none of them is failing on a code path that #80 touched.
 | `session-runner.spec.ts:237` | 18.3 s | failed at 9.3 s | failed *earlier than its baseline*, so an assertion gave up well before the flow ran out — a race, not a clock |
 | `sla.spec.ts:144` G-M3-4 | 16.1 s | red | drain measurement under load, in the family |
 
-**`dashboard.spec.ts:125` is the same root cause as the phase-label reds, with a number on it.** Its solo
-baseline is **4.0 s**, it asserts that a *second, already-open tab* learns about a session created in
-another tab (`stale.getByText('In progress').toBeVisible()`, `toHaveCount(0)`), and the app's visible poll
-is `POLL_INTERVAL_VISIBLE_MS = 4_000`. So the spec's entire happy path is **one poll cycle long**, and
-Playwright's default assertion timeout is **5 s** — 20 % headroom, on a spec whose subject is a poll.
-Under a 1.7x-oversubscribed box the poll lands late, the window closes, and a correct product reads as a
-failure. That is not contention being mistaken for a bug; it is a window that was never derived from the
-propagation design it depends on.
+**Correction, one row later, against something I wrote from a title: `dashboard.spec.ts:125` is *not*
+the poll class.** Reading the spec's body (`:136-158`) shows the mechanism is a **rejection-triggered
+refetch** — the stale tab clicks Start, the server refuses it under `one_active_session_per_day`, and the
+client's own comment says "after the rejected attempt **and the refetch it triggers**, the stale tab shows
+the one true session". No `POLL_INTERVAL_VISIBLE_MS` is on that path, so the paragraph this row replaced
+("its entire happy path is one poll cycle long") was an inference from the test's *name* and is withdrawn.
+Its solo baseline of 4.0 s stands; its cause does not.
+
+**So this one stays open, and the reason it can stay open honestly is that it is now observable.** Pass C's
+error text is unrecoverable — `battery.sh` greps `passed|failed|✘`, which is how #105 lost its own
+assertion diffs and how I nearly reconstructed this from memory. Traces and per-spec durations now exist,
+so a future red arrives as `trace.zip` plus a JSON entry instead of an argument. What is *not* done here:
+no speculative window widening on a mechanism nobody has named, because a fence for the wrong cause
+converts a red that means something into a green that means nothing.
 
 ## Instrumentation landed — #100 branch `test/m4-100-contention-fences` (stacked on `#80`'s `8b5d974`)
 

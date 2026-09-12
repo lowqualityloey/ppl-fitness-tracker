@@ -339,3 +339,15 @@ pass** (4.68 before, 4.96 after, on `nproc=4`), and the set-tap gate measured **
 number of any pass in this ledger, including the quiet ones. Two things follow, and only the second one is
 comfortable: the label/clock fences hold under oversubscription, and a "quiet box" was never the condition
 that made earlier passes pass, because they had no denominator to be quiet about.
+| `100r2` | 0 ×8 | **61 passed (7.4 m)** | 45/430 · 11/64 | **34.8 ms** vs 50 (max tap 52.6) | 215.1 vs 200 (MISSES, #92) | LOAD BEFORE: 3.91 4.07 4.49 →  5.82 8.49 6.74 | **2/5** |
+
+**`100r2` is the pass that tests what #100's fences were built for.** An unrelated `opencode` session held
+~50 % of a core for 45 minutes and a `VBCSCompiler` joined it mid-run; the 1-minute load peaked at **8.49**
+on `nproc=4` — **2.1× oversubscribed** — and the suite went green anyway, in 7.4 m against 5.6 m for the
+quieter `100r1`. Set-tap measured p95 34.8 ms with a single tap at 52.6 ms: the p95 gate held, and the
+individual max is reported here rather than being the thing that gates, which is how the spec is written.
+
+That is not "the box was quiet so it passed" and it is not "we loosened something": every window that had
+previously been shorter than the propagation it waited on was widened to its derived bound *before* this
+pass, and no SLA moved. The honest reading is narrower than "flakes fixed" — it is **one pass at 2× load
+with zero reds**, which is more than any earlier branch can show *measured*.

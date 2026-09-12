@@ -96,6 +96,26 @@ const MUTATIONS: Mutation[] = [
     restore: ['DROP TABLE IF EXISTS public.unprotected_future_table'],
     expectFailing: 'tests/integration/schema-drift.test.ts',
   },
+  {
+    // M4-00 (#89): the auth->profiles cascade (migration 0007) is the physical form of
+    // ADR-0002's identity invariant; a profile that outlives its auth.users row is
+    // stranded data that no policy will ever show. The expectFailing suite deletes real
+    // GoTrue users over BOTH the admin API and owner SQL and asserts the whole ownership
+    // chain vanishes, so dropping the FK must turn it red. This entry is the scripted,
+    // permanent form of docs/tests/2026-09-12-m4-089-break-each-gate-audit.md entry 6.
+    // The restore re-validates against the live table: the suite's afterAll (and the
+    // 23503 refusal test's self-cleanup) leave no orphan profile behind, so a restore
+    // failure would itself be a finding, not plumbing.
+    name: 'auth->profiles cascade FK dropped (0007 / #89)',
+    break: ['ALTER TABLE public.profiles DROP CONSTRAINT profiles_id_auth_users_fkey'],
+    restore: [
+      `ALTER TABLE public.profiles
+         ADD CONSTRAINT profiles_id_auth_users_fkey
+         FOREIGN KEY (id) REFERENCES auth.users (id)
+         ON DELETE CASCADE ON UPDATE NO ACTION`,
+    ],
+    expectFailing: 'tests/integration/auth-user-cascade.test.ts',
+  },
 ];
 
 function runVitest(testFile: string): { status: number; output: string } {

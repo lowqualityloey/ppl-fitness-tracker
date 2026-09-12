@@ -31,6 +31,17 @@ test.describe('session runner', () => {
     page,
     request,
   }) => {
+
+    /*
+     * Measured on this file's own worst pass in the counted sequence (`100r2`, load 8.49 on 4 cores):
+     * **7.3 s** against Playwright's 30 s default — 24 % of the clock, which is a red waiting to be
+     * scheduled rather than a product finding. The uncapped run proved it: at CI's worker count a spec in
+     * this file reported `Test timeout of 30000ms exceeded`, with a trace attached. Same class as #100's
+     * other clock rows — `sla.spec.ts:315` permitting 55 s of waits inside 30 s, the two Lighthouse audits
+     * outside their describe's 240 s — and the same remedy: the flow allowance this file's other specs
+     * already use, sized from the measured duration instead of picked. No SLA or assertion threshold moved.
+     */
+    test.setTimeout(WORKOUT_FLOW_TIMEOUT_MS);
     const auth = await signInFreshUser(page, 'e2e-offline-tick');
     try {
       await startPushDay(page);
@@ -151,6 +162,17 @@ test.describe('session runner', () => {
   });
 
   test('surfaces a refused mutation, refetches, and never replays it', async ({ page }) => {
+
+    /*
+     * Measured on this file's own worst pass in the counted sequence (`100r2`, load 8.49 on 4 cores):
+     * **15.0 s** against Playwright's 30 s default — 50 % of the clock, which is a red waiting to be
+     * scheduled rather than a product finding. The uncapped run proved it: at CI's worker count a spec in
+     * this file reported `Test timeout of 30000ms exceeded`, with a trace attached. Same class as #100's
+     * other clock rows — `sla.spec.ts:315` permitting 55 s of waits inside 30 s, the two Lighthouse audits
+     * outside their describe's 240 s — and the same remedy: the flow allowance this file's other specs
+     * already use, sized from the measured duration instead of picked. No SLA or assertion threshold moved.
+     */
+    test.setTimeout(WORKOUT_FLOW_TIMEOUT_MS);
     const auth = await signInFreshUser(page, 'e2e-rejection');
     const sentIds: string[] = [];
     try {
@@ -297,6 +319,17 @@ test.describe('session runner', () => {
   });
 
   test('has no detectable a11y violations with a live session', async ({ page }) => {
+
+    /*
+     * Measured on this file's own worst pass in the counted sequence (`100r2`, load 8.49 on 4 cores):
+     * **17.9 s** against Playwright's 30 s default — 60 % of the clock, which is a red waiting to be
+     * scheduled rather than a product finding. The uncapped run proved it: at CI's worker count a spec in
+     * this file reported `Test timeout of 30000ms exceeded`, with a trace attached. Same class as #100's
+     * other clock rows — `sla.spec.ts:315` permitting 55 s of waits inside 30 s, the two Lighthouse audits
+     * outside their describe's 240 s — and the same remedy: the flow allowance this file's other specs
+     * already use, sized from the measured duration instead of picked. No SLA or assertion threshold moved.
+     */
+    test.setTimeout(WORKOUT_FLOW_TIMEOUT_MS);
     const auth = await signInFreshUser(page, 'e2e-runner-axe');
     try {
       await startPushDay(page);

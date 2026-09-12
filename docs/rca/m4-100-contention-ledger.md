@@ -401,3 +401,42 @@ samples are in `battery.sh`'s output for every pass from here on.
    the counted runs, the message will say what it was.
 5. **`/api/sync` misses its documented 200 ms budget on p95 every counted pass** (335.5 → 302.3 → 210.8 →
    320.3 → 281.0 ms). #92's, with the caveat already recorded about quoting a p50 that dipped under.
+
+## The uncapped pass — CI's real scheduling, on a box CI does not run on
+
+`pw-default-workers.sh` with no `--workers`: Playwright chose **2 workers** (`cores/2` on `nproc=4`), which is
+exactly what `.github/workflows/test.yml` runs. Result **4 failed / 57 passed in 4.9 m**, load ending at
+**7.51 / 7.37** (1.9× oversubscribed). Every red is classified from its own text rather than from the pass
+average — available because the harness stopped filtering output and started attaching traces:
+
+| # | Spec | Its own words | Class |
+| :-- | :-- | :-- | :-- |
+| 1 | `session-runner.spec.ts:112` | `p95 of 55.1 ms over 100 taps` | **measurement gate** — the 50 ms paint goal, missed under 1.9× load |
+| 2 | `session-runner.spec.ts:299` | `Test timeout of 30000ms exceeded` (+ `trace.zip`) | **clock bug** — same class as G-M3-3, now measured |
+| 3 | `sla.spec.ts:94` G-M3-2 | `p95 73.2ms exceeds the 50ms goal` | **measurement gate** — same goal, further over |
+| 4 | `timers.spec.ts:278` | `Expected "Resting"`, received `"· Working out"`, `Timeout: 10000ms` | **derived label window exhausted** |
+
+Row 2 was fixable from data this branch created. `session-runner.spec.ts`'s three unclocked specs measured
+**7.3 s / 15.0 s / 17.9 s** in `100r2` — the last being **60 % of a 30 s default** on a busy-but-serial pass,
+which becomes a timeout as soon as a second worker competes for the same cores. They now carry
+`WORKOUT_FLOW_TIMEOUT_MS`, the allowance their file's other three specs already use, with the measured
+duration in each comment; verified 6/6 green in 1.3 m. That is a clock sized from arithmetic, and neither
+the 50 ms gate nor the 5 s budgets nor the 4 s poll moved to obtain it.
+
+Rows 1 and 3 are the honest residue #100 does **not** remove: on this box, at 2 workers, the 50 ms paint
+goal is missed by two specs simultaneously. Merging a silent `--workers=1` into CI would hide it (refused on
+purpose — CI still runs bare), and raising the goal to 80 ms would be the exact move the card forbids. On
+CI's runner the same gate reads p95 **16.8–19.4 ms**, and PR #119's green job was itself 2 workers, so what
+the data says is: *the gate is sensitive to oversubscription, not broken by parallelism.* #92/#96's load work
+owns that question.
+
+Row 4 says something narrower about my own fence than I would like: `PHASE_LABEL_WINDOW_MS` = two poll
+cycles + a refetch is derived from the interval, but under 1.9× oversubscription **the poll itself is
+starved**, so the window that was too tight at 5 s is too tight at 10 s. It held on all five serial greens.
+Widening it to survive 2× contention would be tuning a bound to a busy box instead of to the design, so it
+stays as derived and this row is the disclosure.
+
+**Consequence for the counted sequence: the tree moved, so the five restarts.** `7baf430` was the code under
+`100r1`–`100r5`; the clocks above are a real change to a shipped behaviour (how long a spec is allowed to
+run), so reusing that pair of… passes would be the same shortcut as carrying greens across a red. New code
+tip, five fresh passes, same rule.

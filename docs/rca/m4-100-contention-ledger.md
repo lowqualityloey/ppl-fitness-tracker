@@ -277,6 +277,46 @@ api:preflight / unit / api / mutation / e2e.
 | `100q1` | 0 ×8 | **61 passed (5.9 m)** | 44/427 · 11/64 | **33.1 ms** vs 50 | 251.1 ms vs 200 (MISSES, #92) | 4 cores · **3.79 / 4.37 / 3.87 → 3.15 / 4.23 / 4.04** | **1/5** |
 | `100q2` | 0 ×8 | **61 passed (5.7 m)** | 44/427 · 11/64 | **30.6 ms** vs 50 (max tap 56.3 — the gate is p95) | 226.2 ms vs 200 (MISSES, #92) | 4 cores · 2.17 / 3.82 / 3.91 → 2.55 / 4.11 / 4.07 | **2/5** |
 
+| `100q3` | 0 ×7, **e2e exit 1** | **1 failed / 60 passed (6.7 m)** | 44/427 · 11/64 | (not reported, see note) | — | 4 cores · 3.19 / 3.71 / 3.86 before → **4.59 / 6.85 / 5.96 after** | **streak reset — see below** |
+
+### `100q3`'s red is a member of the family with a name, and it is not a timing window
+
+```
+✘  tests/e2e/a11y.spec.ts:163:1 › state is carried by glyph and word, not by colour (8.1s)
+   Error: Could not clean up M1-16 test user (500).
+     at ../integration/api/fixtures.ts:156
+```
+
+**Zero `ERR_CONNECTION_REFUSED`**, so this is not `100run1`'s vanished-server signature. And it is not a
+slow assertion either: nothing about the app was asserted wrongly — **`cleanup` threw**, in the teardown
+path of `createTestSession`, because GoTrue's `DELETE /auth/v1/admin/users/{id}` returned **500**.
+
+That retires a loose end that had been carried on two PRs' "not claimed" lists. The same string appeared on
+`session-runner.spec.ts:111` in earlier passes, where it was filed as unexplained. **It is one event, not
+two flakes** — whichever spec happens to own the fixture at the moment GoTrue 500s is the spec that gets
+blamed, which is exactly why this family looked random and why solo re-runs "fixed" it: the 500 is
+episodic, not per-spec. A red that lands on an arbitrary file name is a red about shared infrastructure
+wearing a spec's clothes.
+
+**The load number does not excuse it, and the streak therefore resets.** The ledger's load rule disqualifies
+*windows* a busy box can stretch; an HTTP 500 from the identity service is not a window, and q3's load
+(3.19 before, 4.59 → 6.85 after on 4 cores) is at most a candidate reason *why* GoTrue 500'd — a cause, not
+a dispensation. `100q1` and `100q2` stop counting toward the five. Restating that cost rather than quietly
+restarting the numbering is the point: after the fix the sequence must be **five fresh consecutive greens**,
+not three more.
+
+Also recorded without attribution, because it is the only other server-side line in the pass and I am not
+ready to connect them: `[WebServer] ⨯ Error: The destination stream closed early.` (digest `385829324`,
+`100q3-e2e-full.txt:88`).
+
+**Why the 500 cannot yet be named, and what that costs:** `fixtures.ts:156` reports the status and nothing
+else, and the delete response body is never read; the create path at `:136` parses a body and then throws it
+away, keeping only the status. So the identity service's explanation for its own failure is discarded by our
+test helper — this was raised as an unfiled artifact twice and never ruled on, and it has now become
+load-bearing: #100 cannot exit "as a root cause with a control" while the root cause's own message is being
+thrown out. Surfacing it is the next change, and it is a diagnostic, not a gate: no threshold, no assertion,
+and no expectation about GoTrue changes.
+
 `100q2` ran at `HEAD=cf2372a`, one markdown commit above the code tip: `git diff --name-only 89f0281..HEAD`
 returns this file alone, so the counted pair shares code tree `89f0281` — the same discipline #80's gate used,
 and for the same reason: a ledger row must not invalidate the pass it is recording.

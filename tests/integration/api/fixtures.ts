@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Client } from 'pg';
 import { CookieJar, createClientFromCookieJar } from '../../../lib/supabase/cookie-jar.js';
+import { describeGoTrueFailure } from './gotrue-failure';
 
 /**
  * Every identity one fixture set owns.
@@ -133,7 +134,9 @@ export async function createTestSession(label: string): Promise<TestSession> {
   });
   const createdBody: unknown = await created.json();
   if (!created.ok || !hasId(createdBody)) {
-    throw new Error(`Could not create M1-16 test user (${created.status}).`);
+    throw new Error(
+      describeGoTrueFailure('create', created.status, JSON.stringify(createdBody)),
+    );
   }
 
   const userId = createdBody.id;
@@ -153,7 +156,12 @@ export async function createTestSession(label: string): Promise<TestSession> {
         method: 'DELETE',
         headers: { apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}` },
       });
-      if (!removed.ok) throw new Error(`Could not clean up M1-16 test user (${removed.status}).`);
+      if (!removed.ok) {
+        // Read the body *before* assuming there is one: a 500 from the proxy layer is often plain text,
+        // and `response.json()` on it would replace a useful error with a parse error.
+        const detail = await removed.text().catch(() => '<unreadable response body>');
+        throw new Error(describeGoTrueFailure('cleanup', removed.status, detail));
+      }
     },
   };
 }

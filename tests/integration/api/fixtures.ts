@@ -2,19 +2,55 @@ import { randomUUID } from 'node:crypto';
 import { Client } from 'pg';
 import { CookieJar, createClientFromCookieJar } from '../../../lib/supabase/cookie-jar.js';
 
-export const ids = {
-  mutation: '11111111-1111-4111-8111-111111111111',
-  session: '22222222-2222-4222-8222-222222222222',
-  exercise: '33333333-3333-4333-8333-333333333333',
-  device: '44444444-4444-4444-8444-444444444444',
-  routineDay: '55555555-5555-4555-8555-555555555555',
-  foreignSession: '66666666-6666-4666-8666-666666666666',
-  routineExercise: '77777777-7777-4777-8777-777777777777',
-  foreignDevice: '88888888-8888-4888-8888-888888888888',
-  freshDevice: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
-  set: '99999999-9999-4999-8999-999999999999',
-  task: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-};
+/**
+ * Every identity one fixture set owns.
+ *
+ * These used to be five fixed UUIDs at module scope (`session: 22222222-…`), and that is #80:
+ * `playwright.config.ts` runs `fullyParallel` with no worker cap, so two spec files — or the two
+ * tests inside `sync-latency.spec.ts`, which is what actually broke — share one database **and one
+ * row identity**. Worker A mid-measurement, worker B's `cleanup()` deleting the session A is
+ * writing: `SessionNotFoundError` → `404 NOT_FOUND`, green in isolation, red in a full run, and the
+ * pre-#105 form of this file made it worse than a read collision because `seedSessionFixtures`
+ * **started** with `DELETE … WHERE id IN (the fixed ids)`. Setup was destroying a sibling's data by
+ * design, not by accident.
+ *
+ * So ids are minted per call and returned on the fixture (`const { ids } = await seedSession…`).
+ * The invariant this exists to hold is stated as a test in
+ * `tests/integration/api/fixture-isolation.test.ts` — see also the sweep below and the notes there
+ * on what per-run identity gives up.
+ */
+export interface FixtureIds {
+  readonly mutation: string;
+  readonly session: string;
+  readonly exercise: string;
+  readonly device: string;
+  readonly routineDay: string;
+  readonly foreignSession: string;
+  readonly routineExercise: string;
+  readonly foreignDevice: string;
+  readonly freshDevice: string;
+  readonly set: string;
+  readonly task: string;
+}
+
+/** Marks the two global (owner-less) fixture rows so a crashed run's leftovers are still findable. */
+const FIXTURE_SLUG_PREFIX = 'm4-fixture-run';
+
+function mintFixtureIds(): FixtureIds {
+  return {
+    mutation: randomUUID(),
+    session: randomUUID(),
+    exercise: randomUUID(),
+    device: randomUUID(),
+    routineDay: randomUUID(),
+    foreignSession: randomUUID(),
+    routineExercise: randomUUID(),
+    foreignDevice: randomUUID(),
+    freshDevice: randomUUID(),
+    set: randomUUID(),
+    task: randomUUID(),
+  };
+}
 
 export const clientTs = '2026-09-08T12:00:00.000Z';
 
@@ -127,6 +163,11 @@ export function authHeaders(session: TestSession): HeadersInit {
 }
 
 export interface SessionFixture {
+  /**
+   * The identities these rows were created under. Minted per call, so a sibling worker cannot
+   * delete them, and no two runs agree on them.
+   */
+  ids: FixtureIds;
   cleanup: () => Promise<void>;
 }
 
@@ -142,6 +183,17 @@ export async function seedSessionFixtures(owner: TestSession): Promise<SessionFi
   let foreign: TestSession | undefined;
   let database: Client | undefined;
   let cleanupRows: (() => Promise<void>) | undefined;
+
+  /** Minted once per call: this run's rows are unreachable by any other run's deletes. */
+  const ids = mintFixtureIds();
+  /**
+   * Slugs carry the session id's prefix because `exercises.slug` and `routine_days.slug` are both
+   * `NOT NULL UNIQUE` (`db/schema/index.ts:74,96`). Per-run UUIDs with fixed slugs would just move
+   * the collision from the primary key to the natural key.
+   */
+  const slugSuffix = ids.session.slice(0, 8);
+  const exerciseSlug = `${FIXTURE_SLUG_PREFIX}-${slugSuffix}-exercise`;
+  const routineDaySlug = `${FIXTURE_SLUG_PREFIX}-${slugSuffix}-day`;
 
   try {
     foreign = await createTestSession('sessions-foreign');
@@ -161,7 +213,27 @@ export async function seedSessionFixtures(owner: TestSession): Promise<SessionFi
       await connectedDatabase.query('DELETE FROM exercises WHERE id = $1', [ids.exercise]);
     };
 
-    await cleanupRows();
+    /**
+     * What replaces the old `await cleanupRows()` at seed time.
+     *
+     * The fixed-id version was self-healing: a crashed run left rows behind, and the next run —
+     * minting the same ids — deleted them. Per-run ids give that up, so a crashed run's leftovers
+     * would now persist forever. Sweeping by id cannot fix that (nothing repeats), so this sweeps by
+     * the marker the slugs carry and bounds it by age: 2 hours is longer than the slowest full
+     * battery on this machine by an order of magnitude, so it cannot reach a sibling's live rows —
+     * which is the whole point of the card. `routine_exercises` goes with its day by cascade
+     * (`db/schema/index.ts:118`), and the day's sessions go first because they reference it.
+     */
+    const sweepStaleFixtureRows = async (): Promise<void> => {
+      const stale = `slug LIKE '${FIXTURE_SLUG_PREFIX}-%' AND created_at < now() - interval '2 hours'`;
+      await connectedDatabase.query(
+        `DELETE FROM workout_sessions WHERE routine_day_id IN (SELECT id FROM routine_days WHERE ${stale})`,
+      );
+      await connectedDatabase.query(`DELETE FROM routine_days WHERE ${stale}`);
+      await connectedDatabase.query(`DELETE FROM exercises WHERE ${stale}`);
+    };
+
+    await sweepStaleFixtureRows();
     await connectedDatabase.query(
       `INSERT INTO profiles (id, email)
        VALUES ($1, $2), ($3, $4)
@@ -178,15 +250,15 @@ export async function seedSessionFixtures(owner: TestSession): Promise<SessionFi
          id, slug, name, muscle_groups, equipment, form_tips, beginner_notes,
          video_url, alternatives, kind, duration_seconds, owner_user_id
        )
-       VALUES ($1, 'm2-api-fixture-exercise', 'API Fixture Press', ARRAY['chest', 'triceps'],
+       VALUES ($1, $2, 'API Fixture Press', ARRAY['chest', 'triceps'],
                'barbell', 'Keep the wrists stacked.', 'Use a controlled range of motion.',
                NULL, ARRAY[]::text[], 'strength', NULL, NULL)`,
-      [ids.exercise],
+      [ids.exercise, exerciseSlug],
     );
     await connectedDatabase.query(
       `INSERT INTO routine_days (id, slug, name, description, owner_user_id)
-       VALUES ($1, 'm2-api-fixture-day', 'API Fixture Push Day', 'Deterministic API test routine.', NULL)`,
-      [ids.routineDay],
+       VALUES ($1, $2, 'API Fixture Push Day', 'Deterministic API test routine.', NULL)`,
+      [ids.routineDay, routineDaySlug],
     );
     await connectedDatabase.query(
       `INSERT INTO routine_exercises (
@@ -248,6 +320,7 @@ export async function seedSessionFixtures(owner: TestSession): Promise<SessionFi
   const connectedForeign = foreign;
   const connectedCleanupRows = cleanupRows;
   return {
+    ids,
     cleanup: async () => {
       const failures: unknown[] = [];
       const attempt = async (operation: () => Promise<unknown>): Promise<void> => {

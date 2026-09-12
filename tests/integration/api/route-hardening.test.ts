@@ -7,8 +7,8 @@ import {
   authHeaders,
   clientTs,
   createTestSession,
-  ids,
   seedSessionFixtures,
+  type FixtureIds,
   type SessionFixture,
   type TestSession,
 } from './fixtures.js';
@@ -31,23 +31,32 @@ import { jsonRequest, responseBody, startApiServer, stopApiServer } from './test
 
 const OWNER_URL = process.env.MIGRATION_DATABASE_URL;
 
-const baseMutation = {
-  op: 'set.upsert' as const,
-  mutationId: ids.mutation,
-  clientTs,
-  sessionId: ids.session,
-  exerciseId: ids.exercise,
-  setIndex: 0,
-  isCompleted: true,
-  weightKg: 60.5,
-  reps: 8,
-};
+/**
+ * Built from the seeding call's ids rather than from constants at module scope: #80 made those ids
+ * per-run, so an identity only exists once the rows behind it have been inserted.
+ */
+function syncBatch(ids: FixtureIds) {
+  const baseMutation = {
+    op: 'set.upsert' as const,
+    mutationId: ids.mutation,
+    clientTs,
+    sessionId: ids.session,
+    exerciseId: ids.exercise,
+    setIndex: 0,
+    isCompleted: true,
+    weightKg: 60.5,
+    reps: 8,
+  };
 
-const syncBody = (mutations: unknown[]) => ({ deviceId: ids.device, sinceSeq: 0, mutations });
+  const syncBody = (mutations: unknown[]) => ({ deviceId: ids.device, sinceSeq: 0, mutations });
+
+  return { ids, baseMutation, syncBody };
+}
 
 describe('M2-06: route hardening — POST /api/sync', () => {
   let owner!: TestSession;
   let fixtures!: SessionFixture;
+  let batch!: ReturnType<typeof syncBatch>;
   let client!: Client;
 
   const count = async (sql: string, params: unknown[] = []): Promise<number> => {
@@ -65,6 +74,7 @@ describe('M2-06: route hardening — POST /api/sync', () => {
     await client.connect();
     owner = await createTestSession('hardening');
     fixtures = await seedSessionFixtures(owner);
+    batch = syncBatch(fixtures.ids);
   });
 
   afterAll(async () => {
@@ -76,7 +86,7 @@ describe('M2-06: route hardening — POST /api/sync', () => {
 
   it('refuses a batch over the 200-mutation contract bound and writes nothing', async () => {
     const oversized = Array.from({ length: 201 }, (_, index) => ({
-      ...baseMutation,
+      ...batch.baseMutation,
       mutationId: randomUUID(),
       setIndex: index,
     }));
@@ -87,7 +97,7 @@ describe('M2-06: route hardening — POST /api/sync', () => {
     const mutationsBefore = await count('SELECT count(*)::text AS n FROM sync_mutations WHERE user_id = $1');
     const setsBefore = await count('SELECT count(*)::text AS n FROM session_sets WHERE user_id = $1');
 
-    const response = await post(syncBody(oversized));
+    const response = await post(batch.syncBody(oversized));
     expect(response.status).toBe(400);
     const parsed = AppEnvelopeSchema.safeParse(await responseBody(response));
     expect(parsed.success).toBe(true);
@@ -100,7 +110,7 @@ describe('M2-06: route hardening — POST /api/sync', () => {
   });
 
   it('lands a concurrently duplicated batch exactly once', async () => {
-    const [first, second] = await Promise.all([post(syncBody([baseMutation])), post(syncBody([baseMutation]))]);
+    const [first, second] = await Promise.all([post(batch.syncBody([batch.baseMutation])), post(batch.syncBody([batch.baseMutation]))]);
     const statuses = [first.status, second.status];
     expect(statuses).toContain(200);
 
@@ -116,7 +126,7 @@ describe('M2-06: route hardening — POST /api/sync', () => {
     expect(await count('SELECT count(*)::text AS n FROM session_sets WHERE user_id = $1')).toBe(1);
     expect(
       await count('SELECT count(*)::text AS n FROM sync_mutations WHERE user_id = $1 AND mutation_id = $2',
-        [baseMutation.mutationId]),
+        [batch.baseMutation.mutationId]),
     ).toBe(1);
     expect(
       await count('SELECT count(*)::text AS n FROM workout_sessions WHERE user_id = $1'),
@@ -132,7 +142,7 @@ describe('M2-06: route hardening — POST /api/sync', () => {
       // body is drained. Starting the clock after `await post(...)` would measure
       // only the body read and report a flattering number as latency.
       const startedAt = performance.now();
-      const response = await post(syncBody([{ ...baseMutation, mutationId: randomUUID() }]));
+      const response = await post(batch.syncBody([{ ...batch.baseMutation, mutationId: randomUUID() }]));
       expect(response.status).toBe(200);
       await responseBody(response);
       samples.push(performance.now() - startedAt);

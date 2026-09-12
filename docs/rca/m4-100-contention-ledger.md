@@ -51,3 +51,25 @@ max 69.9 ms** against a 50 ms gate (passes A and B printed 27.4 and 24.9 ms p95 
 | `sla.spec.ts:144` G-M3-4 (60-mutation drain < 5 s) | red once in #105's pass A with solo median 1 752 ms | **same family member**, load-shaped |
 | `session-runner.spec.ts:237` (last session's load as editable default) | not previously recorded | to be established by solo re-run below |
 | `dashboard.spec.ts:125` (day started in another tab resolves to the server's answer) | not previously recorded | to be established by solo re-run below; note `#80` cannot reach it — `dashboard.spec.ts` does not import the fixture module |
+
+### Solo re-runs of pass C's four reds — 2026-09-12T14:34Z, `--workers=1`, load 2.46 (1 min) / 5.67 (5 min) on 4 cores
+
+**4 passed (1.1 m)** — every one green, on a box whose 5-minute load was still above its core count from
+pass C. That is the discriminating result: none of the four is failing because of a stale fixture row, and
+none of them is failing on a code path that #80 touched.
+
+| Spec | Solo | Pass C (red) | Reading |
+| :-- | :-- | :-- | :-- |
+| `dashboard.spec.ts:125` | **4.0 s** | 13.6 s | see below — this one is not a "flake", it is arithmetic |
+| `session-runner.spec.ts:111` | p95 **28.2 ms** | p95 53.5 ms | measurement breach under load, in the family |
+| `session-runner.spec.ts:237` | 18.3 s | failed at 9.3 s | failed *earlier than its baseline*, so an assertion gave up well before the flow ran out — a race, not a clock |
+| `sla.spec.ts:144` G-M3-4 | 16.1 s | red | drain measurement under load, in the family |
+
+**`dashboard.spec.ts:125` is the same root cause as the phase-label reds, with a number on it.** Its solo
+baseline is **4.0 s**, it asserts that a *second, already-open tab* learns about a session created in
+another tab (`stale.getByText('In progress').toBeVisible()`, `toHaveCount(0)`), and the app's visible poll
+is `POLL_INTERVAL_VISIBLE_MS = 4_000`. So the spec's entire happy path is **one poll cycle long**, and
+Playwright's default assertion timeout is **5 s** — 20 % headroom, on a spec whose subject is a poll.
+Under a 1.7x-oversubscribed box the poll lands late, the window closes, and a correct product reads as a
+failure. That is not contention being mistaken for a bug; it is a window that was never derived from the
+propagation design it depends on.

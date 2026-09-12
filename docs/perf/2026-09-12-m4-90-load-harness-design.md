@@ -500,6 +500,19 @@ percentile so the tail guard stayed quiet. That is a sharper statement of #92's 
 at low concurrency the *typical* request meets the budget and the *tail* does not. It also can't be read as a
 pass — n=81 and a 733.8 ms max on a box whose load was already 2.86.
 
+**CORRECTION, measured on merged `main` (`e26ecfa`) rather than argued — the "meets the budget" half of the
+paragraph above does not replicate.** The identical configuration (`--users=3 --rps=4 --duration=20`) on the
+merge commit reads **p50 230.9 ms / p95 359.0 ms / max 441.8 ms over 81 accepted requests, zero rejections**:
+the median is **above** the 200 ms document there, not inside it. So the sharper framing this file offered —
+"the typical request meets the budget and the tail does not" — is withdrawn, and what survives both runs is
+weaker but real: **p95 exceeds the budget in both runs, and the typical request sits *at* the documented
+number (~181–231 ms) rather than comfortably under it**, which is #92's problem stated as a floor *and* a tail
+instead of a tail alone. The two p95s (238.4 vs 359.0 ms) are also **not comparable**: this run's tail guard
+fired (`only 4 observation(s) above it`), which is the harness correctly refusing to call a four-sample
+headroom a percentile. Left in place rather than deleted, because the interesting part of this record is that
+a claim made on a branch tree failed on the merge of the same tree, and the alternative — quietly keeping the
+prettier number — is the error this file has been correcting all week.
+
 Limiter behaviour at the same 12 rps, two durations, for comparison: 60 s → 360 accepted / **241 429**;
 90 s → 657 accepted / **423 429**. Consistent with a 120 req/min sliding window against 4 rps/user, i.e. the
 refusal fraction grows with duration exactly as the budget implies.

@@ -44,14 +44,50 @@ interface Options {
   users: number;
   label: string;
   mutationsPerRequest: number;
+  /** Client-side ceiling on concurrent requests. Hitting it is counted, never used to lower the target. */
+  maxInflight: number;
+  /** How long to wait after the deadline for in-flight responses before declaring them unfinished. */
+  drainGraceMs: number;
 }
 
+const FLAG_NAMES = [
+  'base-url',
+  'rps',
+  'duration',
+  'users',
+  'label',
+  'mutations',
+  'max-inflight',
+  'drain-grace',
+] as const;
+
+/**
+ * Accepts both `--users 30` and `--users=30`, and refuses an unknown flag.
+ *
+ * The `=` form is not a nicety: the first run of this harness was intended as a 3-user / 6 rps / 5 s pilot,
+ * and npm hands flags over as `--users=3`, which the original space-only matcher never saw — so every setting
+ * silently fell back to its default and the "pilot" became a full 30-user 60 s run at 50 rps on a 4-core box.
+ * An unrecognised flag is a hard error for the same reason: a flag that gets ignored is a run whose
+ * parameters are not the parameters that were typed, and nothing downstream can tell.
+ */
 function parseArgs(argv: string[]): Options {
   const get = (name: string, fallback: string): string => {
+    const inline = argv.find((entry) => entry.startsWith(`--${name}=`));
+    if (inline !== undefined) return inline.slice(name.length + 3);
     const index = argv.indexOf(`--${name}`);
-    const value = argv[index + 1];
-    return index >= 0 && value !== undefined ? value : fallback;
+    const value = index >= 0 ? argv[index + 1] : undefined;
+    if (index >= 0 && value !== undefined && !value.startsWith('--')) return value;
+    return fallback;
   };
+  for (const entry of argv) {
+    const name = (entry.split('=')[0] ?? '').trim();
+    if (name.startsWith('--') && !(FLAG_NAMES as readonly string[]).includes(name.slice(2))) {
+      throw new Error(
+        `unknown flag "${name}" — refusing to run with a parameter that would be ignored.\n` +
+          `         Known: ${FLAG_NAMES.map((flag) => `--${flag}`).join(', ')}`,
+      );
+    }
+  }
   const numeric = (name: string, fallback: number): number => {
     const raw = get(name, String(fallback));
     const parsed = Number(raw);
@@ -67,6 +103,8 @@ function parseArgs(argv: string[]): Options {
     users: numeric('users', 30),
     label: get('label', 'm4-90'),
     mutationsPerRequest: numeric('mutations', 1),
+    maxInflight: numeric('max-inflight', 64),
+    drainGraceMs: numeric('drain-grace', 30) * 1000,
   };
 }
 
@@ -140,7 +178,6 @@ async function main(): Promise<number> {
     return 2;
   }
   const perUserRps = options.targetRps / options.users;
-  const intervalMs = 1000 / perUserRps;
 
   console.log(
     `M4-01 load harness — ${options.baseUrl}/api/sync, ${options.targetRps} rps offered for ` +
@@ -195,18 +232,24 @@ async function main(): Promise<number> {
     const startedAt = performance.now();
     const deadline = startedAt + options.durationMs;
 
-    const runUser = async (session: TestSession, ids: FixtureIds): Promise<void> => {
-      // Self-correcting schedule: each slot is computed from the start rather than from "now + interval", so
-      // one slow response cannot drag this user's rate down and quietly lower the offered load.
-      let slot = 0;
-      for (;;) {
-        const at = startedAt + slot * intervalMs;
-        const waitMs = at - performance.now();
-        if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, waitMs));
-        if (performance.now() >= deadline) return;
-        slot += 1;
-        offered += 1;
-        const begin = performance.now();
+    // ---- Open-loop scheduler (finding B) -------------------------------------------------------------
+    // The first version ran one request per user and awaited it, so offered load collapsed to
+    // `users / latency`: at ~3.2 s p50 with 30 users it offered 8.8 rps against a 50 rps target. A generator
+    // that goes quiet exactly when the system slows down cannot answer a latency question, so the pacer now
+    // fires on a global clock without waiting for responses. Concurrency is capped by `--max-inflight`, and
+    // reaching the cap is counted as `backpressure_ticks` and printed: a client-side ceiling that silently
+    // lowers offered load is the same failure wearing a different hat.
+    const tickMs = 1000 / options.targetRps;
+    let inFlight = 0;
+    let maxInFlight = 0;
+    let backpressureTicks = 0;
+
+    const fire = (session: TestSession, ids: FixtureIds): void => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      offered += 1;
+      const begin = performance.now();
+      void (async () => {
         try {
           const response = await fetch(`${options.baseUrl}/api/sync`, {
             method: 'POST',
@@ -223,15 +266,39 @@ async function main(): Promise<number> {
         } catch (error) {
           tally('fetch-error');
           if (process.env.PERF_DEBUG) console.error('  request failed:', (error as Error).message);
+        } finally {
+          inFlight -= 1;
         }
-      }
+      })();
     };
 
-    await Promise.all(created.map((session, index) => {
+    let cursor = 0;
+    for (let slot = 0; ; slot += 1) {
+      const at = startedAt + slot * tickMs;
+      const waitMs = at - performance.now();
+      if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, waitMs));
+      if (performance.now() >= deadline) break;
+      if (inFlight >= options.maxInflight) {
+        backpressureTicks += 1;
+        continue;
+      }
+      const index = cursor % created.length;
+      cursor += 1;
+      const session = created[index];
       const ids = fixtures[index]?.ids;
-      if (!ids) throw new Error(`fixture ${index} was never seeded; refusing to under-report the run`);
-      return runUser(session, ids);
-    }));
+      if (!session || !ids) {
+        throw new Error(`driver ${index} was never set up; refusing to under-report the run`);
+      }
+      fire(session, ids);
+    }
+
+    // Drain with a grace window. Anything still open when it closes is counted as `unfinished` and stays out
+    // of the sample — dropping it silently would report the fast half of a distribution and call it p95.
+    const drainUntil = performance.now() + options.drainGraceMs;
+    while (inFlight > 0 && performance.now() < drainUntil) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    const unfinished = inFlight;
     running = false;
     await observerLoop;
 
@@ -247,6 +314,17 @@ async function main(): Promise<number> {
       `OFFERED      ${offered} requests over ${elapsedS.toFixed(1)} s = ` +
         `${(offered / elapsedS).toFixed(1)} rps (target ${options.targetRps.toFixed(1)})`,
     );
+    console.log(
+      `CLIENT       max_in_flight=${maxInFlight} (cap ${options.maxInflight}) ` +
+        `backpressure_ticks=${backpressureTicks} unfinished_at_grace=${unfinished}`,
+    );
+    if (backpressureTicks > 0 || unfinished > 0) {
+      console.log(
+        `             the client limited this run, not the server: ${backpressureTicks} ticks were skipped at` +
+          ` the in-flight cap and ${unfinished} requests were still open when the grace window closed. Neither` +
+          ` is in the percentiles; raise --max-inflight / --drain-grace before reading the verdict.`,
+      );
+    }
     console.log(
       `ACCEPTED     n=${accepted.length} → ${(accepted.length / elapsedS).toFixed(1)} rps achieved | ` +
         `p50=${fmt(p50)} p95=${fmt(p95)} max=${fmt(maxMs)} ms  (2xx only)`,

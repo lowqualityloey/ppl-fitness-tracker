@@ -171,3 +171,29 @@ and the box was oversubscribed by the harness itself. The 200 ms question stays 
 fix the parser, make the scheduler open-loop, then a short real pilot (small `--users`, small `--rps`), then
 the baseline, then the watched-fail control. Until the control goes red on purpose, no number in this file is
 evidence about the budget.
+
+## Fixes after that run, each watched failing on purpose
+
+**Parser (finding A).** `parseArgs` now accepts `--users=3` as well as `--users 3`, and **refuses an unknown
+flag** instead of ignoring it. Both halves were observed, not assumed:
+
+- `npm run perf:sync -- --user=2` → `M4-01 harness aborted: unknown flag "--user" — refusing to run with a
+  parameter that would be ignored.` followed by the known-flag list. Exit before any side effect.
+- `npm run perf:sync -- --users=2 --rps=2 --duration=1` → header echoes `2 rps offered for 1 s across 2 users`
+  and `SETUP 2 authenticated users`, so the configuration that ran is the configuration that was typed.
+
+That second invocation also doubled as the **`n=0` control**: with no server listening, it reported
+`ACCEPTED n=0 → 0.0 rps … p50=n/a p95=n/a` and `VERDICT MISS … (n=0 accepted: nothing was measured — check the
+server and the stack.)` A harness that prints a MISS over an empty sample is honest; one that prints a PASS
+would have been lying, and this proves which it does.
+
+**Scheduler (finding B).** The per-user pacer is replaced by a **global open-loop clock**: a tick every
+`1000 / rps` ms fires at the next user round-robin *without awaiting the response*, so latency no longer
+throttles the offered load. Two client-side effects that would otherwise hide are counted and printed:
+`backpressure_ticks` (ticks skipped because the `--max-inflight` cap, default 64, was reached — the *client*
+limited the run, not the server) and `unfinished_at_grace` (requests still open when `--drain-grace`, default
+30 s, closed — kept out of the sample rather than dropped silently, because dropping them would report the
+fast half of the distribution as p95). When either is non-zero the report says plainly to raise the caps
+before reading the verdict.
+
+Typecheck 0, lint 0 after both changes.

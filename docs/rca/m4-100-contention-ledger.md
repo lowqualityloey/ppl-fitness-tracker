@@ -500,12 +500,22 @@ is why the same median (15.3 ms, identical in both runs) produced red and green 
 different trees. Second: the spec's title promises **100 taps** and CI records **17**, while this box
 records 100.
 
-**The mechanism is in the sampler, not the app.** `sla.spec.ts:126-152` pairs each click's `t0` with the
-`MutationObserver` record that follows, and deletes `t0` on the first match — so when the same element is
-tapped repeatedly, later taps usually have no pending `t0` when a batched mutation arrives and the sample is
-discarded. How many survive depends on paint coalescing, which differs by machine class: 100 here, 17 there.
-Locally the degeneracy is hidden because `p95(100)` is a real 95th percentile and the max (up to 75.6 ms)
-never gates.
+**What is verified, and what is only a candidate mechanism — stated separately because the first version of
+this paragraph did not.** Verified from the code: `sla.spec.ts:115-126` sets `t0` per element on
+`pointerdown`; the observer at `:128-136` records a sample **only when an `aria-pressed` mutation arrives
+while a `t0` is pending**, then deletes it; the observer filter is `['aria-pressed']`, so it sees *changes*
+rather than commits; and `:161` accepts the run with **`samples.length > 3`**, so a spec titled "across 100
+taps" can compute "p95" from four. The CI/local split (n=17 vs n=100) is therefore a sampling-ratio
+difference, and the statistic's meaning changes with it: `p95(17) = max(17)`, `p95(100)` is a percentile the
+75.6 ms local maximum cannot reach.
+
+Candidate mechanism, **not established**: a tap whose state change coalesces into an existing
+`aria-pressed="true"` produces no mutation, its `t0` survives, and the *next* change pairs with that stale
+`t0` — which would simultaneously explain samples going missing and a long-tail reading like 66.1 ms, since
+the pair measures tap → a later paint. Distinguishing that from plain loss needs the sampler to report pairs
+found vs taps issued, which is the first line of the fix. What is *not* in doubt is the gate's shape: with
+n=17, one observation decides it, and on CI that observation was a coin flip between 24.8 ms and 66.1 ms
+across two runs whose median did not move.
 
 **Not fixed here, and why that is disclosed rather than tidied:** the fix is to make the loop await the paint
 it is timing before the next tap (or key `t0` per pending click rather than per element), which changes *how

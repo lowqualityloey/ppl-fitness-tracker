@@ -271,3 +271,45 @@ is a genuine server-side behavior with product consequences (a syncing client lo
 exactly the class M4 exists to find), and it becomes a card of its own rather than a footnote here.
 
 Either way: **no number in the table above is a baseline**, and the 200 ms question stays open.
+
+## The 401 question answered: the session was never invalid
+
+Probe (same tree; app code unchanged since the build, verified with `git diff --name-only` → docs + script
+only). Two 25 s runs at `--max-inflight=256`, so the client stopped being the limit:
+
+| Run | requests | 2xx | 401 | users ever rejected | users later accepted on the same cookie |
+| :-- | :-- | :-- | :-- | :-- | :-- |
+| 30 users, 50 rps | 1147 | 98 | **1049** | 30 | **29** |
+| 10 users, 50 rps | 1155 | 152 | **1003** | 10 | **10 — every one** |
+
+The harness tracks recovery precisely because it settles this without guessing: a user keeps firing with the
+same credential, so **a 2xx after a 401 from that user proves the credential was valid**. It was, for every
+user in the 10-user run. Rejection rate scales with concurrency — 0 % at 5 users / 10 rps, 49 % at 30 users /
+cap 64, **91 % at 30 users / cap 256** — and `429=0` throughout, because the route verifies *before* it counts.
+
+**Mechanism, from the code:** `lib/auth/require-user.ts` calls `supabase.auth.getUser()`, an outbound HTTP hop
+to GoTrue on *every* request, and maps **any** error from it to `unauthenticatedError()`. So a shed and a
+signed-out user are the same response. **The cause is discarded too**: a 25 s run with 1003 rejections produced
+an **8-line server log** — `routeErrorResponse()` redacts it from the client and records nothing server-side.
+That is #77's shape again (a decision about what a rejection means, made by collapsing causes into one code),
+and it is filed as **#125**, deliberately not folded into this card.
+
+Two consequences for how the rest of this file should be read:
+
+1. **The latency tables above are over a filtered minority.** In the 30-user probe only 98 of 1147 requests
+   authenticated at all, so "p95 18 807 ms" describes the survivors, not the route's behaviour. Split reporting
+   is what kept that visible rather than accidental.
+2. **This box cannot offer 50 rps to a route this slow.** At cap 256 it reached 33.9 rps offered with
+   `max_in_flight=256`; the target was never delivered, and the harness now says `INCONCLUSIVE` instead of
+   naming 50 rps anyway. The AC's "run at 50 rps for the stated duration" is therefore **not satisfiable on
+   this hardware** — that is an environment fact to raise with the owner, not a budget to move and not a
+   definition to quietly relax. The §4 item 16 control *is* still runnable, at a rate the box can deliver.
+
+### Guards added this round, each observed firing on a real run rather than on a mock
+
+- **`INCONCLUSIVE` verdict**: fired in both probe runs (`at an offered 33.9 rps, NOT the 50 rps the budget is
+  written against`), which is the phrasing fix working on live data.
+- **Limiter-silence guard**: fired in the 10-user run — `per-user offered rate 5.00 rps exceeds the 120
+  req/min budget, yet 429=0 … Read the AUTH line.` Without it, "0 rejections by the limiter" reads as health.
+- **AUTH recovery discriminator**: fired in both, and is the line that answered the question this section is
+  about. The one user who never recovered in the 30-user run is left open on the issue, not smoothed over.

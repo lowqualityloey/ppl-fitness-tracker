@@ -244,7 +244,26 @@ async function main(): Promise<number> {
     let maxInFlight = 0;
     let backpressureTicks = 0;
 
-    const fire = (session: TestSession, ids: FixtureIds): void => {
+    // `requireUserContext()` verifies by calling `supabase.auth.getUser()`, i.e. **every** /api/sync request
+    // makes an outbound hop to GoTrue and any failure there is reported as our own 401. That makes 401
+    // ambiguous: an invalid session, or a valid one whose verification hop shed under load. The discriminator
+    // needs no new machinery — each user keeps firing with the same cookie, so a 2xx that arrives *after* a
+    // 401 from that same user is direct evidence the credential was never the problem.
+    interface Track {
+      sawReject: boolean;
+      recoveries: number;
+    }
+    const tracks = created.map<Track>(() => ({ sawReject: false, recoveries: 0 }));
+    let rejectSample = '';
+    let rejectSetCookie = 'none';
+
+    const fire = (index: number): void => {
+      const session = created[index];
+      const ids = fixtures[index]?.ids;
+      const track = tracks[index];
+      if (!session || !ids || !track) {
+        throw new Error(`driver ${index} was never set up; refusing to under-report the run`);
+      }
       inFlight += 1;
       maxInFlight = Math.max(maxInFlight, inFlight);
       offered += 1;
@@ -258,11 +277,22 @@ async function main(): Promise<number> {
           });
           // Drain before stopping the clock. Stopping when headers arrive measures the start of a response and
           // reports it as latency, which is the flattering version of this number.
-          await response.text();
+          const text = await response.text();
           const elapsedMs = performance.now() - begin;
           tally(String(response.status));
-          if (response.ok) accepted.push(elapsedMs);
-          else rejected.push(elapsedMs);
+          if (response.ok) {
+            accepted.push(elapsedMs);
+            if (track.sawReject) track.recoveries += 1;
+          } else {
+            rejected.push(elapsedMs);
+            track.sawReject = true;
+            if (!rejectSample) {
+              rejectSample = `${response.status} ${text.slice(0, 220)}`;
+              rejectSetCookie = response.headers.get('set-cookie')
+                ? `present (${(response.headers.get('set-cookie') ?? '').slice(0, 40)}…)`
+                : 'absent';
+            }
+          }
         } catch (error) {
           tally('fetch-error');
           if (process.env.PERF_DEBUG) console.error('  request failed:', (error as Error).message);
@@ -284,12 +314,7 @@ async function main(): Promise<number> {
       }
       const index = cursor % created.length;
       cursor += 1;
-      const session = created[index];
-      const ids = fixtures[index]?.ids;
-      if (!session || !ids) {
-        throw new Error(`driver ${index} was never set up; refusing to under-report the run`);
-      }
-      fire(session, ids);
+      fire(index);
     }
 
     // Drain with a grace window. Anything still open when it closes is counted as `unfinished` and stays out
@@ -334,6 +359,34 @@ async function main(): Promise<number> {
         `other=${rejected.length - countOf('429') - serverErrors} fetch_error=${countOf('fetch-error')}` +
         `  (excluded from the percentiles above, by design)`,
     );
+    const usersWithReject = tracks.filter((track) => track.sawReject).length;
+    const usersThatRecovered = tracks.filter((track) => track.recoveries > 0).length;
+    if (countOf('401') > 0) {
+      console.log(
+        `AUTH         401=${countOf('401')} users_ever_rejected=${usersWithReject} ` +
+          `users_later_accepted_with_the_same_cookie=${usersThatRecovered}`,
+      );
+      console.log(
+        usersThatRecovered === usersWithReject && usersWithReject > 0
+          ? `             EVERY rejected user subsequently succeeded on the same credential, so the session was` +
+            ` never invalid: these 401s are the auth verification hop failing under load and being reported as` +
+            ` unauthenticated by requireUserContext(), not a client problem.`
+          : `             ${usersWithReject - usersThatRecovered} user(s) never recovered on the same cookie, so` +
+            ` not every 401 is explicable as a shed verification hop — this needs a cause, not a guess.`,
+      );
+      console.log(`             first rejection seen: ${rejectSample || 'n/a'} | set-cookie: ${rejectSetCookie}`);
+    }
+    // The card's negative scenario expects 429 interference once per-user load exceeds the M2-06 budget of
+    // 120 req/min (2 rps). Zero 429s while asking for more than 2 rps/user is therefore NOT a clean bill of
+    // health — say which of the two explanations is on the table instead of letting silence read as a pass.
+    if (countOf('429') === 0 && options.targetRps / options.users > 2) {
+      console.log(
+        `LIMITER      per-user offered rate ${(options.targetRps / options.users).toFixed(2)} rps exceeds the` +
+          ` 120 req/min budget, yet 429=0. That is not evidence the budget held: the route verifies the session` +
+          ` BEFORE counting it, so anything rejected upstream never reaches the limiter. Read the AUTH line.` +
+          ` If auth were clean, this line would be the finding — a budget that should have bitten and did not.`,
+      );
+    }
     if (countOf('429') > 0) {
       console.log(
         `             429s are fast by construction — they return before the write — so including them would` +

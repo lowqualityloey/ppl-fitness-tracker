@@ -17,7 +17,7 @@ credential that had been faking a code regression, and two structural findings (
 | D1 lint red, unenforced | **CLOSED** — merged in PR #48 | 22 casts → typed helpers, 2 unused bindings dropped, `--max-warnings=0`, CI `Lint` step; `main` lint exit 0 |
 | D2 non-hermetic unit layer | open | unchanged; see the correction under D2 — it passes with a working environment, so the defect is classification, not correctness |
 | D3 phantom E2E config | **doc-closed** | `PROMPTKIT.md` §2/§3 now state E2E does not exist; `tests/e2e/` to be created with its first spec in M3/M4 |
-| D4 migration journal gap | open | blocks the next `db:generate`; M2-05 should avoid needing one |
+| D4 migration journal gap | **CLOSED** — #89 (M4-00), ADR-0006 | hand-authoring recorded as the model; `db:generate`/`db:migrate` retired, `supabase/migrations/meta/` deleted, `tests/unit/migration-authority.test.ts` gates every re-introduction (watched RED ×4) |
 | D5 route suites outside CI | **CLOSED** — merged in PR #48 | API step + preflight + declared-pending registry + anti-rot guard + env guard; `main` CI runs the gate green |
 | D6 test run rewrites tracked `tsconfig.json` | open (new) | below |
 | D7 integration suites read `pg` results as inferred `any` | open (new) | below |
@@ -143,6 +143,15 @@ offline-session flow; create `tests/e2e/` in that PR, not before.
 ---
 
 ## D4 — Drizzle's migration journal now covers 4 of 7 SQL migrations
+
+> **CLOSED by #89 / M4-00 (2026-09-12) — option (b) chosen.** Hand-authoring is the recorded
+> model (ADR-0006): the drizzle-kit `generate`/`migrate` npm scripts are deleted,
+> `drizzle.config.ts` no longer declares an `out:`, and `supabase/migrations/meta/` is removed.
+> The trap described below was **fired deliberately before the fix** and emitted a phantom
+> destructive `0004` with exit 0 — captured in
+> `docs/tests/2026-09-12-m4-089-break-each-gate-audit.md` entry 1; the disarm is gated by
+> `tests/unit/migration-authority.test.ts`. Text below kept as written — it is the intake
+> record, not the current state.
 
 **Severity**: Medium (silent schema-drift risk for anything generated later) · **Priority**: `#priority/p2` · **Est**: 1–2h
 

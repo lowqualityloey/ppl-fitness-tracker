@@ -10,6 +10,19 @@ describe('M1-03: Schema Constraints & Verification', () => {
       connectionString: process.env.MIGRATION_DATABASE_URL,
     });
     await client.connect();
+
+    // M4-00 (#89): migration 0007 put a real FK on profiles.id -> auth.users.id, so the
+    // synthetic `00000000-…0001` profile used below must have an Auth parent the way every
+    // real profile does. This is the same owner-only auth.users insert
+    // handle-new-user-trigger.test.ts performs; the on_auth_user_created trigger then
+    // materializes the profile row itself — demonstrating the ADR-0002 invariant rather
+    // than routing around it: a profile without an identity is now a constraint violation.
+    await client.query(
+      `INSERT INTO auth.users (id, email)
+       VALUES ('00000000-0000-0000-0000-000000000001'::uuid,
+               'schema-constraints-fixture@example.com')
+       ON CONFLICT DO NOTHING`,
+    );
   });
 
   afterAll(async () => {
@@ -34,6 +47,10 @@ describe('M1-03: Schema Constraints & Verification', () => {
     await client.query('DELETE FROM routine_days WHERE id = $1::uuid', [
       '00000000-0000-0000-0000-000000000002',
     ]);
+    // Delete the synthetic user's Auth parent last: since #89/0007 that single row owns
+    // the whole cleanup chain — the FK cascade takes the profile and any domain row the
+    // per-test cleanups missed. It replaces the old profiles-first discipline entirely.
+    await client.query("DELETE FROM auth.users WHERE id = '00000000-0000-0000-0000-000000000001'::uuid");
     await client.end();
   });
 

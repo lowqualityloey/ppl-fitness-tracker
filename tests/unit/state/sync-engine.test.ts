@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { SyncMutation } from '../../../lib/contracts/sync';
+import {
+  SyncResponseDataSchema,
+  type SyncMutation,
+  type SyncResponseData,
+} from '../../../lib/contracts/sync';
 import { OutboxQuotaExceededError } from '../../../src/app/state/outbox';
 import type { SendOutcome } from '../../../src/app/state/sync-engine';
 import {
@@ -15,6 +19,7 @@ import {
   requestsPerMinute,
 } from '../../../src/app/state/sync-engine';
 import { DEVICE, SESSION, id, makeOutbox, MemoryStorage, setMutation, stored } from './fixtures';
+import { syncResponseBody } from '../../e2e/sync-fixtures';
 
 /**
  * M3-05 (#62) — the engine's scheduling and single-flight rules. Every external
@@ -29,6 +34,8 @@ interface EngineHarness {
   sends: SyncMutation[][];
   refetchCount: () => number;
   rejections: string[];
+  /** Every `serverSeq` the engine adopted from a drained batch, in order. */
+  serverSeqs: number[];
   /** Moves the engine's clock; backoff is asserted by moving time, not waiting it. */
   advance: (ms: number) => void;
 }
@@ -48,6 +55,7 @@ function engineHarness(
   const outbox = makeOutbox(storage).outbox;
   const sends: SyncMutation[][] = [];
   const rejections: string[] = [];
+  const serverSeqs: number[] = [];
   let clock = 1_700_000_000_000;
   let refetches = 0;
 
@@ -66,6 +74,7 @@ function engineHarness(
       refetches += 1;
     },
     onRejected: (items) => rejections.push(...items.map((item) => item.reason)),
+    onServerSeq: (seq) => serverSeqs.push(seq),
   });
 
   return {
@@ -74,26 +83,33 @@ function engineHarness(
     sends,
     refetchCount: () => refetches,
     rejections,
+    serverSeqs,
     advance: (ms) => {
       clock += ms;
     },
   };
 }
 
-/** A clean success. `state` is a placeholder because #73 leaves that schema permissive. */
+/**
+ * A clean success, built through the contract.
+ *
+ * This used to carry `state: {} as never` — the client-side twin of the fabrication
+ * `tests/e2e/session-runner.spec.ts` was built on, and it survived #73 only because that field
+ * was a `passthrough()` placeholder when this harness was written. Parsing here costs nothing
+ * and means the queue's tests run against answers the server can actually give.
+ */
 function okResponse(
   serverSeq = 1,
   overrides: { applied?: string[]; rejected?: { mutationId: string; reason: string }[] } = {},
 ): SendOutcome {
   return {
     kind: 'ok',
-    data: {
+    data: SyncResponseDataSchema.parse({
       serverSeq,
       applied: overrides.applied ?? [],
       rejected: overrides.rejected ?? [],
-      state: {} as never,
       clockSkewMs: 0,
-    },
+    }),
   };
 }
 
@@ -428,5 +444,79 @@ describe('Outbox wiring inside the engine', () => {
 
     expect((await engine.pending()).map((row) => row.seq)).toEqual([0, 1, 2]);
     expect(await outbox.pendingCount()).toBe(3);
+  });
+});
+
+/*
+ * #105 — a queue written by the previous build, drained against the narrowed contract.
+ *
+ * Option B's third acceptance criterion is about deployment rather than schema: mutations a
+ * device queued before this change must drain against the server after it, and be applied or
+ * refused legibly — never a 500, never a silent discard. What makes that true is that the *request*
+ * half is untouched (an `Outbox` row's `payload` is a `SyncMutation`) and that the shipped client
+ * reads three things out of the answer: `applied`, `rejected`, `serverSeq`.
+ *
+ * So the two specs below take the answer from the same place the browser specs do —
+ * `syncResponseBody`, which `.strict().parse`es through `SyncResponseDataSchema` before it will
+ * return anything — and hand it to the engine the way `provider.tsx` does: **the bytes, cast,
+ * never parsed**. That is the client's actual read path, and the reason a field can be deleted
+ * from the wire without a client that already has a queue noticing. "It never read `state`" is a
+ * claim about three files until this runs; then it is an observation.
+ */
+describe('an outbox written before #105, drained against the narrowed contract', () => {
+  /** The wire body a narrowed server answers with, read the way the shipped client reads it. */
+  function narrowedAnswer(data: SyncResponseData): SendOutcome {
+    const envelope = JSON.parse(syncResponseBody(data)) as { data?: SyncResponseData };
+    if (!envelope.data) throw new Error('The sync fixture produced an envelope with no data.');
+    // `as SyncResponseData` is the shipped client's own cast (`provider.tsx`), reproduced here
+    // rather than improved on: the point is what *that* code does with these bytes.
+    return { kind: 'ok', data: envelope.data };
+  }
+
+  it('applies a queued batch without reaching for the field that is no longer sent', async () => {
+    const harness = engineHarness(() =>
+      narrowedAnswer({ serverSeq: 7, applied: [id(1), id(2)], rejected: [], clockSkewMs: 0 }),
+    );
+
+    // Two taps queued by the old build, seeded exactly as `Outbox` would have left them.
+    await harness.storage.put(stored(0, setMutation(1, 0)));
+    await harness.storage.put(stored(1, setMutation(2, 1)));
+    await harness.engine.drain();
+
+    // Readable as one batch, in `seq` order…
+    expect(harness.sends[0]?.map((mutation) => mutation.mutationId)).toEqual([id(1), id(2)]);
+    // …drained, because the server said `applied` rather than the client assuming it…
+    expect(harness.storage.rows).toEqual([]);
+    // …and nothing surfaced as a refusal, which is what a silent discard would have looked like
+    // from the outside until the next authoritative read disagreed with the screen.
+    expect(harness.rejections).toEqual([]);
+    expect(harness.refetchCount()).toBe(0);
+    // The sequence the client stands on comes from the narrowed body — the only number the
+    // deleted graph was ever going to contribute here.
+    expect(harness.serverSeqs).toEqual([7]);
+  });
+
+  it('survives a legible refusal of a queued tap, refetching instead of reading state inline', async () => {
+    const harness = engineHarness(() =>
+      narrowedAnswer({
+        serverSeq: 3,
+        applied: [id(2)],
+        rejected: [{ mutationId: id(1), reason: 'CONFLICT' }],
+        clockSkewMs: 0,
+      }),
+    );
+    await harness.storage.put(stored(0, setMutation(1, 0)));
+    await harness.storage.put(stored(1, setMutation(2, 1)));
+
+    await harness.engine.drain();
+
+    // Item-level, not batch-level: one tap refused, the other accepted, and the refusal carries
+    // the server's code rather than a status the whole batch had to share.
+    expect(harness.rejections).toEqual(['CONFLICT']);
+    expect(harness.storage.rows.map((row) => row.mutationId)).toEqual([]);
+    // §8.2: the refusal forces the full authoritative read. That read — `GET /api/sessions/[id]`
+    // — is where state comes from now, and it is the consumer whose absence made `state` dead.
+    expect(harness.refetchCount()).toBe(1);
+    expect(harness.serverSeqs).toEqual([3]);
   });
 });

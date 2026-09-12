@@ -20,6 +20,7 @@ import {
   SetUpsertMutationSchema,
   SyncMutationSchema,
   SyncRequestSchema,
+  SyncResponseDataSchema,
   SyncResponseSchema,
   TaskCompleteMutationSchema,
 } from '../../../lib/contracts/sync.js';
@@ -165,18 +166,41 @@ describe('sync contracts', () => {
     expect(SyncRequestSchema.safeParse({ ...request, mutations: [setMutation] }).success).toBe(true);
     expect(SyncResponseSchema.safeParse({
       ok: true,
-      data: { serverSeq: 1, applied: [ids.mutation], rejected: [], state: mapperOutput(), clockSkewMs: 0 },
+      data: { serverSeq: 1, applied: [ids.mutation], rejected: [], clockSkewMs: 0 },
     }).success).toBe(true);
     expect(SyncResponseSchema.safeParse({
       ok: true,
-      data: { serverSeq: -1, applied: [], rejected: [], state: mapperOutput(), clockSkewMs: 0 },
+      data: { serverSeq: -1, applied: [], rejected: [], clockSkewMs: 0 },
     }).success).toBe(false);
-    // #73: `state` used to be a `z.object({}).passthrough()`, so `state: {}` was accepted
-    // here and proved nothing. It is the session graph now, and an empty one is refused —
-    // which is the assertion that makes the line above worth running.
-    expect(SyncResponseSchema.safeParse({
-      ok: true,
-      data: { serverSeq: 1, applied: [], rejected: [], state: {}, clockSkewMs: 0 },
+  });
+
+  /*
+   * #105 — the removed field, asserted as a boundary rather than as an absence.
+   *
+   * Two assertions used to live in the block above, and both were about `state`: one accepted
+   * `state: mapperOutput()`, the other refused `state: {}` because #73 had made an *empty* session
+   * graph illegal. Re-aimed rather than deleted:
+   *
+   *  - the key list is pinned, so "the field is gone" is a counted fact about the schema instead
+   *    of a sentence in a comment; and
+   *  - `state` is refused **as an unknown key**, in both the shape the old test passed and the
+   *    shape the deleted field actually had. `.strict()` is what turns that into a production
+   *    control: a route that still emitted the field fails `validateOutgoing` with a redacted 500
+   *    rather than shipping bytes the contract stopped describing.
+   */
+  it('describes the sync answer as four fields and refuses the one #105 removed', () => {
+    expect(Object.keys(SyncResponseDataSchema.shape).sort()).toEqual(
+      ['applied', 'clockSkewMs', 'rejected', 'serverSeq'],
+    );
+    const narrowed = { serverSeq: 1, applied: [ids.mutation], rejected: [], clockSkewMs: 0 };
+    expect(SyncResponseDataSchema.safeParse(narrowed).success).toBe(true);
+    // The pre-#105 prefill from the test directly above, unchanged in every other respect.
+    expect(SyncResponseDataSchema.safeParse({ ...narrowed, state: mapperOutput() }).success).toBe(false);
+    // And the exact fabrication `tests/e2e/session-runner.spec.ts` was built on: an object
+    // *containing* a session, which this contract never described at any revision.
+    expect(SyncResponseDataSchema.safeParse({
+      ...narrowed,
+      state: { session: { ...mapperOutput(), sets: [], tasks: [] } },
     }).success).toBe(false);
   });
 });

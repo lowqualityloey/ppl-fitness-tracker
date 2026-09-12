@@ -9,7 +9,6 @@ import {
   TaskKeySchema,
   UuidSchema,
 } from './common';
-import { SessionStateSchema } from './sessions';
 
 const MutationIdentityShape = {
   mutationId: UuidSchema,
@@ -77,11 +76,28 @@ export const SyncRejectionSchema = z.object({
   reason: z.string().min(1),
 }).strict();
 
+/**
+ * The answer to one drained batch: what the server accepted, what it refused and why, and the
+ * sequence the client is now standing on. Nothing else.
+ *
+ * **#105 removed a fifth field, `state: SessionStateSchema`.** Every sync response carried the
+ * whole session graph — strictly validated on the producer, read by no client (`src/app/state/`
+ * casts this body and refetches), on the two hottest calls in the app: the drain behind every
+ * queued mutation and the 4 s poll. A field the producer must be right about and nobody consumes
+ * is cost, not contract. Authoritative state is `GET /api/sessions/[id]`'s job, and the
+ * rejection-and-refetch path #63 shipped is the consumer that was always meant to read it.
+ *
+ * `.strict()` is what makes the removal stick rather than a matter of taste: a producer that
+ * still emitted `state` now fails `validateOutgoing` with a `ContractViolationError` (a redacted
+ * 500) instead of quietly shipping a key the contract stopped describing. And because the
+ * *request* half — `SyncRequestSchema`, which is what an outbox row in someone's IndexedDB
+ * actually holds — is untouched, a batch queued before this deploy still posts. That is stated
+ * here and *executed* in `tests/integration/api/sync.test.ts`, not assumed.
+ */
 export const SyncResponseDataSchema = z.object({
   serverSeq: NonNegativeIntegerSchema,
   applied: z.array(UuidSchema),
   rejected: z.array(SyncRejectionSchema),
-  state: SessionStateSchema,
   clockSkewMs: z.number().int(),
 }).strict();
 

@@ -177,8 +177,9 @@ export const SessionTaskStateSchema = z.object({
 }).strict();
 
 /**
- * The whole session graph — what `GET /api/sessions/[id]`, `POST /api/sessions`, and the
- * `state` field of `POST /api/sync` carry.
+ * The whole session graph — what `GET /api/sessions/[id]` and `POST /api/sessions` carry.
+ * Those two are its only producers: `POST /api/sync` used to ship it in a `state` field no
+ * client read, and #105 deleted that (see the comment on `SyncResponseDataSchema`).
  *
  * Until #73 this was `z.object({}).passthrough()`, an M2-01 placeholder. What a
  * placeholder cost was not only an API that validated nothing about the object the app is

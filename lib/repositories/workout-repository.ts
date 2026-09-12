@@ -497,8 +497,6 @@ export class WorkoutRepository {
         userId,
         session,
         context,
-        state,
-        refreshState,
         request.deviceId,
         receivedAt,
       );
@@ -655,8 +653,6 @@ export class WorkoutRepository {
     userId: string,
     session: typeof workoutSessions.$inferSelect,
     context: SessionMutationContext,
-    state: MutableState,
-    refreshState: () => Promise<void>,
     deviceId: string,
     receivedAt: Date,
   ): SyncStore {
@@ -664,9 +660,22 @@ export class WorkoutRepository {
       sessionId: session.id,
       deviceId,
       receivedAt,
-      getState: async (): Promise<SessionState> => {
-        await refreshState();
-        return state.current;
+      // One column, not the graph. `allocateSequence` runs *after* the lifecycle write that
+      // refreshes `state.current`, so the in-memory copy is one sequence behind — this read is
+      // the only correct source for the batch's answer, and it is a single indexed row read on
+      // a row this transaction already holds `FOR UPDATE`. (#105 replaced a `getState()` here
+      // that re-mapped every set, task, and placement to be thrown away an arm's length away.)
+      currentServerSeq: async (): Promise<number> => {
+        const [updated] = await tx
+          .select({ serverSeq: workoutSessions.serverSeq })
+          .from(workoutSessions)
+          .where(and(
+            eq(workoutSessions.id, session.id),
+            eq(workoutSessions.userId, userId),
+          ))
+          .limit(1);
+        if (!updated) throw new SessionNotFoundError('Session disappeared during sync.');
+        return updated.serverSeq;
       },
       reserveMutation: async (mutation: SyncMutation, payloadHash: string): Promise<SyncReservation> => {
         const [existing] = await tx

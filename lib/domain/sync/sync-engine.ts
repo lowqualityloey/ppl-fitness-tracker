@@ -219,12 +219,14 @@ export class SyncEngine {
       addUnique(applied, mutation.mutationId);
     }
 
-    const state = await this.store.getState();
+    // The batch's own answer, and after #105 nothing else: the sequence the client is now
+    // standing on, the item-level verdicts, and the skew the server observed. Authoritative
+    // session state is `GET /api/sessions/[id]`'s to carry — this route is not a second copy
+    // of it, and the client that refetches after any rejection (#63) is what makes that safe.
     return {
-      serverSeq: state.serverSeq,
+      serverSeq: await this.store.currentServerSeq(),
       applied,
       rejected,
-      state,
       clockSkewMs: maximumClockSkewMs,
     };
   }

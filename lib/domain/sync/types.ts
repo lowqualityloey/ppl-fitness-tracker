@@ -1,5 +1,4 @@
 import type { SyncMutation, SyncResponseData } from '../../contracts/sync';
-import type { SessionState } from '../sessions/types';
 
 export type SyncEntityType = 'set' | 'task' | 'session';
 export type SyncMutationStatus = 'processing' | 'applied' | 'rejected';
@@ -31,7 +30,14 @@ export interface SyncStore {
   readonly sessionId: string;
   readonly deviceId: string;
   readonly receivedAt: Date;
-  getState(): Promise<SessionState>;
+  /**
+   * The session's sequence after this batch — **one integer**, which is all the sync answer
+   * needs. It replaces `getState(): Promise<SessionState>`, the seam #105 deleted along with
+   * the response field it existed to fill: the repository already maps the graph inside the
+   * transaction to gate each mutation's lifecycle, and mapping it a final time to serialize a
+   * copy nobody read was the pure part of the cost.
+   */
+  currentServerSeq(): Promise<number>;
   reserveMutation(mutation: SyncMutation, payloadHash: string): Promise<SyncReservation>;
   findEntityVersion(entityType: SyncEntityType, entityKey: string): Promise<SyncEntityVersion | null>;
   applyMutation(mutation: SyncMutation): Promise<void>;
@@ -48,9 +54,17 @@ export interface SyncStore {
   markRejected(mutationId: string, reason: string): Promise<void>;
 }
 
-export type SyncApplyResult = Omit<SyncResponseData, 'state'> & {
-  state: SessionState;
-};
+/**
+ * What `POST /api/sync` answers with. As of #105 the domain's result and the wire body are one
+ * shape — this used to be `Omit<SyncResponseData, 'state'> & { state: SessionState }`, whose
+ * whole purpose was to carry a session graph no client parsed.
+ *
+ * The alias is kept rather than inlined because the two names mean different things: this is
+ * what the conflict model decided, `SyncResponseData` is what the contract promises. They are
+ * now equal by construction, and `validateOutgoing` in the route is what stops them drifting
+ * apart again if someone reintroduces a field on one side only.
+ */
+export type SyncApplyResult = SyncResponseData;
 
 export class SyncValidationError extends Error {
   override readonly name = 'SyncValidationError';

@@ -229,8 +229,8 @@ time they appear.
 
 ## Pilot, baseline and sweep — 2026-09-12, `cc84de4` + parser/scheduler fixes, production build on :3001
 
-Reproduction: `/tmp/ppl-battery/perf-run.sh` (build unmodified tree → `next start --port 3001` → pilot →
-baseline → sweep → kill by PID). Box: `nproc=4`, **load 1.34 before the pilot and 26.7 after the baseline**,
+Reproduction: **`scripts/perf/baseline-sweep.sh`** (build unmodified tree → `next start --port 3001` → pilot
+→ baseline → sweep → kill by PID). Box: `nproc=4`, **load 1.34 before the pilot and 26.7 after the baseline**,
 so the harness was the dominant load on the machine it measured.
 
 | Run | config | offered | accepted | p50 / p95 / max (2xx) | rejected | DB-side max |
@@ -274,6 +274,8 @@ Either way: **no number in the table above is a baseline**, and the 200 ms quest
 
 ## The 401 question answered: the session was never invalid
 
+Reproduction: **`scripts/perf/probe-401.sh`**.
+
 Probe (same tree; app code unchanged since the build, verified with `git diff --name-only` → docs + script
 only). Two 25 s runs at `--max-inflight=256`, so the client stopped being the limit:
 
@@ -316,7 +318,7 @@ Two consequences for how the rest of this file should be read:
 
 ## §4 item 16 control: the harness watched failing on a deliberate slowdown
 
-Reproduction: `/tmp/ppl-battery/control-run.sh` (ladder → baseline → inject → rebuild → measure → revert →
+Reproduction: **`scripts/perf/control-run.sh`** (ladder → baseline → inject → rebuild → measure → revert →
 rebuild → measure; the injection is applied to the working tree by a script that **reverts it in the same
 run**, and the run's own last line prints `git status` to prove only `tsconfig.json` (D6) remained).
 
@@ -376,3 +378,19 @@ Undetermined, and named so it stays a question: **this instrument cannot split p
 per-request `getUser()` hop to GoTrue** (`#125`), because both are serial resources acquired before the write
 and neither reports queue depth to an external client. Separating them needs the cause that #125 says is
 currently discarded, or in-process pool metrics — the surface this card explicitly declined to invent.
+
+## Reproduction scripts, and what changed when they moved into the repo
+
+All three sequences now live beside this file — `scripts/perf/baseline-sweep.sh`,
+`scripts/perf/control-run.sh`, `scripts/perf/probe-401.sh` — instead of pointing at a `/tmp` directory that
+dies with the box. **Disclosed, because "exact reproduction" has to mean something:** the runs reported above
+were executed from `/tmp/ppl-battery/` copies, and the only edits in moving them are (a) `cd
+/home/heyloey/personal/ppl-fitness-tracker` replaced by `cd "$(git rev-parse --show-toplevel)"`, (b) log paths
+renamed from `/tmp/ppl-battery/*` to `/tmp/ppl-perf-*` to avoid colliding with other tooling, and (c) comments
+added, including the bracket-pattern warning on the kill loop (`pkill -f 'next start'` matches the invoking
+script's own command line and has already SIGTERMed a session in this project). No measurement logic, flag, or
+threshold was altered in the move.
+
+They are also **not wired into any CI job or npm script**, per the card's scope: each needs the local stack, a
+production build, and a machine that is not a shared runner. `npm run perf:sync` is the only new entry point,
+and it is a manual command.

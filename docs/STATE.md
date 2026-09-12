@@ -991,6 +991,45 @@ Carried forward, still open:
       **Protocol: re-run a red timing gate solo
       before believing it, and move no budget without a re-run proving the reality changed.** M4's
       load test is what decides whether any of these tails is real.
+     - **#100 renamed most of the family on 2026-09-12: it was arithmetic, not contention.** The largest
+       member has a root cause with a control — the subtitle is server truth by design (`runner.tsx:459`;
+       `:1155-1160`, "the client *asks*; it does not decide"), so a phase may lag one
+       `POLL_INTERVAL_VISIBLE_MS` cycle, and eleven assertions waited on that chain inside Playwright's
+       **5 000 ms default** — shorter than the poll they depend on. `expectPhase`'s window is now *derived*
+       from that interval (`2 × POLL_INTERVAL_VISIBLE_MS + 2 000`, imported from `sync-engine.ts` rather than
+       retyped), which accounts for `a11y.spec.ts:102`'s CI red, `session-runner.spec.ts:201`, and
+       `timers.spec.ts:277` — retiring this bullet's "not reproduced deliberately" caveat for them. Two
+       further causes were clocks never sized from their own specs: **G-M3-3 permits 55 s of declared waiting
+       inside a 30 s default** (measured 25.6 s solo — audit 19's "out of test budget while printing a passing
+       p95", explained without invoking load), and tests running on the default because a `describe`-scoped
+       `setTimeout` does not reach outside its `describe` (two Lighthouse audits at 12.2–13.5 s; three
+       `session-runner` specs, one measuring 17.9 s at 2.1× load = 60 % of its clock, which timed out at CI's
+       worker count). Third, the evidence was unreachable by configuration: `trace: "on-first-retry"` could
+       not fire because `retries` defaults to 0, so **the suite had never produced a trace for any incident in
+       its history**; it is now `retain-on-failure` with a JSON duration reporter — every number in this
+       bullet came from that reporter, which is what made the class visible at all. **Five controls, each
+       watched failing on a deliberate breakage** (`tests/unit/infra/e2e-evidence-config.test.ts`,
+       `e2e-phase-window.test.ts`, `gotrue-failure-detail.test.ts`); two guards' first failures were defects
+       *in the guard* (a parser matching no `PHASE_LABEL` keys, a scan flagging an assertion of a *set* of
+       labels) and the guard was fixed, not the assertion dropped. **No SLA, budget, or threshold moved** —
+       50 ms, both 5 s budgets, 800 ms, the 4 s poll, axe's rules — and CI's `--workers` was not capped.
+       **Residue, named rather than smoothed:** (a) `dashboard.spec.ts:125` is unexplained — a poll-based
+       explanation was written into the ledger and **withdrawn** after reading the spec's body (it learns via
+       a rejection-triggered refetch), and it received no speculative window widening; (b) `100run1`'s 54 reds
+       came from the production server vanishing mid-run — no crash output, no OOM, no competing process, and
+       it did **not** reproduce — cause unnamed, harness now detects the signature and locks against a
+       concurrent pass; (c) the GoTrue teardown 500 that had been filed as two unexplained flakes is now
+       *nameable* (our helper was discarding the response body) but not fixed; (d) `/api/sync` missed its
+       documented 200 ms on **p95 every counted pass** (210.8–335.5 ms) — #92; (e) at CI's real scheduling on
+       this box the 50 ms paint gate is missed by two specs at once at 1.9× oversubscription (55.1 and 73.2 ms
+       p95) while reading 16.8–19.4 ms on CI's runner, so it is load-sensitive rather than parallel-broken,
+       and `timers.spec.ts:278` exhausted the new 10 s window there — the poll it is derived from is itself
+       starved under contention, and widening the bound to fit a busy machine would tune it to the box.
+       Five consecutive full batteries green with **zero solo re-runs** now exists twice — `100r1`–`100r5` on
+       `7baf430`, discarded when a spec's allowed runtime changed, and `100s1`–`100s5` on the shipping tree —
+       because a clock is behaviour and carrying greens across that change is the same shortcut as carrying
+       them across a red. **The protocol above still stands as a fallback**, but it is no longer the only
+       instrument: a red timing gate now arrives with a trace and a duration.
     - **The Lighthouse gate is blind to a zero-width-space accessible name** — it scores such a link
       **100**, and axe did not catch it either (audit entry 11). Closing this needs a structural DOM
       check, not a louder Lighthouse (handoff §3.6). The same section notes the contrast matrix

@@ -2,11 +2,12 @@ import { expect, test } from '@playwright/test';
 
 import { signInFreshUser } from './auth';
 import {
-  advanceIntoRest,
   START_DAY,
+  WORKOUT_FLOW_TIMEOUT_MS,
+  advanceIntoRest,
+  expectPhase,
   startPushDay,
   waitForSynced,
-  WORKOUT_FLOW_TIMEOUT_MS,
 } from './runner-fixtures';
 
 /**
@@ -242,7 +243,7 @@ test.describe('session timers', () => {
       await page.getByTestId('task-main_workout').click();
       await waitForSynced(page);
       await page.getByTestId('advance-phase').click();
-      await expect(page.getByTestId('session-subtitle')).toContainText('Stretching');
+      await expectPhase(page, 'Stretching');
 
       // Gone on the transition, and still gone a minute of clock later: no interval survived to
       // write a number into the next phase's UI.

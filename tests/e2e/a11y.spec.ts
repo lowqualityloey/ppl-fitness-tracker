@@ -2,12 +2,13 @@ import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { createTestSession, type TestSession } from '../integration/api/fixtures.js';
 import {
+  WORKOUT_FLOW_TIMEOUT_MS,
   armNoMouseGuard,
   completeWorkoutByKeyboard,
-  pointerEventCount,
-  startPushDayByKeyboard,
   firstTick,
+  pointerEventCount,
   startPushDay,
+  startPushDayByKeyboard,
   warmUpAndStart,
 } from './runner-fixtures';
 
@@ -100,6 +101,22 @@ test.describe('accessibility gate', () => {
 // G-M3-5. The guard is the point: `armNoMouseGuard` makes `page.mouse.*` throw and counts pointer
 // events page-side, so a future edit that reaches for `.click()` fails naming the rule.
 test('a whole session can be completed with the keyboard alone', async ({ page }) => {
+  /*
+   * The arithmetic this spec's own flow dictates, not a comfort margin.
+   *
+   * Four phase transitions are asserted through `expectPhase`, at `2 x POLL_INTERVAL_VISIBLE_MS + 2 000`
+   * = 10 s each: that is **40 s of legitimate waiting** before a single click, navigation, or server ack
+   * is counted. Measured on a quiet box with those windows in place: **24.4 s** green, solo. The 30 s
+   * default it ran under was therefore never a possible budget — it was one-and-a-half phase transitions
+   * — which is why audit 17 recorded this spec as "30 s test timeout vs 15.1 s baseline" and why it went
+   * red on CI once: the clock was shorter than the propagation design it was testing.
+   *
+   * `WORKOUT_FLOW_TIMEOUT_MS` is the same constant `session-runner.spec.ts` and `timers.spec.ts` already
+   * use for a whole workout walked through the UI. This spec is that class of test and was the one flow
+   * spec that had not been given it. No SLA or assertion threshold moved: 5 s propagation budgets, the
+   * 50 ms tap gate, and every axe rule are untouched.
+   */
+  test.setTimeout(WORKOUT_FLOW_TIMEOUT_MS);
   const auth = await createTestSession('e2e-a11y-kbd');
   try {
     await armNoMouseGuard(page);

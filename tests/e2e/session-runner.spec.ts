@@ -4,12 +4,13 @@ import AxeBuilder from '@axe-core/playwright';
 import { authHeaders, type TestSession } from '../integration/api/fixtures';
 import { signInFreshUser } from './auth';
 import {
-  firstTick,
   START_DAY,
+  WORKOUT_FLOW_TIMEOUT_MS,
+  expectPhase,
+  firstTick,
   startPushDay,
   waitForSynced,
   warmUpAndStart,
-  WORKOUT_FLOW_TIMEOUT_MS,
 } from './runner-fixtures';
 import { refusedSyncResponseBody } from './sync-fixtures';
 
@@ -210,7 +211,7 @@ test.describe('session runner', () => {
 
       // Nothing is finished yet, and the server says so: the read-only assertions below
       // would be meaningless if the session had somehow already ended.
-      await expect(page.getByTestId('session-subtitle')).toContainText('Warming up');
+      await expectPhase(page, 'Warming up');
       expect(completedSetCount(await fetchSession(request, auth, sessionId))).toBe(0);
 
       await completeWorkoutThroughUi(page);
@@ -374,19 +375,19 @@ async function finishWorkoutThroughUi(page: import('@playwright/test').Page) {
   // what blocks the move into `stretch`. Asserting the hint at the wrong step is how this
   // test first failed, and the machine — not the test — was right about the order.
   await page.getByTestId('advance-phase').click();
-  await expect(page.getByTestId('session-subtitle')).toContainText('Resting');
+  await expectPhase(page, 'Resting');
 
   await expect(page.getByTestId('phase-gate')).toContainText('Main workout complete');
   await page.getByTestId('task-main_workout').click();
   await waitForSynced(page);
 
   await page.getByTestId('advance-phase').click();
-  await expect(page.getByTestId('session-subtitle')).toContainText('Stretching');
+  await expectPhase(page, 'Stretching');
 
   await page.getByTestId('task-stretch').click();
   await waitForSynced(page);
   await page.getByTestId('advance-phase').click();
-  await expect(page.getByTestId('session-subtitle')).toContainText('Finishing up');
+  await expectPhase(page, 'Finishing up');
 
   // `post_workout` has no successor, so the stepper stops offering one.
   await expect(page.getByTestId('advance-phase')).toHaveCount(0);

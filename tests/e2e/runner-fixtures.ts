@@ -1,4 +1,5 @@
 import { expect } from '@playwright/test';
+import { POLL_INTERVAL_VISIBLE_MS } from '../../src/app/state/sync-engine';
 
 export const START_DAY = 'Push Day';
 
@@ -15,6 +16,43 @@ export const START_DAY = 'Push Day';
  * below are unchanged.
  */
 export const WORKOUT_FLOW_TIMEOUT_MS = 90_000;
+
+/**
+ * A server-truth phase label can lag one poll, and that is the app's design rather than its defect.
+ *
+ * `src/app/session/[id]/runner.tsx:459` renders the subtitle from `serverView.phase`, and `:1155-1160`
+ * states the intent outright — "The client *asks*; it does not decide… a transition the server refuses
+ * arrives as a rejection plus a refetch". So a phase becomes visible only after: enqueue → possibly
+ * deferred to the next cycle by `sync-engine.ts:211`'s single-flight guard or `:216`'s backoff window →
+ * POST → applied → invalidate → `GET /api/sessions/[id]` → render. The deferral quantum is
+ * `POLL_INTERVAL_VISIBLE_MS`.
+ *
+ * Two cycles plus a refetch is the honest bound. Playwright's 5 000 ms default is **inside** it, which is
+ * the root cause of every label red in docs/rca/m4-100-contention-ledger.md (`a11y.spec.ts:102` on CI,
+ * `session-runner.spec.ts:201`, `timers.spec.ts:277`, and `dashboard.spec.ts:125` at a 4.0 s baseline).
+ * The value is imported, not retyped, so the window cannot drift away from the interval it is derived
+ * from; `tests/unit/infra/e2e-phase-window.test.ts` fails if the relationship stops holding.
+ */
+export const PHASE_LABEL_WINDOW_MS = 2 * POLL_INTERVAL_VISIBLE_MS + 2_000;
+
+/**
+ * Assert a phase label with the window its own propagation path requires.
+ *
+ * The bare `toContainText(...)` default is what made correct behaviour look flaky: it gave a
+ * poll-delivered server fact less time than the poll is allowed to take.
+ */
+export async function expectPhase(
+  page: import('@playwright/test').Page,
+  // Exactly the app's labels: `PHASE_LABEL` in `src/app/session/[id]/runner.tsx:75-81`. The guard in
+  // tests/unit/infra/e2e-phase-window.test.ts fails if the two lists ever disagree, because this one is
+  // hand-written and the app's is not. 'Finishing' used to appear here as a loose prefix of
+  // 'Finishing up', which typecheck surfaced the moment the union replaced free-form strings.
+  label: 'Warming up' | 'Working out' | 'Resting' | 'Stretching' | 'Finishing up',
+): Promise<void> {
+  await expect(page.getByTestId('session-subtitle')).toContainText(label, {
+    timeout: PHASE_LABEL_WINDOW_MS,
+  });
+}
 
 export async function startPushDay(page: import('@playwright/test').Page) {
   await page.goto('/');
@@ -52,7 +90,7 @@ export async function warmUpAndStart(page: import('@playwright/test').Page) {
   await page.getByTestId('task-warm_up').click();
   await waitForSynced(page);
   await page.getByTestId('advance-phase').click();
-  await expect(page.getByTestId('session-subtitle')).toContainText('Working out');
+  await expectPhase(page, 'Working out');
   await expect(page.locator('[data-testid^="tick-"]').first()).toBeEnabled();
 }
 
@@ -65,7 +103,7 @@ export async function warmUpAndStart(page: import('@playwright/test').Page) {
 export async function advanceIntoRest(page: import('@playwright/test').Page) {
   await warmUpAndStart(page);
   await page.getByTestId('advance-phase').click();
-  await expect(page.getByTestId('session-subtitle')).toContainText('Resting');
+  await expectPhase(page, 'Resting');
 }
 
 /**
@@ -175,7 +213,7 @@ export async function completeWorkoutByKeyboard(
   await pressActivate(page.getByTestId('task-warm_up'));
   await waitForSynced(page);
   await pressActivate(page.getByTestId('advance-phase'));
-  await expect(page.getByTestId('session-subtitle')).toContainText('Working out');
+  await expectPhase(page, 'Working out');
 
   const ticks = page.locator('[data-testid^="tick-"]');
   const total = await ticks.count();
@@ -187,17 +225,17 @@ export async function completeWorkoutByKeyboard(
   await waitForSynced(page);
 
   await pressActivate(page.getByTestId('advance-phase'));
-  await expect(page.getByTestId('session-subtitle')).toContainText('Resting');
+  await expectPhase(page, 'Resting');
   await pressActivate(page.getByTestId('task-main_workout'));
   await waitForSynced(page);
 
   await pressActivate(page.getByTestId('advance-phase'));
-  await expect(page.getByTestId('session-subtitle')).toContainText('Stretching');
+  await expectPhase(page, 'Stretching');
   await pressActivate(page.getByTestId('task-stretch'));
   await waitForSynced(page);
 
   await pressActivate(page.getByTestId('advance-phase'));
-  await expect(page.getByTestId('session-subtitle')).toContainText('Finishing');
+  await expectPhase(page, 'Finishing up');
   await pressActivate(page.getByTestId('finish-session'));
   /*
    * `waitForSynced` cannot prove a finish. It waits for the badge to read "All changes synced", and

@@ -121,3 +121,53 @@ file asserts its scan found >10 spec files including `sla.spec.ts` and `a11y.spe
 **Retries stay off, and that is the considered choice, not an oversight:** they would make the original
 `on-first-retry` setting work as intended *and* silently convert every flake into a green after one
 attempt. The card's whole premise is that red has to keep meaning red.
+
+## #119's CI run is the experiment #80 was for
+
+CI runs `npm run test:e2e` **bare** — no `--workers` cap — so on its 4-core runner the suite executes at
+Playwright's default worker count. PR #119's `test` job came back **green in 13m7s** with per-run fixture
+ids in place. That is not proof the contention family is gone (CI's runner is faster and quieter than this
+box, and it is a single sample), but it is the first green at *uncapped* workers this project has had on a
+branch whose subject is shared identity — and it is the configuration #100 must now reproduce locally
+rather than theorise about.
+
+## The label fence landed — and it immediately made a new mistake, which is the useful part
+
+`tests/e2e/runner-fixtures.ts` gained `PHASE_LABEL_WINDOW_MS = 2 × POLL_INTERVAL_VISIBLE_MS + 2_000`
+(= 10 s, **imported** from `src/app/state/sync-engine.ts`, not retyped), plus `expectPhase`. Eleven call
+sites across three files converted from bare `toContainText('<label>')`, which had been running on
+Playwright's 5 000 ms default — half the poll interval they depend on.
+
+**Guard:** `tests/unit/infra/e2e-phase-window.test.ts`, 4 specs. Provoked red three times, each on exactly
+one named test — window detached to `1_000`; one site rewritten to a bare `toContainText('Resting')`;
+`'Stretching'` deleted from the union while the app still renders it. Restored to 4/4 before commit.
+
+**Two defects the guard found in itself, not in the code:**
+- its label parser looked for a *quoted* key (`pre_workout:` is unquoted), so `appPhaseLabels()` returned
+  `[]` and the comparison "passed" against an empty list. Now it throws when it parses nothing. A scanner
+  that silently finds no subjects reports success while testing nothing — the same failure #105's fixture
+  guard was written against.
+- it flagged `a11y.spec.ts:243`, which asserts the subtitle carries *one of* the phase words. That is the
+  "colour is not the only carrier" rule, not a transition wait; routing it through `expectPhase` would
+  have made a test assert a single label it has no business choosing. The scan now matches string-literal
+  arguments only, and says so inline.
+
+**And the change created the next problem measurably.** `a11y.spec.ts:102` went green solo in **24.4 s**
+after the fence — up from the 15.1 s baseline audit 17 recorded, because four 10 s windows are now legal
+waiting inside one test, against a **30 s default test timeout**. Enlarging assertion windows without
+enlarging the clock simply moves the failure from "measurement breach" to "test timeout" — which is
+precisely audit 19's shape for G-M3-3, and precisely what the card says a measurement's own arithmetic
+justifies fixing. It now carries `test.setTimeout(WORKOUT_FLOW_TIMEOUT_MS)`, the constant the other two
+whole-workout flow specs already use and that this one had somehow never been given, with the arithmetic
+(4 × 10 s + flow, 24.4 s measured) in the comment. Full file: 7 passed in 49.4 s.
+
+Unit layer after this increment: **44 files / 427 tests** (was 42 / 419 — the two new guards). ESLint
+exit 0, typecheck 0 errors.
+
+### Still open in this class
+- `dashboard.spec.ts:125` (4.0 s baseline, 5 s windows, poll-dependent): same class, different subject —
+  it asserts list state, not a phase label, so `expectPhase` does not fit. Needs a derived window of its
+  own or a structural wait, decided by experiment.
+- The `waitForQueued` (registration-then-ack) idea is **not implemented**: it assumes the "N waiting to
+  sync" render is observable long enough to catch, and if a fast ack skips it the helper becomes a new
+  flake generator. The derived window carries the fence alone until that is measured.

@@ -77,11 +77,470 @@ none of them is failing on a code path that #80 touched.
 | `session-runner.spec.ts:237` | 18.3 s | failed at 9.3 s | failed *earlier than its baseline*, so an assertion gave up well before the flow ran out — a race, not a clock |
 | `sla.spec.ts:144` G-M3-4 | 16.1 s | red | drain measurement under load, in the family |
 
-**`dashboard.spec.ts:125` is the same root cause as the phase-label reds, with a number on it.** Its solo
-baseline is **4.0 s**, it asserts that a *second, already-open tab* learns about a session created in
-another tab (`stale.getByText('In progress').toBeVisible()`, `toHaveCount(0)`), and the app's visible poll
-is `POLL_INTERVAL_VISIBLE_MS = 4_000`. So the spec's entire happy path is **one poll cycle long**, and
-Playwright's default assertion timeout is **5 s** — 20 % headroom, on a spec whose subject is a poll.
-Under a 1.7x-oversubscribed box the poll lands late, the window closes, and a correct product reads as a
-failure. That is not contention being mistaken for a bug; it is a window that was never derived from the
-propagation design it depends on.
+**Correction, one row later, against something I wrote from a title: `dashboard.spec.ts:125` is *not*
+the poll class.** Reading the spec's body (`:136-158`) shows the mechanism is a **rejection-triggered
+refetch** — the stale tab clicks Start, the server refuses it under `one_active_session_per_day`, and the
+client's own comment says "after the rejected attempt **and the refetch it triggers**, the stale tab shows
+the one true session". No `POLL_INTERVAL_VISIBLE_MS` is on that path, so the paragraph this row replaced
+("its entire happy path is one poll cycle long") was an inference from the test's *name* and is withdrawn.
+Its solo baseline of 4.0 s stands; its cause does not.
+
+**So this one stays open, and the reason it can stay open honestly is that it is now observable.** Pass C's
+error text is unrecoverable — `battery.sh` greps `passed|failed|✘`, which is how #105 lost its own
+assertion diffs and how I nearly reconstructed this from memory. Traces and per-spec durations now exist,
+so a future red arrives as `trace.zip` plus a JSON entry instead of an argument. What is *not* done here:
+no speculative window widening on a mechanism nobody has named, because a fence for the wrong cause
+converts a red that means something into a green that means nothing.
+
+## Instrumentation landed — #100 branch `test/m4-100-contention-fences` (stacked on `#80`'s `8b5d974`)
+
+`playwright.config.ts` now keeps a failure's evidence, and `tests/unit/infra/e2e-evidence-config.test.ts`
+pins the configuration so it cannot revert to an unobservable intention.
+
+**The claim, watched rather than asserted.** A temporary failing spec ran on this box:
+
+| Spec | status | duration | trace produced |
+| :-- | :-- | :-- | :-- |
+| `deliberate failure for the trace check` | `failed` | **1 558 ms** | `test-results/…/trace.zip` ✓ |
+| `deliberate pass carrying a known sleep` | `passed` | **3 440 ms** | none (correct: only failures retain) |
+
+The throwaway spec was deleted in the same change. The durations arriving in `test-results/playwright.json`
+is the part that changes how this file gets written from now on: a near-miss (tap p95 47 ms, G-M3-4's drain
+at 4.6 s) is now visible across runs instead of being remembered from a console line.
+
+**Two provocations, each red on exactly one named test:**
+
+| Breakage | Result |
+| :-- | :-- |
+| `retain-on-failure` → `on-first-retry` (the dead setting) | `records a trace on failure rather than on a retry that never happens` — **red** |
+| `retries: 2` added to the config | `keeps retries off, so a red gate still means red` — **red** |
+| restored | 4/4 green |
+
+**What the guard caught on its first run was a defect in the guard, not in the config.** It asserted
+`not.toContain('on-first-retry')` against the raw file — and tripped on the block comment that *explains*
+why that setting was dead. A prose-sensitive guard is worse than none: it fails on documentation and passes
+on a real regression hidden in a comment. Fixed by scanning code with block comments stripped (and line
+comments stripped only when `//` is not preceded by `:`, so `"http://localhost:3001"` survives). The same
+file asserts its scan found >10 spec files including `sla.spec.ts` and `a11y.spec.ts`, which is the
+`finds the specs it claims to have scanned` lesson from #105 applied before it had to be learned twice.
+
+**Retries stay off, and that is the considered choice, not an oversight:** they would make the original
+`on-first-retry` setting work as intended *and* silently convert every flake into a green after one
+attempt. The card's whole premise is that red has to keep meaning red.
+
+## #119's CI run is the experiment #80 was for
+
+CI runs `npm run test:e2e` **bare** — no `--workers` cap — so on its 4-core runner the suite executes at
+Playwright's default worker count. PR #119's `test` job came back **green in 13m7s** with per-run fixture
+ids in place. That is not proof the contention family is gone (CI's runner is faster and quieter than this
+box, and it is a single sample), but it is the first green at *uncapped* workers this project has had on a
+branch whose subject is shared identity — and it is the configuration #100 must now reproduce locally
+rather than theorise about.
+
+## The label fence landed — and it immediately made a new mistake, which is the useful part
+
+`tests/e2e/runner-fixtures.ts` gained `PHASE_LABEL_WINDOW_MS = 2 × POLL_INTERVAL_VISIBLE_MS + 2_000`
+(= 10 s, **imported** from `src/app/state/sync-engine.ts`, not retyped), plus `expectPhase`. Eleven call
+sites across three files converted from bare `toContainText('<label>')`, which had been running on
+Playwright's 5 000 ms default — half the poll interval they depend on.
+
+**Guard:** `tests/unit/infra/e2e-phase-window.test.ts`, 4 specs. Provoked red three times, each on exactly
+one named test — window detached to `1_000`; one site rewritten to a bare `toContainText('Resting')`;
+`'Stretching'` deleted from the union while the app still renders it. Restored to 4/4 before commit.
+
+**Two defects the guard found in itself, not in the code:**
+- its label parser looked for a *quoted* key (`pre_workout:` is unquoted), so `appPhaseLabels()` returned
+  `[]` and the comparison "passed" against an empty list. Now it throws when it parses nothing. A scanner
+  that silently finds no subjects reports success while testing nothing — the same failure #105's fixture
+  guard was written against.
+- it flagged `a11y.spec.ts:243`, which asserts the subtitle carries *one of* the phase words. That is the
+  "colour is not the only carrier" rule, not a transition wait; routing it through `expectPhase` would
+  have made a test assert a single label it has no business choosing. The scan now matches string-literal
+  arguments only, and says so inline.
+
+**And the change created the next problem measurably.** `a11y.spec.ts:102` went green solo in **24.4 s**
+after the fence — up from the 15.1 s baseline audit 17 recorded, because four 10 s windows are now legal
+waiting inside one test, against a **30 s default test timeout**. Enlarging assertion windows without
+enlarging the clock simply moves the failure from "measurement breach" to "test timeout" — which is
+precisely audit 19's shape for G-M3-3, and precisely what the card says a measurement's own arithmetic
+justifies fixing. It now carries `test.setTimeout(WORKOUT_FLOW_TIMEOUT_MS)`, the constant the other two
+whole-workout flow specs already use and that this one had somehow never been given, with the arithmetic
+(4 × 10 s + flow, 24.4 s measured) in the comment. Full file: 7 passed in 49.4 s.
+
+Unit layer after this increment: **44 files / 427 tests** (was 42 / 419 — the two new guards). ESLint
+exit 0, typecheck 0 errors.
+
+### Still open in this class
+- `dashboard.spec.ts:125` (4.0 s baseline, 5 s windows, poll-dependent): same class, different subject —
+  it asserts list state, not a phase label, so `expectPhase` does not fit. Needs a derived window of its
+  own or a structural wait, decided by experiment.
+- The `waitForQueued` (registration-then-ack) idea is **not implemented**: it assumes the "N waiting to
+  sync" render is observable long enough to catch, and if a fast ack skips it the helper becomes a new
+  flake generator. The derived window carries the fence alone until that is measured.
+
+## The clocks, measured — and audit 19 stops being a mystery
+
+`sla.spec.ts`'s three measurement specs ran on Playwright's **30 s default test timeout** with no override,
+while two of them *declare* more permitted waiting than that. Both are now set from their own constants:
+
+| Spec | Declared waits | Measured solo, quiet box (load 1.08 / 2.33) | Old clock | New clock |
+| :-- | :-- | :-- | :-- | :-- |
+| **G-M3-3** `:315` | 15 000 + 5 × 8 000 = **55 s** | **25.7 s — 86 % of its old budget** | 30 s | 55 s + `WORKOUT_FLOW_TIMEOUT_MS` = 145 s |
+| G-M3-4 `:169` | 10 000 + 15 000 = 25 s | 8.3 s (16.1 s in an earlier solo) | 30 s | 115 s |
+| G-M3-2 `:94` | **none declared** | 5.8 s | 30 s | **30 s, left alone** |
+
+G-M3-3's number is the one that retires the story. Audit 19 recorded it "running out its 30 s *test* budget
+while printing a **passing** measurement", and that is exactly what a 25.7 s quiet-box baseline inside a
+30 s clock predicts: **4.3 s of headroom** on a spec whose own assertion windows permit 55 s of waiting. No
+contention required, no product defect required — the arithmetic never fit. The json reporter is what turned
+that from a reading of the code into a measurement: `list` printed 25.7 s once and would have forgotten it.
+
+G-M3-2 keeps the default deliberately. It declares no waits and its recorded failure was a measurement
+breach at p95, so extending its clock would be loosening a gate to fit a narrative about it.
+
+**Why there is no separate guard for these clocks:** the inline literals and the test timeouts are now the
+same identifiers — `G_M3_3_BADGE_WINDOW_MS`, `G_M3_3_PROPAGATION_WINDOW_MS`, `G_M3_4_QUEUE_VISIBLE_MS` — so
+a clock cannot drift below the waits it contains without editing them, and `grep -n "timeout: [0-9]"` over
+this file returns nothing. Naming the values *is* the fence; a test asserting a sum of two names would
+decorate it.
+
+## `100run1` — a harness event, recorded because discarding it silently would be the same error as retrying a flake
+
+**54 failed / 6 passed in 2.9 m.** One cause, and the log proves it by its shape rather than by my
+reading of it:
+
+| # | Test | Result |
+| :-- | :-- | :-- |
+| 1–4 | `a11y.spec.ts` axe on `/`, `/sign-in` | passed in ~1 s — the server was alive |
+| 5 | `a11y.spec.ts:103` (keyboard walker) | failed at 13.7 s: expected `Working out`, received `· Warming up`, **Timeout 10 000 ms, 24 polls** at `runner-fixtures.ts:216` |
+| 6–60 | everything after | failed in **623–971 ms each**: `page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:3001/` |
+
+More than half a suite failing inside one second is not fifty-four findings; it is the target server
+disappearing, and every remaining spec then reporting the same absence. Test 5's label red is a symptom of
+the same event — its task mutation had no server to acknowledge it, so the phase legitimately never
+advanced, and `expectPhase` waited its full derived 10 s instead of deciding at 5 s.
+
+Evidence gathered, including the three negative results that matter: **no crash output** in the run's
+`[WebServer]` stream after its startup warnings (a Next process that throws says so; this one went silent,
+i.e. a signal), **no OOM in `dmesg` or the kernel journal**, and **no competing battery or stray
+`next-server` process** found afterwards. `pkill -f '[n]ext-server'` appears in my harness at the *start*
+and *end* of the e2e step, which is the right place for it but would be fatal if a second harness ever ran
+concurrently — the one hypothesis that fits a signal with no output, and not available for this pass
+because nothing else was running.
+
+**Reproduction, same tree, same command, nothing else on the box: `61 passed (5.3m)`, zero refusals, load
+1.78.** The verdict therefore is: `100run1` measured the harness, does not count toward #100's five, and
+its cause is **unnamed**. Unnamed is not the same as resolved, and #100 does not get to close while "the
+server can vanish mid-suite and the log blames the specs" is unaddressed.
+
+What the pass did buy: **the first `trace.zip` this project has ever produced from a battery failure**
+(`test-results/a11y-a-whole-session-can-b-f0515-…/trace.zip`), which is the instrumentation claim working
+on a real incident rather than on a provoked one. And `battery.sh` now counts `ERR_CONNECTION_REFUSED`
+occurrences and prints `HARNESS: that pass measured the harness, not the specs. Do not count it either
+way.` — so the misreading cannot be made again by whoever runs it next, including me.
+
+## The suite's wall clock, finally measurable — and the denominator I got wrong in my own table
+
+The green repro produced per-spec durations for all 61 specs. Slowest four, against the clock each one
+*actually* runs under:
+
+| Spec | Duration | Its real clock | Utilisation |
+| :-- | :-- | :-- | :-- |
+| `sla.spec.ts:315` G-M3-3 | 25.6 s | 145 s (set this round, from its 55 s of declared waits) | 18 % |
+| `timers.spec.ts:307` | 23.6 s | 90 s (`WORKOUT_FLOW_TIMEOUT_MS`, already present at `:308`) | 26 % |
+| `session-runner.spec.ts:202` | 18.3 s | 90 s | 20 % |
+| `lighthouse.spec.ts:276` | 13.5 s | **30 s default** → now 240 s | **45 % → 6 %** |
+
+My first pass at this table computed "utilisation" as a share of a **30 s default for every spec**, which
+was wrong for the six that set their own clocks and would have made G-M3-3 look like an 85 % near-miss when
+it had already been given 145 s. Corrected above. The lesson is the ledger's own, applied to me: a
+measurement without the right denominator is worse than no measurement, because it looks like evidence.
+
+**The one real finding in that column is a class #100 had not named: a `describe`-scoped clock does not
+reach tests declared outside the `describe`.** `lighthouse.spec.ts:99` set 240 s inside
+`test.describe('Lighthouse accessibility')`, while the two whole-page audits at the bottom of the same file
+are top-level `test(...)` calls — so they ran a cold Chrome plus a full audit inside the **30 s default**,
+taking 12.2 s and 13.5 s on an idle box. Under the same contention that produced pass C, those are reds
+with no product meaning at all. The ceiling is now `LIGHTHOUSE_RUN_TIMEOUT_MS`, named once and applied to
+all four specs; verified 4/4 green in 1.1 m. This is *scoping*, not arithmetic — the G-M3-3 bug was a sum
+that exceeded its clock, and this one was a clock that never applied.
+
+## #100's counted sequence — five consecutive full batteries, zero solo re-runs
+
+Criterion, from the card: five consecutive full-battery greens on this machine with **no spec re-run in
+isolation to rescue it**, each pass reporting its denominator. Code tip: `89f0281`, rebased onto merged
+`main` (`dac6b44`, which contains #80). Per-step exits are lint / typecheck / check-set-config /
+api:preflight / unit / api / mutation / e2e.
+
+| Pass | Per-step exits | e2e result | unit / api | set-tap p95 | `/api/sync` p50 | `nproc` · load before → after | Counts? |
+| :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
+| `100q1` | 0 ×8 | **61 passed (5.9 m)** | 44/427 · 11/64 | **33.1 ms** vs 50 | 251.1 ms vs 200 (MISSES, #92) | 4 cores · **3.79 / 4.37 / 3.87 → 3.15 / 4.23 / 4.04** | **1/5** |
+| `100q2` | 0 ×8 | **61 passed (5.7 m)** | 44/427 · 11/64 | **30.6 ms** vs 50 (max tap 56.3 — the gate is p95) | 226.2 ms vs 200 (MISSES, #92) | 4 cores · 2.17 / 3.82 / 3.91 → 2.55 / 4.11 / 4.07 | **2/5** |
+
+| `100q3` | 0 ×7, **e2e exit 1** | **1 failed / 60 passed (6.7 m)** | 44/427 · 11/64 | (not reported, see note) | — | 4 cores · 3.19 / 3.71 / 3.86 before → **4.59 / 6.85 / 5.96 after** | **streak reset — see below** |
+
+### `100q3`'s red is a member of the family with a name, and it is not a timing window
+
+```
+✘  tests/e2e/a11y.spec.ts:163:1 › state is carried by glyph and word, not by colour (8.1s)
+   Error: Could not clean up M1-16 test user (500).
+     at ../integration/api/fixtures.ts:156
+```
+
+**Zero `ERR_CONNECTION_REFUSED`**, so this is not `100run1`'s vanished-server signature. And it is not a
+slow assertion either: nothing about the app was asserted wrongly — **`cleanup` threw**, in the teardown
+path of `createTestSession`, because GoTrue's `DELETE /auth/v1/admin/users/{id}` returned **500**.
+
+That retires a loose end that had been carried on two PRs' "not claimed" lists. The same string appeared on
+`session-runner.spec.ts:111` in earlier passes, where it was filed as unexplained. **It is one event, not
+two flakes** — whichever spec happens to own the fixture at the moment GoTrue 500s is the spec that gets
+blamed, which is exactly why this family looked random and why solo re-runs "fixed" it: the 500 is
+episodic, not per-spec. A red that lands on an arbitrary file name is a red about shared infrastructure
+wearing a spec's clothes.
+
+**The load number does not excuse it, and the streak therefore resets.** The ledger's load rule disqualifies
+*windows* a busy box can stretch; an HTTP 500 from the identity service is not a window, and q3's load
+(3.19 before, 4.59 → 6.85 after on 4 cores) is at most a candidate reason *why* GoTrue 500'd — a cause, not
+a dispensation. `100q1` and `100q2` stop counting toward the five. Restating that cost rather than quietly
+restarting the numbering is the point: after the fix the sequence must be **five fresh consecutive greens**,
+not three more.
+
+Also recorded without attribution, because it is the only other server-side line in the pass and I am not
+ready to connect them: `[WebServer] ⨯ Error: The destination stream closed early.` (digest `385829324`,
+`100q3-e2e-full.txt:88`).
+
+**Why the 500 cannot yet be named, and what that costs:** `fixtures.ts:156` reports the status and nothing
+else, and the delete response body is never read; the create path at `:136` parses a body and then throws it
+away, keeping only the status. So the identity service's explanation for its own failure is discarded by our
+test helper — this was raised as an unfiled artifact twice and never ruled on, and it has now become
+load-bearing: #100 cannot exit "as a root cause with a control" while the root cause's own message is being
+thrown out. Surfacing it is the next change, and it is a diagnostic, not a gate: no threshold, no assertion,
+and no expectation about GoTrue changes.
+
+`100q2` ran at `HEAD=cf2372a`, one markdown commit above the code tip: `git diff --name-only 89f0281..HEAD`
+returns this file alone, so the counted pair shares code tree `89f0281` — the same discipline #80's gate used,
+and for the same reason: a ledger row must not invalidate the pass it is recording.
+
+**Zero solo re-runs across both passes.** Nothing was re-run in isolation, because nothing went red; the
+protocol §7 still recommends ("re-run a red timing gate solo before believing it") stayed unused, which is
+the first time in this project's history that the recommendation has been *satisfiable* rather than merely
+followed.
+
+## The streak restarts at `7baf430` — the cost of treating a red as real
+
+`100q1` and `100q2` are history, not the first two of five. **Fresh sequence, code tip `7baf430`:**
+
+| Pass | Per-step exits | e2e | unit / api | set-tap p95 | `/api/sync` p50 | load before → after | Streak |
+| :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
+| `100r1` | 0 ×8 | **61 passed (5.6 m)** | 45/430 · 11/64 | **18.2 ms** vs 50 | 244.2 vs 200 (MISSES, #92) | 4 cores · **3.42 / 3.78 / 4.68 → 4.96 / 4.32 / 4.61** | **1/5** |
+
+`100r1` is the first *counted* green earned with the 1-minute load **above the core count for most of the
+pass** (4.68 before, 4.96 after, on `nproc=4`), and the set-tap gate measured **18.2 ms p95** — its best
+number of any pass in this ledger, including the quiet ones. Two things follow, and only the second one is
+comfortable: the label/clock fences hold under oversubscription, and a "quiet box" was never the condition
+that made earlier passes pass, because they had no denominator to be quiet about.
+| `100r2` | 0 ×8 | **61 passed (7.4 m)** | 45/430 · 11/64 | **34.8 ms** vs 50 (max tap 52.6) | 215.1 vs 200 (MISSES, #92) | LOAD BEFORE: 3.91 4.07 4.49 →  5.82 8.49 6.74 | **2/5** |
+
+**`100r2` is the pass that tests what #100's fences were built for.** An unrelated `opencode` session held
+~50 % of a core for 45 minutes and a `VBCSCompiler` joined it mid-run; the 1-minute load peaked at **8.49**
+on `nproc=4` — **2.1× oversubscribed** — and the suite went green anyway, in 7.4 m against 5.6 m for the
+quieter `100r1`. Set-tap measured p95 34.8 ms with a single tap at 52.6 ms: the p95 gate held, and the
+individual max is reported here rather than being the thing that gates, which is how the spec is written.
+
+That is not "the box was quiet so it passed" and it is not "we loosened something": every window that had
+previously been shorter than the propagation it waited on was widened to its derived bound *before* this
+pass, and no SLA moved. The honest reading is narrower than "flakes fixed" — it is **one pass at 2× load
+with zero reds**, which is more than any earlier branch can show *measured*.
+| `100r3` | 0 ×8 | **61 passed (5.3 m)** | 45/430 · 11/64 | **18.7 ms** vs 50 | p50 175.2 / **p95 210.8 → MISSES** | 3.53 / **7.04** / 6.39 → 2.68 / 4.19 / 5.29 | **3/5** |
+
+`100r3` ran with the 5-minute average at **7.04** (1.8× cores) when it started and came down as it went, and
+`POST /api/sync` printed **p50 175.2 ms — inside the documented 200 ms** for the first time in this ledger.
+Worth stating precisely because it cuts both ways: the budget's verdict on this box swings with what the
+neighbours are doing, which is #92's point about the measurement needing a quieter denominator, not evidence
+that anything in the app improved. The 800 ms enforced ceiling is untouched and was never approached.
+| `100r4` | 0 ×8 | **61 passed (5.9 m)** | 45/430 · 11/64 | **25.8 ms** vs 50 (max 48.1) | p50 232.8 / p95 320.3 → MISSES | 3.19 3.99 5.12 → 6.85 5.61 5.27 | **4/5** |
+
+`100r4` began at 3.19 / 3.99 / 5.12 and ended with the 1-minute average at **6.85** — the load *rose* during
+the pass, peaked above the core count, and changed nothing: no red, no solo re-run, no `HARNESS` line. Its
+`/api/sync` p95 of 320.3 ms is the worst of the four and sits alongside the quietest tap numbers in the
+sequence (median 12.8 ms), which is a useful reminder that these two measurements do not move together:
+one is a local paint, the other is a round trip through a contended Postgres.
+
+(Counted from the e2e log rather than from the pass file: the only `✘`/`failed` lines in `100r4.log` are the
+six mutation-harness controls, which are *supposed* to fail — `CAUGHT exit=1` — and whose `RESTORED` step
+came back 6 passed. Quoting that count as "e2e reds" would be a mistake a reader of this ledger could make,
+so it is pre-empted here.)
+| `100r5` | 0 ×8 | **61 passed (6.2 m)** | 45/430 · 11/64 | **36.3 ms** vs 50 (max tap 75.6) | p50 219.3 / p95 281.0 → MISSES | **4.80 / 5.42 / 5.25 → 5.00 / 5.59 / 5.34** | **5/5** |
+
+## #100's five-consecutive criterion: met, and what "met" means here
+
+`100r1` … `100r5` are **five consecutive full-battery greens on this machine with zero solo re-runs** — nothing
+was re-run in isolation, because nothing went red. Verified to share one code tree: `git diff --name-only
+7baf430..HEAD` returns this file alone, so `7baf430` is the code the whole sequence measured.
+
+The sequence is not continuous with the earlier passes, and the breakage is part of the record: `100q1` and
+`100q2` were green and were discarded when `100q3` went red on a teardown 500 whose cause could not yet be
+named. Carrying two greens earned *before* that red existed would be the same move as deleting the row.
+
+**Three of the five passes ran with the load average above the core count** — r3 started at 7.04 on the
+5-minute average (1.8×), r4 ended at 6.85 (1.7×), r5 ran its whole length between 4.80 and 5.59 (1.2–1.4×).
+That is the difference between "green on a quiet box" and something worth calling evidence, and it is
+reportable only because the denominator got attached to the harness. The `nproc=4` count and both load
+samples are in `battery.sh`'s output for every pass from here on.
+
+**What is still not claimed**, restated so the summary above cannot be read as a close:
+
+1. **The suite is not proven quiet.** Five greens at 1–1.8× oversubscription on one machine with one
+   neighbour profile is a strong result and not a proof; the 50 ms tap gate and the 5 s propagation budgets
+   were never moved to obtain it.
+2. **The `100run1` server disappearance is unnamed.** It did not reproduce and the harness now detects it,
+   but "a production server can vanish mid-suite with no signal explanation" is unresolved.
+3. **`dashboard.spec.ts:125` is unresolved**, with a wrong explanation withdrawn (see above).
+4. **The GoTrue teardown 500 is now *nameable* rather than fixed.** `describeGoTrueFailure` surfaces the
+   service's own message; the cause of the 500 is still open, and #100 does not claim it. If it recurs in
+   the counted runs, the message will say what it was.
+5. **`/api/sync` misses its documented 200 ms budget on p95 every counted pass** (335.5 → 302.3 → 210.8 →
+   320.3 → 281.0 ms). #92's, with the caveat already recorded about quoting a p50 that dipped under.
+
+## The uncapped pass — CI's real scheduling, on a box CI does not run on
+
+`pw-default-workers.sh` with no `--workers`: Playwright chose **2 workers** (`cores/2` on `nproc=4`), which is
+exactly what `.github/workflows/test.yml` runs. Result **4 failed / 57 passed in 4.9 m**, load ending at
+**7.51 / 7.37** (1.9× oversubscribed). Every red is classified from its own text rather than from the pass
+average — available because the harness stopped filtering output and started attaching traces:
+
+| # | Spec | Its own words | Class |
+| :-- | :-- | :-- | :-- |
+| 1 | `session-runner.spec.ts:112` | `p95 of 55.1 ms over 100 taps` | **measurement gate** — the 50 ms paint goal, missed under 1.9× load |
+| 2 | `session-runner.spec.ts:299` | `Test timeout of 30000ms exceeded` (+ `trace.zip`) | **clock bug** — same class as G-M3-3, now measured |
+| 3 | `sla.spec.ts:94` G-M3-2 | `p95 73.2ms exceeds the 50ms goal` | **measurement gate** — same goal, further over |
+| 4 | `timers.spec.ts:278` | `Expected "Resting"`, received `"· Working out"`, `Timeout: 10000ms` | **derived label window exhausted** |
+
+Row 2 was fixable from data this branch created. `session-runner.spec.ts`'s three unclocked specs measured
+**7.3 s / 15.0 s / 17.9 s** in `100r2` — the last being **60 % of a 30 s default** on a busy-but-serial pass,
+which becomes a timeout as soon as a second worker competes for the same cores. They now carry
+`WORKOUT_FLOW_TIMEOUT_MS`, the allowance their file's other three specs already use, with the measured
+duration in each comment; verified 6/6 green in 1.3 m. That is a clock sized from arithmetic, and neither
+the 50 ms gate nor the 5 s budgets nor the 4 s poll moved to obtain it.
+
+Rows 1 and 3 are the honest residue #100 does **not** remove: on this box, at 2 workers, the 50 ms paint
+goal is missed by two specs simultaneously. Merging a silent `--workers=1` into CI would hide it (refused on
+purpose — CI still runs bare), and raising the goal to 80 ms would be the exact move the card forbids. On
+CI's runner the same gate reads p95 **16.8–19.4 ms**, and PR #119's green job was itself 2 workers, so what
+the data says is: *the gate is sensitive to oversubscription, not broken by parallelism.* #92/#96's load work
+owns that question.
+
+Row 4 says something narrower about my own fence than I would like: `PHASE_LABEL_WINDOW_MS` = two poll
+cycles + a refetch is derived from the interval, but under 1.9× oversubscription **the poll itself is
+starved**, so the window that was too tight at 5 s is too tight at 10 s. It held on all five serial greens.
+Widening it to survive 2× contention would be tuning a bound to a busy box instead of to the design, so it
+stays as derived and this row is the disclosure.
+
+**Consequence for the counted sequence: the tree moved, so the five restarts.** `7baf430` was the code under
+`100r1`–`100r5`; the clocks above are a real change to a shipped behaviour (how long a spec is allowed to
+run), so reusing that pair of… passes would be the same shortcut as carrying greens across a red. New code
+tip, five fresh passes, same rule.
+
+## The five fresh counted passes on `05a6b0d`
+
+Rows rebuilt from each pass's own `.log` and preserved `-e2e-full.txt` by parsing, not transcription: reds
+are counted from Playwright's numbered failure blocks, `refusals` from the harness signature, and the
+streak column only advances when a pass is 8/8 green with zero e2e reds.
+
+| Pass | Code tip | Steps | e2e | unit / api | set-tap ms | `/api/sync` ms | load before → after | Streak |
+| :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
+| `100s1` | `05a6b0d` | 8/8 | **61 passed (5.4m)**, 0 reds | 45/430 · 11/64 | p95 **32.2** (max 61.2) | 194.5 / 280.7 → MISSES | 3.19 4.67 5.31 → 2.17 3.34 4.43 | **1/5** |
+| `100s2` | `05a6b0d` | 8/8 | **61 passed (5.5m)**, 0 reds | 45/430 · 11/64 | p95 **20.7** (max 30.3) | 173.7 / 202.1 → MISSES | 2.17 3.34 4.43 → 2.25 3.55 4.15 | **2/5** |
+| `100s3` | `05a6b0d` | 8/8 | **61 passed (5.6m)**, 0 reds | 45/430 · 11/64 | p95 **35.0** (max 42.1) | 216.8 / 324.1 → MISSES | 2.25 3.55 4.15 → 4.43 3.85 3.99 | **3/5** |
+| `100s4` | `05a6b0d` | 8/8 | **61 passed (6.6m)**, 0 reds | 45/430 · 11/64 | p95 **30.5** (max 39.4) | 242.3 / 404.6 → MISSES | 4.43 3.85 3.99 → 8.36 6.83 5.34 | **4/5** |
+| `100s5` | `05a6b0d` | 8/8 | **61 passed (5.3m)**, 0 reds | 45/430 · 11/64 | p95 **24.2** (max 50.9) | 171.5 / **199.1 → MET, by 0.9 ms** | 8.36 6.83 5.34 → 2.64 4.08 4.80 | **5/5** |
+
+**5 of 5 counted passes green on `05a6b0d`.**
+
+## #100's criterion, satisfied twice and claimed neither time as proof of quietness
+
+Five consecutive full-battery greens exist for two code trees: `7baf430` (`100r1`–`100r5`) and `05a6b0d`
+(`100s1`–`100s5`), each with **zero solo re-runs**, and the second is the one the branch ships. The first was
+discarded on principle, not necessity — a spec's allowed runtime is shipped behaviour, so carrying those
+greens across a clock change would have been the same shortcut as carrying them across a red.
+
+**Two errors in this table, both corrected on sight.** The first version of `100s5`'s row said "MISSES"
+because the generator wrote that verdict unconditionally; `100s5` actually printed **p95 199.1 ms against the
+200 ms document — met, by 0.9 ms**, the only pass in the project's recorded history to clear it, and clearing
+it by 0.9 ms is a coin flip rather than a result. The second: a paragraph below the earlier version claimed
+the shipping five "stayed between 2.17 and 4.43", which the rows contradict — `100s4` ended at **8.36**
+(2.1× cores) and `100s5` began there. Both statements are wrong in the *flattering* direction, which is the
+kind worth looking for. So the strongest statement the data supports is *five consecutive full
+batteries at `--workers=1`, on a box whose neighbours were awake, with the label windows and the spec clocks
+each sized from the arithmetic they depend on* — and the uncapped 2-worker run above shows the same tree
+still reds on the 50 ms paint gate at 1.9× oversubscription. #100 exits as **a named fence with named
+residue**, not as a root-caused silence: three causes were found and fenced with controls (the poll-derived
+label window, the under-sized spec clocks, and the unreachable-trace configuration), and four things remain
+open by name (`dashboard.spec.ts:125`, the vanished server in `100run1`, the GoTrue teardown 500 now being
+nameable rather than fixed, and `/api/sync`'s p95 against its 200 ms document).
+
+## CI went red on the paint gate, and the retry passing is not the end of it
+
+**Run 34710896238 (`c0c727b4`, the merge ref): `test` job failed — "Run E2E suite against the production
+build", 60 passed / 1 failed.** The red was `sla.spec.ts:94` G-M3-2: `p95 66.1ms exceeds the 50ms goal`.
+**Run 34711078660 (`d0c6037`) passed in 12m37s**, `MERGEABLE`/`CLEAN`. Both numbers are from the job logs,
+fetched rather than remembered.
+
+The retry does not close it, and the pair is more useful together than either run alone:
+
+| CI run | G-M3-2 line | median | p95 | max | **n** |
+| :-- | :-- | :-- | :-- | :-- | :-- |
+| 34710896238 (red) | `[G-M3-2 tap→UI]` | **15.3 ms** | **66.1 ms** | 66.1 ms | **17** |
+| 34711078660 (green) | `[G-M3-2 tap→UI]` | **15.3 ms** | **24.8 ms** | 24.8 ms | **17** |
+| local counted passes | same | 12.8–17.4 ms | 18.2–36.3 ms | 24.9–75.6 ms | **100** |
+
+**Two facts in that table, and neither is contention.** First: **`p95 == max` in both CI runs.** With
+`n=17` the "95th percentile" *is* the largest observation, so a single slow tap decides a 50 ms SLA — which
+is why the same median (15.3 ms, identical in both runs) produced red and green on successive runs of
+different trees. Second: the spec's title promises **100 taps** and CI records **17**, while this box
+records 100.
+
+**What is verified, and what is only a candidate mechanism — stated separately because the first version of
+this paragraph did not.** Verified from the code: `sla.spec.ts:115-126` sets `t0` per element on
+`pointerdown`; the observer at `:128-136` records a sample **only when an `aria-pressed` mutation arrives
+while a `t0` is pending**, then deletes it; the observer filter is `['aria-pressed']`, so it sees *changes*
+rather than commits; and `:161` accepts the run with **`samples.length > 3`**, so a spec titled "across 100
+taps" can compute "p95" from four. The CI/local split (n=17 vs n=100) is therefore a sampling-ratio
+difference, and the statistic's meaning changes with it: `p95(17) = max(17)`, `p95(100)` is a percentile the
+75.6 ms local maximum cannot reach.
+
+Candidate mechanism, **not established**: a tap whose state change coalesces into an existing
+`aria-pressed="true"` produces no mutation, its `t0` survives, and the *next* change pairs with that stale
+`t0` — which would simultaneously explain samples going missing and a long-tail reading like 66.1 ms, since
+the pair measures tap → a later paint. Distinguishing that from plain loss needs the sampler to report pairs
+found vs taps issued, which is the first line of the fix. What is *not* in doubt is the gate's shape: with
+n=17, one observation decides it, and on CI that observation was a coin flip between 24.8 ms and 66.1 ms
+across two runs whose median did not move.
+
+**Not fixed here, and why that is disclosed rather than tidied:** the fix is to make the loop await the paint
+it is timing before the next tap (or key `t0` per pending click rather than per element), which changes *how
+many samples the gate sees* — a measurement-semantics change that deserves its own control and its own
+counted passes, not a commit riding on a PR whose five batteries were measured on the current sampler. Two
+corrections travel with it: this PR's body claimed CI reads **16.8–19.4 ms** for this gate (from #116's
+single job) when the honest figure is 24.8 ms with n=17, and **§7's claim that G-M3-2's reds are
+load-attributable is now at least partly a degenerate-statistic problem on CI hardware.** The 50 ms goal
+itself has not moved, and will not be moved to accommodate this: the defect is in the denominator, not the
+threshold.
+
+## Re-run accounting for every red this branch produced
+
+The criterion is "five consecutive full batteries with **zero solo re-runs**", so the ledger has to say which
+red was re-run and in what form — otherwise "zero" is a claim about a number nobody recorded.
+
+| Red | Where | Solo re-run? | What resolved it instead |
+| :-- | :-- | :-- | :-- |
+| `80passC` × 4 (`dashboard.spec.ts:125`, `session-runner.spec.ts:111`, `session-runner.spec.ts:237`, `sla.spec.ts:144`) | `--workers=1` full suite | **yes, 4/4, before #100 existed** | Each green solo in 1.1 m with its number recorded in the "solo re-run" table above. This is the practice #100's criterion is designed to make unnecessary, and it is kept visible for exactly that reason. |
+| `100run1` × 54 | `--workers=1` full suite | **no** | Full-suite re-run of the identical command on the identical tree: 61 passed, zero refusals. A server disappearance is not a per-spec property, so a solo run would have measured the wrong thing. |
+| `100q3` × 1 (`a11y.spec.ts:163`) | `--workers=1` full suite | **no, deliberately** | Named from code and text instead: `fixtures.ts:156` threw in `cleanup()`. Re-running a teardown throw solo would either pass by luck or produce the same 500 without ever explaining it, and it is the move that had already mis-filed this event twice under two spec names. |
+| uncapped × 4 (`session-runner.spec.ts:112`, `session-runner.spec.ts:299`, `sla.spec.ts:94`, `timers.spec.ts:278`) | default 2 workers | **no** | Classified from their own error strings (55.1 / `Test timeout of 30000ms` / 73.2 / window exhausted). One was fixed by a clock sized from measured durations, which was then re-verified by restarting the whole counted five rather than by re-running the single spec. |
+| CI `test` job on `c0c727b4` (`sla.spec.ts:94`) | GitHub runner | **no** | The retry that produced #116's "same SHA, 61/0" story was *not* reproduced here: the next green run was a different SHA, and the red was taken to its own cause (`n=17`, `p95 == max`), which is filed as **#121** with the 50 ms goal left untouched. |
+
+**Across `100s1`–`100s5` (the counted five): no spec was ever run in isolation at all** — nothing went red, and
+the passes are the unit. That is the first time in this project's history that §7's "re-run a red timing gate
+solo before believing it" protocol was satisfied by *not needing it* rather than by following it, and the row
+above exists so that claim can be audited rather than read as rhetoric.

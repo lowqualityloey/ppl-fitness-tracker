@@ -4,12 +4,13 @@ import AxeBuilder from '@axe-core/playwright';
 import { authHeaders, type TestSession } from '../integration/api/fixtures';
 import { signInFreshUser } from './auth';
 import {
-  firstTick,
   START_DAY,
+  WORKOUT_FLOW_TIMEOUT_MS,
+  expectPhase,
+  firstTick,
   startPushDay,
   waitForSynced,
   warmUpAndStart,
-  WORKOUT_FLOW_TIMEOUT_MS,
 } from './runner-fixtures';
 import { refusedSyncResponseBody } from './sync-fixtures';
 
@@ -30,6 +31,17 @@ test.describe('session runner', () => {
     page,
     request,
   }) => {
+
+    /*
+     * Measured on this file's own worst pass in the counted sequence (`100r2`, load 8.49 on 4 cores):
+     * **7.3 s** against Playwright's 30 s default — 24 % of the clock, which is a red waiting to be
+     * scheduled rather than a product finding. The uncapped run proved it: at CI's worker count a spec in
+     * this file reported `Test timeout of 30000ms exceeded`, with a trace attached. Same class as #100's
+     * other clock rows — `sla.spec.ts:315` permitting 55 s of waits inside 30 s, the two Lighthouse audits
+     * outside their describe's 240 s — and the same remedy: the flow allowance this file's other specs
+     * already use, sized from the measured duration instead of picked. No SLA or assertion threshold moved.
+     */
+    test.setTimeout(WORKOUT_FLOW_TIMEOUT_MS);
     const auth = await signInFreshUser(page, 'e2e-offline-tick');
     try {
       await startPushDay(page);
@@ -150,6 +162,17 @@ test.describe('session runner', () => {
   });
 
   test('surfaces a refused mutation, refetches, and never replays it', async ({ page }) => {
+
+    /*
+     * Measured on this file's own worst pass in the counted sequence (`100r2`, load 8.49 on 4 cores):
+     * **15.0 s** against Playwright's 30 s default — 50 % of the clock, which is a red waiting to be
+     * scheduled rather than a product finding. The uncapped run proved it: at CI's worker count a spec in
+     * this file reported `Test timeout of 30000ms exceeded`, with a trace attached. Same class as #100's
+     * other clock rows — `sla.spec.ts:315` permitting 55 s of waits inside 30 s, the two Lighthouse audits
+     * outside their describe's 240 s — and the same remedy: the flow allowance this file's other specs
+     * already use, sized from the measured duration instead of picked. No SLA or assertion threshold moved.
+     */
+    test.setTimeout(WORKOUT_FLOW_TIMEOUT_MS);
     const auth = await signInFreshUser(page, 'e2e-rejection');
     const sentIds: string[] = [];
     try {
@@ -210,7 +233,7 @@ test.describe('session runner', () => {
 
       // Nothing is finished yet, and the server says so: the read-only assertions below
       // would be meaningless if the session had somehow already ended.
-      await expect(page.getByTestId('session-subtitle')).toContainText('Warming up');
+      await expectPhase(page, 'Warming up');
       expect(completedSetCount(await fetchSession(request, auth, sessionId))).toBe(0);
 
       await completeWorkoutThroughUi(page);
@@ -296,6 +319,17 @@ test.describe('session runner', () => {
   });
 
   test('has no detectable a11y violations with a live session', async ({ page }) => {
+
+    /*
+     * Measured on this file's own worst pass in the counted sequence (`100r2`, load 8.49 on 4 cores):
+     * **17.9 s** against Playwright's 30 s default — 60 % of the clock, which is a red waiting to be
+     * scheduled rather than a product finding. The uncapped run proved it: at CI's worker count a spec in
+     * this file reported `Test timeout of 30000ms exceeded`, with a trace attached. Same class as #100's
+     * other clock rows — `sla.spec.ts:315` permitting 55 s of waits inside 30 s, the two Lighthouse audits
+     * outside their describe's 240 s — and the same remedy: the flow allowance this file's other specs
+     * already use, sized from the measured duration instead of picked. No SLA or assertion threshold moved.
+     */
+    test.setTimeout(WORKOUT_FLOW_TIMEOUT_MS);
     const auth = await signInFreshUser(page, 'e2e-runner-axe');
     try {
       await startPushDay(page);
@@ -374,19 +408,19 @@ async function finishWorkoutThroughUi(page: import('@playwright/test').Page) {
   // what blocks the move into `stretch`. Asserting the hint at the wrong step is how this
   // test first failed, and the machine — not the test — was right about the order.
   await page.getByTestId('advance-phase').click();
-  await expect(page.getByTestId('session-subtitle')).toContainText('Resting');
+  await expectPhase(page, 'Resting');
 
   await expect(page.getByTestId('phase-gate')).toContainText('Main workout complete');
   await page.getByTestId('task-main_workout').click();
   await waitForSynced(page);
 
   await page.getByTestId('advance-phase').click();
-  await expect(page.getByTestId('session-subtitle')).toContainText('Stretching');
+  await expectPhase(page, 'Stretching');
 
   await page.getByTestId('task-stretch').click();
   await waitForSynced(page);
   await page.getByTestId('advance-phase').click();
-  await expect(page.getByTestId('session-subtitle')).toContainText('Finishing up');
+  await expectPhase(page, 'Finishing up');
 
   // `post_workout` has no successor, so the stepper stops offering one.
   await expect(page.getByTestId('advance-phase')).toHaveCount(0);

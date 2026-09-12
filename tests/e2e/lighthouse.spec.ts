@@ -95,8 +95,19 @@ function runLighthouse(
   return JSON.parse(run.stdout) as LighthouseReport;
 }
 
+/*
+ * A Lighthouse audit costs a cold Chrome plus a full page load, so it needs a clock an order of magnitude
+ * above the suite's default. It is named once because a `describe`-scoped `setTimeout` does **not** apply
+ * to tests declared outside that describe: the two whole-page audits at the bottom of this file run on
+ * Playwright's 30 s default while their siblings were given 240 s. Measured on a quiet box they take 12.3 s
+ * and 13.4 s, i.e. 41-45 % of the clock they actually have, which is a red that appears the moment Chrome
+ * is competing for the same four cores. Same class as #100's other clock findings, different cause: here it
+ * is scoping, not arithmetic.
+ */
+const LIGHTHOUSE_RUN_TIMEOUT_MS = 240_000;
+
 test.describe('Lighthouse accessibility', () => {
-  test.setTimeout(240_000);
+  test.setTimeout(LIGHTHOUSE_RUN_TIMEOUT_MS);
   /**
    * Paths an unauthenticated visit to `/` may resolve to. `#/` is here because it is
    * the intent of #61's screen for a signed-in visitor and belongs in this list the
@@ -232,6 +243,7 @@ test.describe('Lighthouse accessibility', () => {
  * with `/history`, so "we could not get 100" is not available as an excuse here.
  */
 test('scores 100 on the authenticated dashboard', async () => {
+  test.setTimeout(LIGHTHOUSE_RUN_TIMEOUT_MS);
   const auth = await createTestSession('lh-dashboard');
   const db = await openHistoryDb();
   try {
@@ -262,6 +274,7 @@ test('scores 100 on the authenticated dashboard', async () => {
 });
 
 test('scores 100 on a session runner', async () => {
+  test.setTimeout(LIGHTHOUSE_RUN_TIMEOUT_MS);
   const auth = await createTestSession('lh-session');
   const db = await openHistoryDb();
   try {

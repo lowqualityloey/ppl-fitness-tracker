@@ -293,6 +293,16 @@ export const SyncResponseSchema = z.object({
 });
 ```
 
+> **Erratum, added 2026-09-12 (#105) — the `state` line above is no longer the contract.** The
+> sketch predicted a response that carried the post-merge session; four milestones of implementation
+> established that no client reads it (`src/app/state/` casts this body and refetches through
+> §4.3/§8.2), while the producer must map and strictly validate the whole graph on the app's hottest
+> call to fill it. It was deleted rather than wired: `SyncResponseDataSchema` is now
+> `{serverSeq, applied, rejected, clockSkewMs}`, and §8.2's "the client refetches on any rejection"
+> is the mechanism the sketch already named for getting state. The `request` half is unchanged, so a
+> batch an outbox queued before the removal still posts; that is asserted against the live route, not
+> inferred from this note. See `docs/STATE.md` §3 (#105 surface) and `docs/tasks/m4/M4-16-sync-state-field.md`.
+
 Route surface:
 
 | Method | Path | Purpose |

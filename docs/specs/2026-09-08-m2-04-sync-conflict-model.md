@@ -129,6 +129,16 @@ The migration must be explicit and reviewed; do not regenerate or silently repai
 
 The route derives `userId` only from `requireUserContext()`. `deviceId`, `sessionId`, and mutation fields are data, not authorization inputs.
 
+> **Erratum, added 2026-09-12 (#105) — the `state` clause of the `200 OK` line above is
+> superseded.** This slice specified, and `contracts/sync.ts` shipped, a response field carrying the
+> authoritative post-merge session graph. Four milestones later the field had no consumer: the client
+> casts the body and reads `applied`/`rejected`/`serverSeq` (`src/app/state/sync-engine.ts`), and the
+> runner's rejection path refetches `GET /api/sessions/[id]` (§8.2 of the RFC) rather than trusting an
+> inline copy — which is the read path this document already mandated. The cost, meanwhile, was real:
+> every drained batch and every 4 s poll mapped and strictly validated the whole graph to fill a key
+> nobody parsed. `200 OK` now means exactly the other four clauses. Nothing about the conflict model
+> changed — item-level verdicts, replay accounting, and clamped ordering are all as written.
+
 ## 6. Failure-mode analysis
 
 | Failure | Detection | Mitigation |

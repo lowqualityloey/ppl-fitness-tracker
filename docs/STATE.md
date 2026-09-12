@@ -3,13 +3,19 @@
 ## 1. Executive Summary & Current Position
 
 - **Project Name**: PPL Fitness Tracker
-- **Current Milestone / Epic**: **M3: Presentation — COMPLETE (19/19).** Milestone #3 reads **open=0 / closed=19** (`gh api repos/lowqualityloey/ppl-fitness-tracker/milestones/3`, read 2026-09-12). M2 remains as it was: M2-00 → M2-06 merged (PRs #43–#47, #51, #53). All of M3's build slices merged 2026-09-11 — #57/#58 (PR #69), #59 (PR #71), #60 (PR #72), #61 (PR #74), #62 (PR #75), #63 (PR #79), #64 (PR #81), #65 (PR #83), #66 (PR #85). **#67 (M3-10, the verification gate) is MERGED as PR #86 (`8704c19`, 2026-09-11T19:23Z)**, and the milestone's last open issue, **#73 (`SessionStateSchema`), is MERGED as PR #87 (`2d5edfb`, 2026-09-12T02:00Z)**. M3's exit report and M4 handoff are `docs/releases/2026-09-12-m3-exit-report-and-m4-handoff.md`; the break-each-gate evidence is `docs/tests/2026-09-11-m3-verification-audit.md` (entries 9–19). **M4 is the next milestone** — §7 item 22 is its start line.
+- **Current Milestone / Epic**: **M3: Presentation — COMPLETE (19/19).** Milestone #3 reads **open=0 / closed=19** (`gh api repos/lowqualityloey/ppl-fitness-tracker/milestones/3`, read 2026-09-12). M2 remains as it was: M2-00 → M2-06 merged (PRs #43–#47, #51, #53). All of M3's build slices merged 2026-09-11 — #57/#58 (PR #69), #59 (PR #71), #60 (PR #72), #61 (PR #74), #62 (PR #75), #63 (PR #79), #64 (PR #81), #65 (PR #83), #66 (PR #85). **#67 (M3-10, the verification gate) is MERGED as PR #86 (`8704c19`, 2026-09-11T19:23Z)**, and the milestone's last open issue, **#73 (`SessionStateSchema`), is MERGED as PR #87 (`2d5edfb`, 2026-09-12T02:00Z)**. M3's exit report and M4 handoff are `docs/releases/2026-09-12-m3-exit-report-and-m4-handoff.md`; the break-each-gate evidence is `docs/tests/2026-09-11-m3-verification-audit.md` (entries 9–19). **M4 is the next milestone** — §7 item 22 is its start line. **Wave 0 has started:** #89 (M4-00) is decided and implemented — ADR-0006 records hand-authored migration authority, `0007` ships the auth→profiles cascade — on `feat/m4-089-migration-authorship` with its PR open.
 - **Overall Status**: ACTIVE <!-- Options: ACTIVE | PAUSED | STABILIZING | RELEASE_CANDIDATE -->
 - **Target Release**: v1.0.0, no date committed
-- **Current Working Branch**: `main` — **M3 is closed; nothing is in flight.** Both exit PRs are merged (#86 → `8704c19`, #87 → `2d5edfb`) and `main`'s own `test` check is `success` on both merge commits. The next branch is M4's first slice, cut from `main` only **after** M4's spec (`pk:plan`) and decomposition (`pk:tasks`) exist — §7 item 22 names the handoff to read first. Do not continue on an M3 branch; there is no M3 work left to continue.
+- **Current Working Branch**: `feat/m4-089-migration-authorship` — **M4 Wave 0's first card (#89)
+  is implemented on it, PR open, awaiting review; per this repo's one-active-branch rule, no other
+  M4 card starts until it merges.** Before this branch, M3 was closed and nothing was in flight:
+  both M3 exit PRs are merged (#86 → `8704c19`, #87 → `2d5edfb`) and `main`'s own `test` check is
+  `success` on both merge commits. The branch is based on `793db53`; #113 later added only
+  `docs/tasks/m4/*.md`, which does not overlap it. Do not continue on an M3 branch; there is no M3
+  work left to continue.
 
 > **Do not pin the current `main` SHA in this field.** It was tried three times and went stale three times, because the merge commit that lands the correction advances `main` past the value being recorded. Describe the state, not the hash. Run `git log --oneline -1` if you need the exact commit.
-- **Last Updated**: 2026-09-12 (**M3 closed — this is the post-merge sync for PRs #86 and #87**). Battery re-measured **on merged `main` (`2d5edfb`) with the stack up**, not quoted from either PR: `npm test` **39 files / 398 tests**, `test:api` **10 files / 60 tests / 0 skipped**, Playwright **61 passed / 0 failed** (3.1 m), `npm run lint` **0 errors / 0 warnings**, `npm run typecheck` **exit 0**, `npm run test:mutation` **exit 0**. G-M3-4 measured **1643–1838 ms post-fix — PASSES**; its earlier MISS was real and is kept in the record. (M3-10's own tree measured 37 files / 380 tests; #73 added two contract files and 18 tests on top of it. The break-each-gate audit — nine deliberate breakages captured and restored, two permanent gate controls kept, one real defect found and fixed by the suite's own hang ceiling — is `docs/tests/2026-09-11-m3-verification-audit.md` entries 9–19.)
+- **Last Updated**: 2026-09-12 (**#89 / M4-00 implemented on branch; the battery numbers the row below quotes for `main` stay valid for `main`, and §5's "Update for #89" paragraph carries this branch's re-measured numbers**). Battery re-measured **on merged `main` (`2d5edfb`) with the stack up**, not quoted from either PR: `npm test` **39 files / 398 tests**, `test:api` **10 files / 60 tests / 0 skipped**, Playwright **61 passed / 0 failed** (3.1 m), `npm run lint` **0 errors / 0 warnings**, `npm run typecheck` **exit 0**, `npm run test:mutation` **exit 0**. G-M3-4 measured **1643–1838 ms post-fix — PASSES**; its earlier MISS was real and is kept in the record. (M3-10's own tree measured 37 files / 380 tests; #73 added two contract files and 18 tests on top of it. The break-each-gate audit — nine deliberate breakages captured and restored, two permanent gate controls kept, one real defect found and fixed by the suite's own hang ceiling — is `docs/tests/2026-09-11-m3-verification-audit.md` entries 9–19.)
 - **Gate status**: #48 (D5 route-handler coverage + D1 lint enforcement) and #49 (this intake
   record) are **merged to `main`**, and `main`'s own Actions runs are green (4m32s and 4m40s).
   `npm run lint` exits 0 there. Consequence for the text below: the gates are no longer pending
@@ -21,8 +27,9 @@
   `main`'s own `test` check is `success` on both merge commits**, so the E2E job, the contrast gate,
   the Lighthouse gate and the legacy-parity scan are all executing on the default branch, not only
   on a branch that claimed to pass.
-  Still open as debt: D2, D4, D6, D7 (D3 closed: the E2E suite exists, is CI-gated,
-  and `PROMPTKIT.md` §3 now describes the real harness, traps included).
+  Still open as debt: D2, D6, D7 (D3 closed with M3; D4 closed with #89 — the migration
+  authorship model is recorded in ADR-0006 and `PROMPTKIT.md` §3; the E2E suite exists, is
+  CI-gated, and `PROMPTKIT.md` §3 now describes the real harness, traps included).
 
 **Where things actually stand.** M1 schema, RLS, auth, contracts, exercise/stretch seeds, and the M1-16 route baseline are on `main`. M2-00 adds the runtime app-role Drizzle client, verified auth-to-RLS context, session domain mappers, and user-scoped repository; M2-01 adds the sessions API; M2-02 adds the pure lifecycle transition table, transaction-scoped set/task/phase/finish mutations, and rollback coverage; M2-03 adds pure Epley e1RM calculation and transaction-scoped personal-record recomputation with app-role ownership/rollback coverage; M2-04 adds bounded transactional sync, replay-safe mutation metadata, per-session sequencing/change rows, deterministic clock/device conflict resolution, and the authenticated `/api/sync` adapter. M3 put a real app on top of it: the dashboard, the
 session runner with the durable outbox, absolute-deadline timers, history and per-exercise
@@ -43,7 +50,7 @@ residuals listed in §5 rather than smoothed.
 - [/] **M1**: Contracts & Seams — code, contracts, seeds, RLS, auth, and RED baseline complete; production SMTP/delivery remains deferred under issue #16
 - [x] **M2**: Core Domain Engine — issues #36–#42 all merged (PRs #43–#47, #51, #53). **Complete 2026-09-11.**
 - [x] **M3**: Presentation — **Complete 2026-09-12.** Milestone #3 is **open=0 / closed=19**. M3-00…M3-09 merged 2026-09-11 as PRs #69, #71, #72, #74, #75, #79, #81, #83, #85; **#67 (M3-10, the verification gate) merged as PR #86 (`8704c19`, 2026-09-11T19:23Z)**, and the milestone's last open child, **#73 (`SessionStateSchema`), merged as PR #87 (`2d5edfb`, 2026-09-12T02:00Z)** — so the milestone closed with nothing parked under it. The gate's own verdict: seven goals measured, two documented misses kept rather than relabelled, and every gate in the suite watched to fail (audit entries 9–19).
-- [ ] **M4**: Hardening, telemetry, decommission the legacy static app (**Next milestone** — **the handoff is already written**: `docs/releases/2026-09-12-m3-exit-report-and-m4-handoff.md`; start at §7 item 22)
+- [ ] **M4**: Hardening, telemetry, decommission the legacy static app (**Next milestone** — **the handoff is already written**: `docs/releases/2026-09-12-m3-exit-report-and-m4-handoff.md`; start at §7 item 22). **Wave 0 started:** #89 (M4-00, the D4 migration-authorship gate) is decided and implemented — ADR-0006, hand-authored model, auth-FK cascade shipped as migration `0007` — on `feat/m4-089-migration-authorship` (PR open); the 25-card breakdown is `docs/tasks/m4/`.
 
 ### Completed Milestone Task Breakdown (M0)
 
@@ -330,12 +337,12 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
 
 ## 4. Locked Technical Invariants (Do Not Undo)
 
-Derived from ADR-0001…0005. Changing any of these means superseding the ADR, not editing code.
+Derived from ADR-0001…0006. Changing any of these means superseding the ADR, not editing code.
 
 > Items 3–6 and 13–16 were **verified empirically** by the M0 spike on 2026-09-08, not merely decided. Evidence: `docs/spikes/2026-09-08-drizzle-rls-enforcement.md`.
 
 1. **Next.js 16 + React 19 + TypeScript strict.** Node ≥ 20.9. (ADR-0001)
-2. **Supabase Auth owns identity.** `profiles.id` *is* `auth.users.id`; every domain FK points at `profiles.id`. No mirror table, no identity-sync webhook. (ADR-0002)
+2. **Supabase Auth owns identity.** `profiles.id` *is* `auth.users.id`; every domain FK points at `profiles.id`. No mirror table, no identity-sync webhook. (ADR-0002) *Since #89 the identity link is also physical: migration `0007` adds `profiles_id_auth_users_fkey` → `auth.users(id)` `ON DELETE CASCADE`, executed — not trusted — by `tests/integration/auth-user-cascade.test.ts` on both deletion paths.*
 3. **Two authorization layers.** App-layer `userId` scoping is authoritative; Postgres RLS under the non-owner `app_authenticated` role is the backstop. Both ship. (ADR-0003)
 4. **`set_config('request.jwt.claims', …, true)`** — the `is_local` flag is mandatory. Omitting it leaks identity across pooled connections. **Reproduced in M0**, not theoretical: with `false`, the next claim-less query on the same backend read the previous user's row.
 5. **Repository methods take `userId` first.** No unscoped query helper may exist. (ADR-0003)
@@ -362,6 +369,7 @@ Added by the M0 spike (ADR-0003 Amendment A1):
 22. **`WeightKgSchema` and `RepsSchema` live in `lib/contracts/common.ts`; `sync.ts` re-exports them and `sessions.ts` must never import from `sync.ts`.** `sync.ts` already imports `SessionStateSchema` from `sessions.ts`, and Zod schemas are constructed at module scope — the reverse import is a cycle whose failure mode is an `undefined` at import time or a schema that quietly stops validating. *(Found while writing M3-00 on 2026-09-11; the bounds also mirror the `weight_sane`/`reps_sane` CHECK constraints so schema and database rejections stay one event.)*
 23. **`PATCH /api/profile` accepts only `displayName` and `preferredUnit`, and an unknown key is a 400, not an ignored field.** `email` is not client-editable at all: identity belongs to Supabase Auth and the app has no verification flow to back the claim. *(M3-00 #57.)*
 24. **The `preferredUnit` wire value is literally the DB enum: `('kg', 'lbs')`, not `('kg', 'lb')`.** Verified against `db/schema/index.ts:29`, migration `0000:5`, and a live `pg_type ⋈ pg_enum` query. No mapping layer, no `ALTER TYPE`: `"lb"` is a 400 pinned in unit and route specs (the RFC §4.1 snippet that guessed it is corrected by the spec's §8.7 erratum). A contract comment claiming to *mirror* storage is an unverified claim until a test reads the storage truth. *(M3-00 #57, 2026-09-11.)*
+25. **Migrations are hand-authored SQL in `supabase/migrations/`, applied in filename order by the Supabase CLI; drizzle-kit `generate`/`migrate` stay out of the migration loop.** The npm scripts are gone, `drizzle.config.ts` declares no `out:`, and `supabase/migrations/meta/` is deleted — each leg enforced by `tests/unit/migration-authority.test.ts`, which was watched failing on all four injected re-introductions (M4 audit entries 4–5). `db/schema/index.ts` is a runtime type view, not a codegen source: keep it in step with the SQL by hand and prove column-level truth with live-catalog tests. *(M4-00 #89, ADR-0006, 2026-09-12.)*
 
 ---
 
@@ -484,7 +492,8 @@ The narrower claim that survived — "non-interactive shells resolve `/usr/bin/n
 **Remediation items — found by running, not reading (intake 2026-09-11).** Full cards with
 Gherkin AC in `docs/tasks/2026-09-11-intake-debt-index.md`. **D1 and D5 are closed and merged** (PR #48, green on `main`),
 and **D3 closed with M3** (PR #72 stood the harness up; #86 made it the CI merge gate for everything user-visible).
-**D2, D4, D6 and D7 remain open** — all four are M4's, none of them blocks closing M3.
+**D4 closed with #89** (hand-authored authorship model, ADR-0006 — see the row below).
+**D2, D6 and D7 remain open** — all three are M4's, none of them blocks closing M3.
 
 - ~~**D1 · `npm run lint` is red and CI never runs it.**~~ **CLOSED (merged, #48)**:
   all 24 `no-explicit-any` errors in `app-role`,
@@ -514,13 +523,17 @@ and **D3 closed with M3** (PR #72 stood the harness up; #86 made it the CI merge
   CI runs the job last on every push (PR #72, hardened by #86 — audit entry 18 fixed the parity
   gate so CI really executes it rather than skipping on a shallow checkout). E2E *is* coverage now,
   and it is a merge gate rather than a suggestion.
-- **D4 · `meta/_journal.json` covers migrations `0000`–`0003` only**; `0004`, `0005` and
+- ~~**D4 · `meta/_journal.json` covers migrations `0000`–`0003` only**; `0004`, `0005` and
   `0006` are hand-authored and unrecorded, while `drizzle.config.ts` still generates into
-  that same directory. The next `db:generate` reasons from a stale snapshot. Choose and
-  record one authorship model. M2-05 landed without touching migrations — `import_batches`
-  already shipped in `0000` with RLS from `0003` — so this trap never fired, which is not the
-  same as it being disarmed. It is still the item that can block the next schema-touching
-  slice, and `drizzle.config.ts` still generates into the same directory.
+  that same directory.~~ **CLOSED — decided and implemented by #89 (M4-00): hand-authoring is
+  the recorded model (ADR-0006).** The trap was **watched before it was removed**: on `793db53`,
+  `npm run db:generate` emitted a phantom destructive `0004_warm_ozymandias.sql` (re-`CREATE`ing
+  shipped tables, `DROP INDEX routine_exercises_day_order`, relaxing shipped NOT NULLs) and
+  rewrote the journal — **exit 0**. The disarm: `db:generate`/`db:migrate` deleted from
+  `package.json`, `out:` deleted from `drizzle.config.ts`, `supabase/migrations/meta/` deleted,
+  and `tests/unit/migration-authority.test.ts` (CI) fails on any re-introduction — all four
+  violation classes observed RED and reverted, #89 audit entries 1–5. One model paragraph now
+  lives in `PROMPTKIT.md` §3; M4-20/#109 and any cascade migration start from it, not folklore.
 - **D6 · Running the API suite rewrites the tracked `tsconfig.json`** (`next dev` appends a
   generated-types include and reformats arrays), so a test run dirties the tree and a later
   `git add -A` can sweep in a formatter diff. Not a CI problem; revert is manual today.
@@ -544,6 +557,20 @@ literal with no local-only guard, and CI running the full service set that `db:u
 `npm run lint` **0 errors / 0 warnings** and `npm run typecheck` exit 0. *(The intake recorded
 23 files / 196 tests with 20 passed / 12 declared-skipped API specs; everything between those
 numbers and these ones is M3, and the declared-skip layer no longer exists — see D5.)*
+**Update for #89 (M4-00), measured twice on `feat/m4-089-migration-authorship` 2026-09-12 with
+the stack up** (pass 2 re-ran everything against a database built by a **fresh `supabase start`**
+on a deleted volume — CI parity): `npm test` is now **41 files / 408 tests** (the migration-authority
+guard: 4; the auth-cascade suite: 6), `npm run test:mutation` now carries **six** controls (the sixth:
+drop the cascade FK → 5 of 6 red, restored green) at exit 0, `test:api` unchanged **10 / 60 / 0**,
+lint **0/0**, typecheck **0**, Lighthouse 100 on all four routes. **Playwright: pass 1 twice 61/0;
+pass 2 opened 60/1** — `timers.spec.ts:224`, not on the documented load-sensitive list, red again
+on its first solo and green on four further solos and two further full runs; the event log is entry
+11 of the #89 audit, kept rather than smoothed. The two known names (`:277`, `sla.spec.ts:282`)
+never fired on five full runs. No budget moved; nothing was retried into a pass without a record. The
+`793db53`-era `npm run db:generate`/`db:migrate` lines in the intake record and PROMPTKIT §3's
+old mixed-authority warning describe the world this branch changed; the trap itself is
+reproduced deliberately and captured in `docs/tests/2026-09-12-m4-089-break-each-gate-audit.md`
+entry 1 rather than taken on faith.
 
 Carried forward, still open:
 
@@ -551,7 +578,20 @@ Carried forward, still open:
 - **Legacy `npm run build` emits zero JavaScript** and exits 0 while doing so. Verified 2026-09-08 **and re-verified 2026-09-11** (0 `.js` files in `dist/`). Cause: classic `<script>` tags Vite won't process. Not being fixed — the legacy app is decommissioned in M4 — but do not mistake a green build for a working one.
 - **Pull-day legacy set data is unrecoverable.** `saveProgress()` keyed checkbox state by `checkbox.id`, and the generated set checkboxes never had one, so all 17 collapsed into a single `"undefined"` key. Only aggregate counts survive the import. Accepted and documented in spec §4.5.
 - ~~**Drizzle migration metadata is incomplete.**~~ Superseded and widened by **D4** above: the journal omits `0004`, `0005` **and now `0006`**, which M2-04 added. Same root cause, larger gap.
-- **Auth/profile deletion is not physically cascaded.** `profiles.id` has no foreign key to `auth.users.id`, so Auth-user deletion does not automatically remove the profile row. Keep explicit cleanup in fixtures/import flows and evaluate a migration before production hardening.
+- ~~**Auth/profile deletion is not physically cascaded.**~~ **Decided and migrated by #89:**
+  `0007_auth_user_cascade.sql` adds `profiles_id_auth_users_fkey` (`profiles.id` →
+  `auth.users(id)`, `ON DELETE CASCADE`), behind a guarded cleanup of stranded fixture residue
+  (the old local database held **2 026** parentless profile rows; a fresh `db reset` apply sees
+  zero and prints nothing). Cascade, not restrict, because ADR-0002 makes a profile without an
+  identity invalid state — and every domain table already cascaded from `profiles`, so one FK
+  closes the whole deletion chain. `tests/integration/auth-user-cascade.test.ts` **executes** it
+  (GoTrue admin API deletion, which runs as a role with zero privileges on `public.*`, plus the
+  owner-SQL path; a 23503 refusal assertion; an in-test rolled-back negative control that
+  reproduces the leak first), and `npm run test:mutation` carries drop-the-FK as its sixth
+  permanent control. Fixtures may now clean up in any order; the old "profiles before Auth
+  users" discipline is a courtesy, not a constraint. **Unverified where it must eventually be:**
+  the same FK creation under a hosted project's `postgres` role — re-assert at first production
+  migration (same caveat `supautils` findings already carry).
 - **Sync conflict metadata is implemented in M2-04.** The additive migration now persists per-session sequences, mutation hashes/status, entity versions, and change rows with relationship-aware RLS. Legacy set/task rows use their stored client timestamp and zero UUID baseline until they receive sync metadata; true deltas remain deferred by contract.
 - **`server_seq` is settled for M2-04.** It remains an integer per-session sequence, protected by the locked session row and unique change-log key; revisit width only with a future contract/volume requirement.
 - ~~**Per-request transaction cost of ADR-0003 is unmeasured.**~~ **Measured 2026-09-08.** `withUser()` costs **+1.29 ms p50 / +1.87 ms p95** over an app-scoped autocommit `SELECT` on a direct connection, **+1.98 ms p50 / +2.35 ms p95** through supavisor in transaction mode. Four round trips instead of one, so it scales with RTT and will be worse from a region distant from the database. Affordable against the spec §2 SLA. *What remains open is narrower: pool exhaustion under sustained load. The spike reached 40 interleaved concurrent transactions on one container, which is not a load test. Still an M4 item.*
@@ -629,6 +669,7 @@ Carried forward, still open:
 | 2026-09-08 | Authorization model | Both layers. App scoping authoritative, RLS under a `NOBYPASSRLS` non-owner role as backstop. **Confirmed empirically by M0 and amended (A1)**: `withUser` needs a second `set_config`, the app role gets nothing on the `auth` schema, `FORCE` does not stop the owner, role attributes cannot be re-forced by migration, and the cost is now measured. Decision unchanged. | `docs/adrs/0003-rls-defense-in-depth.md` |
 | 2026-09-08 | Focus ring contrast | Override `DESIGN.md`. 2px `#465fff` (~4.8:1) replaces `#ecf3ff` (~1.1:1), which fails SC 1.4.11. | `docs/adrs/0004-focus-ring-contrast-override.md` |
 | 2026-09-08 | Design tokens + set logging | One base palette plus three scoped day accents; light-only v1. Weight and reps in scope, nullable, prefilled from last session, kg canonical. | `docs/adrs/0005-design-tokens-and-set-logging.md` |
+| 2026-09-12 | Migration authorship (D4) + auth-FK cascade | **Hand-authored SQL is the only migration currency**, applied by the Supabase CLI in filename order; drizzle-kit `generate`/`migrate` retired (scripts, `out:`, journal all deleted) after the stale-snapshot phantom migration was *watched* emitting destructive DDL with exit 0. Same card made identity deletion physical: `0007` adds `profiles.id → auth.users.id ON DELETE CASCADE`, executed by `auth-user-cascade.test.ts` and carried by `test:mutation`. | `docs/adrs/0006-migration-authorship-hand-authored.md` |
 
 ---
 
@@ -654,13 +695,19 @@ Carried forward, still open:
    that also changes the gate hides which regression either one caught. **Then update
    `PROMPTKIT.md` §3 and §3/§5 here**: they described `main` and went stale on merge, which is the
    §8 row below this one.
-5. **Decide D4 (journal vs hand-authored migrations) before any `db:generate`** and record
-   the chosen authorship model in `PROMPTKIT.md` §3. ~~Decide D7 before M2-06 writes its negative
+5. ~~**Decide D4 (journal vs hand-authored migrations) before any `db:generate`** and record
+   the chosen authorship model in `PROMPTKIT.md` §3.~~ **Decided and implemented by #89
+   (M4-00): hand-authoring, ADR-0006** — model paragraph in `PROMPTKIT.md` §3, guard in
+   `tests/unit/migration-authority.test.ts`, and there is no `db:generate` left to run before
+   it. ~~Decide D7 before M2-06 writes its negative
    controls.~~ → **D7 (typed rows in the security suites) is still open, and M2-06 long since wrote
    those controls**: it is an M4 item now, because the 50 rps load test and the hardening pass will
    pile more assertions onto the same untyped foundation.
-6. **Keep schema-risk work explicit.** Retain the missing Auth/profile FK as a tracked
-   hardening risk. ~~Keep `--accent-legs` unresolved-but-flagged since it blocks M3, not M2.~~
+6. ~~**Keep schema-risk work explicit.** Retain the missing Auth/profile FK as a tracked
+   hardening risk.~~ **Closed by #89**: the FK shipped (`0007_auth_user_cascade.sql`, cascade)
+   and is executed by `tests/integration/auth-user-cascade.test.ts`, `test:mutation` control 6,
+   and the #89 audit — see §5's rewritten cascade bullet for the one remaining unverified claim
+   (hosted-project FK privileges). ~~Keep `--accent-legs` unresolved-but-flagged since it blocks M3, not M2.~~
    **Resolved: #59 shipped `--accent-legs #7a3ff2` as a documented `DESIGN.md` extension (PR #71),
    measured and inside the contrast gate.**
 7. **Keep issue #16 deferred.** Custom SMTP/provider/DNS remains the separate M1 production-release blocker and must not block M2 coding or be described as complete.
@@ -894,3 +941,5 @@ Carried forward, still open:
 | 2026-09-12 | Agent (DSH) | #73 closed: `SessionStateSchema` describes the session graph | The M2-01 placeholder is gone. Shape transcribed from `lib/domain/sessions/types.ts` as `mapSessionState` emits it (design spec `docs/specs/2026-09-12-73-session-state-contract.md`, not memory), `.strict()` on every object, `ExerciseKindSchema` + `RoutineExercisePhaseSchema` added to `contracts/common.ts` because a hand-copied enum is this issue's documented birth defect, and the `Date`-or-ISO coercion moved out of `lib/views/session-view.ts` into the contract — required, since the server components validate mapper output holding `Date`s and the runner validates the same columns as strings. `session-view.ts` is now the re-export §5 asked for (166 lines → 47), and `SessionView` stopped being a subset, which is why `tests/unit/state/fixtures.ts` had to grow: that fixture claimed to be "the server's view" of a session with no `clientId`, no `source`, no `serverSeq`, and no `updatedAt`. Producers are held to it: `validateOutgoing` in `contracts/envelope.ts` parses the outgoing body in `POST /api/sessions`, the full-session branch of `GET /api/sessions/[id]`, and `POST /api/sync` — throwing `ContractViolationError`, which is deliberately not a `ZodError` so a producer defect cannot be billed to the caller as a 400. Two drift classes injected and watched to fail (audit 19: 11 unit + 6 route tests red on a deleted `serverSeq`, 5 red on `kind:'cardio'`), and the routes-own-no-schemas gate fired on my own comment first — reworded, not loosened. Battery: lint 0/0, typecheck 0, unit 39/397, api+security 10/60, mutation 0, Playwright 61/0 (two prior runs carried one timing-gate flake each, both green solo, budgets untouched). Not verified: `SyncResponseData.state` has no runtime consumer, so its new strictness is enforced only server-side. `tsconfig.json` churned (D6), unstaged as ever.
 
 | 2026-09-12 | Agent (DSH, `pk:checkpoint`) | **M3 closed — post-merge state sync** | PRs **#86** (issue #67, M3-10) and **#87** (issue #73) are merged; milestone #3 reads **open=0 / closed=19**. This is the convention those two merges trigger: the tracker described branches that no longer exist. **§1** milestone/working-branch/last-updated/gate-status now describe `main` with nothing in flight; **§2**'s M3 row is `[x]` and the #59/#60/#67 task lines read MERGED with their PRs and SHAs (#71 `3b0ffbf`, #72 `9f98f83`, #86 `8704c19`, #87 `2d5edfb`), with a row added for #73 so the milestone's 19 closed items are all visible; **§3**'s active-spec line, the retired-`pending-handlers.ts` claim and the M3-10 "in review" heading are corrected, and the Verification-Commands baseline is re-measured rather than inherited; **§5**'s Lighthouse bullet (the authenticated audit #67 built), #73 bullet, `--accent-legs` and package-manager "open questions", the D3 debt row, the "D2/D3/D4/D6/D7 open" list, the "unmerged findings from #63" heading, and the stale 23-file/196-test baseline are all corrected; **§7** items 5–21 lost their `awaiting merge` / `in review` tenses, item 22 is now the M4 start line, and **items 21–22 were moved back into §7** — a previous session appended them after the §8 table, so the file's own section numbering was lying. **§8** carries this row. No source touched, no gate weakened, `docs/tests/…-m3-verification-audit.md` left exactly as written. **Re-measured on merged `main` (`2d5edfb`), stack up**: lint 0/0 · typecheck 0 · `npm test` **39 files / 398 tests** · `test:api` **10 / 60 / 0 skipped** · Playwright **61 passed / 0 failed (3.1 m)** · `test:mutation` **exit 0**. Two numbers the record disagreed on, resolved by measurement rather than by preferring a document: audit entry 19 and §8's #73 row say **397** while PR #87's evidence table says **398** — the merged tree measures **398**, so the older figures stand as the branch-time reading and are not edited. And the `POST /api/sync` p95 carried forward here is the exit report's **234–282 ms**, not a narrower band: the CI figure is 222.0 ms and the first local one was 272.8 ms, so the miss is quoted as the full measured range with each run attributed. Housekeeping the owner still owes: **GitHub milestone #3 is still `state: open`** despite zero open issues (milestone #2 was closed the same way after M2), **39 merged local branches** (`git branch --merged main`, excluding `main` and this docs branch), and D6's `tsconfig.json` — which churned again during this sync's API and Playwright runs and is, by rule, left unstaged. |
+
+| 2026-09-12 | Agent (DSH) | `M4-00` (#89) implemented: D4 settled as hand-authored, cascade shipped | Settled the p0 gate M4-20/M4-21 sit behind. **The decision was evidence, not taste**: `db:generate` was *run on purpose* on `793db53` and emitted a phantom destructive `0004` (`DROP INDEX routine_exercises_day_order`, re-`CREATE`s of shipped tables, NOT NULL relaxations) plus a journal rewrite — **exit 0** — while the applier (Supabase CLI, filename order) had been ignoring the journal all along and `drizzle.__drizzle_migrations` sat empty; journal-authoritative would mean fabricating snapshots drizzle later trusts. **Model (b) recorded**: ADR-0006; `db:generate`/`db:migrate` deleted from scripts, `out:` deleted from `drizzle.config.ts` (bare generate falls back to gitignored `./drizzle/` — measured), `supabase/migrations/meta/` deleted; `tests/unit/migration-authority.test.ts` gates all four re-introduction classes and was watched RED on each (#89 audit 4–5). **Cascade layer = the database**: `0007_auth_user_cascade.sql` adds `profiles_id_auth_users_fkey → auth.users(id) ON DELETE CASCADE` behind a guarded stranded-row cleanup (old local DB: 2 026 orphans; fresh `db reset` apply: zero), `tests/integration/auth-user-cascade.test.ts` executes deletion through the real GoTrue admin API (a role with zero `public.*` privileges — the cascade works anyway, measured, not quoted from Supabase docs) plus owner SQL, asserts the 23503 refusal, carries an in-transaction rolled-back negative control reproducing the leak first, and checks `supabase_migrations.schema_migrations` so a committed-but-unapplied migration is red; drop-the-FK became `test:mutation`'s sixth permanent control (5 of 6 red while broken). `schema-constraints.test.ts`'s synthetic profile learned to have an identity. Gates on this branch, twice: lint 0/0 · typecheck 0 · `npm test` **41/408** · api **10/60/0** · mutation exit 0 (6 controls) · Playwright pass 1 **61/0** ×2, pass 2 (against a fresh-volume DB) **60/1 → 61/0 → 61/0** — `timers.spec.ts:224`, an undocumented third member of the load-sensitive family, went red in the full suite and on its first solo, then green on four solos and two more full runs; event log = audit entry 11, budgets untouched, the red reported not smoothed · Lighthouse 100 on all four routes. One existing gate caught its own author mid-slice: `next build` typechecks test files, `vitest run` does not — TS2365 on a `count(*)` string, red before any spec ran, fixed not fudged (audit 10). The CI-parity question was closed by measurement, not presumption: deleting the volume and re-running `supabase start` applied and stamped `0000`–`0007` exactly as `db reset` had (audit Limits 2). Not verified: hosted-project FK privileges into `auth` (re-assert at first production migration). D6 churned as always, unstaged. |

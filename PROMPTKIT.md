@@ -4,7 +4,7 @@
 
 > **This project is mid-migration.** Two stacks coexist, and the split is no longer "built vs. unbuilt" on either side of the seam.
 >
-> - The *target* stack's **server side and its UI are both merged to `main`**: schema + migrations `0000`–`0006`, RLS on every table, magic-link auth, Zod contracts (including the session-state graph, as of #73), the sessions/profile/prefill/exercises/progress/sync/import APIs, `SessionEngine`, `ProgressionEngine`, and transactional conflict-aware sync (M1 complete bar deferred #16; M2-00 → M2-06 merged as PRs #43–#47, #51, #53; **M3-00 → M3-10 merged as PRs #69–#87 — the milestone is complete, open=0 / closed=19**).
+> - The *target* stack's **server side and its UI are both merged to `main`**: schema + migrations `0000`–`0006` (and `0007`, the auth→profiles cascade FK, **lands with #89 — after that merge this list reads `0000`–`0007`**), RLS on every table, magic-link auth, Zod contracts (including the session-state graph, as of #73), the sessions/profile/prefill/exercises/progress/sync/import APIs, `SessionEngine`, `ProgressionEngine`, and transactional conflict-aware sync (M1 complete bar deferred #16; M2-00 → M2-06 merged as PRs #43–#47, #51, #53; **M3-00 → M3-10 merged as PRs #69–#87 — the milestone is complete, open=0 / closed=19**).
 > - The target stack is now a **working app**: `/` (dashboard), `/sign-in`, `/session/[id]` (the runner), `/history` + a one-session report + per-exercise progress, and `/settings` with the legacy-import dialog. What it still is not: **deployable**. Production email delivery (#16), telemetry/Sentry, the 50 rps load test, a service worker, volume/streak analytics, body-measurement import and data export do not exist — M4's list, with its measured starting facts in `docs/releases/2026-09-12-m3-exit-report-and-m4-handoff.md`.
 > - The **legacy vanilla-JS app still runs unchanged** on port 3000 beside it and is still the thing `npm run build` builds (a build that emits zero JavaScript — see §2). M3 was required to run beside all of it and never wrote a legacy key; `tests/e2e/legacy-parity.spec.ts` measures that, and is built to fire when M4 deletes them.
 >
@@ -42,7 +42,7 @@
 - **Backend & Database**: Supabase — PostgreSQL **17.6** (measured on the local stack 2026-09-08; earlier drafts said 16), Supabase Auth (email magic link) — ADR-0002. **Realtime is not in use**: zero `.channel(`/realtime references in application code, and `npm run db:up` starts the stack with `-x realtime,...`, so the local stack does not even run it.
 - **ORM**: Drizzle (`db/schema/index.ts`), connecting as a non-owner `app_authenticated` role — ADR-0003. `db/seed/` loads exercise and stretch content.
 - **Validation**: Zod at every boundary (`lib/contracts/` — envelope, auth, sessions, sync, progress, exercises, legacy import). Since **#73** the session graph is one of those boundaries rather than the exception: `SessionStateSchema` is a `.strict()` description of what `mapSessionState` emits, `lib/views/session-view.ts` is a **re-export** of it, and the three producers (`POST /api/sessions`, `GET /api/sessions/[id]`, `POST /api/sync`) validate what they send through `validateOutgoing` in `envelope.ts`.
-- **Testing**: Vitest — **49 `.test.ts` files** (counted with `find` on merged `main` 2026-09-12, not inherited from the last edit): **25** under `tests/unit/`, **14** DB-backed under `tests/integration/` (12 at its root, 2 in `repository/`), **10** route-handler suites under `tests/integration/api/`. `npm test` runs the first two groups — **39 files / 398 tests**, stack up — because the API directory boots real servers; `npm run test:api` runs those **10 files / 60 tests**. **Playwright E2E exists and is the merge gate for anything user-visible** — 13 spec files / 61 tests (M3-03 harness, PR #72; grown by M3-06…10), run by `npm run test:e2e` in CI against a **production** build, including `lighthouse.spec.ts` (Lighthouse is a devDependency; the CI job installs browsers `--with-deps` for exactly this; it scores `/sign-in` plus `/history`, `/` and `/session/[id]`, the last three authenticated). Every latency claim this repo makes is quoted from these logs — see `docs/tests/2026-09-11-m3-verification-audit.md` for what each gate prints and how it was proven capable of failing. D3 is resolved.
+- **Testing**: Vitest — **51 `.test.ts` files** (counted with `find` on the #89 branch 2026-09-12): **26** under `tests/unit/`, **15** DB-backed under `tests/integration/` (13 at its root, 2 in `repository/`), **10** route-handler suites under `tests/integration/api/`. `npm test` runs the first two groups — **41 files / 408 tests**, stack up — because the API directory boots real servers; `npm run test:api` runs those **10 files / 60 tests**. **Playwright E2E exists and is the merge gate for anything user-visible** — 13 spec files / 61 tests (M3-03 harness, PR #72; grown by M3-06…10), run by `npm run test:e2e` in CI against a **production** build, including `lighthouse.spec.ts` (Lighthouse is a devDependency; the CI job installs browsers `--with-deps` for exactly this; it scores `/sign-in` plus `/history`, `/` and `/session/[id]`, the last three authenticated). Every latency claim this repo makes is quoted from these logs — see `docs/tests/2026-09-11-m3-verification-audit.md` and `docs/tests/2026-09-12-m4-089-break-each-gate-audit.md` for what each gate prints and how it was proven capable of failing. D3 is resolved.
 
 ---
 
@@ -94,11 +94,11 @@ each serving correctly, zero collision.
   legacy `npm run build`, which is verified zero-JS (see the note above) and stays
   that way until M4
 - **Start (production)**: `npm run next:start`
-- **Test files that exist today** (re-counted 2026-09-12 on merged `main`): **49 `.test.ts` files** —
-  25 under `tests/unit/`, 14 DB-backed under `tests/integration/` (12 at its root, 2 in `repository/`),
+- **Test files that exist today** (re-counted 2026-09-12 on the #89 branch): **51 `.test.ts` files** —
+  26 under `tests/unit/`, 15 DB-backed under `tests/integration/` (13 at its root, 2 in `repository/`),
   10 route-handler API suites under `tests/integration/api/` (plus `fixtures.ts` and `test-server.ts`
   helpers) — plus **13 `.spec.ts` files** under `tests/e2e/`. `npm test` (unit + DB integration) runs
-  **39 files / 398 tests** **with the stack up** and fails `ECONNREFUSED` without it. The unit-layer
+  **41 files / 408 tests** **with the stack up** and fails `ECONNREFUSED` without it. The unit-layer
   split includes `tests/unit/with-user.test.ts`, which opens a real socket to Postgres — still an
   integration test filed in the unit layer (D2, unchanged, listed so the failure mode stays
   recognizable).
@@ -120,11 +120,14 @@ each serving correctly, zero collision.
   future suite that depends on system content has to state the same precondition rather than hope
   some other file seeded it first.
 - **Mutation check**: `npm run test:mutation` (`tsx scripts/mutation-check.ts`) — removes
-  each RLS control in turn and requires the drift test to go red. Needs the stack up, **and it is
+  each control in turn and requires its named test file to go red: five RLS controls against the
+  drift test plus, since #89, the **auth→profiles cascade FK** against
+  `tests/integration/auth-user-cascade.test.ts` (drop → 5 of 6 red, measured; the restore
+  re-validates against the live table). Needs the stack up, **and it is
   the only gate script that does not pass `--env-file-if-exists=.env.local`**: run bare it exits with
   `MIGRATION_DATABASE_URL environment variable required`, so source the env first
-  (`set -a; . ./.env.local; set +a`). Verified exit 0 on merged `main` 2026-09-12 — every control
-  removed made the drift test go red, and restoring it made the suite pass again.
+  (`set -a; . ./.env.local; set +a`). Verified exit 0 twice on the #89 branch 2026-09-12 — every
+  control removed made its named file go red, and restoring it made it pass again.
 - **E2E Tests**: `npm run test:e2e` (`playwright test`) — **13 spec files, 61 tests, and they are
   the CI merge gate.** `playwright.config.ts` boots its own **production** server
   (`npm run next:build && npm run next:start` on :3001; `reuseExistingServer: !process.env.CI`),
@@ -160,13 +163,24 @@ each serving correctly, zero collision.
   non-database throws) instead of casting to a fake error type — so a spec expecting `42501`
   still fails when the driver throws something else. Warnings fail the build, so "lint clean" is
   citable evidence now, and a reintroduced `any` is a CI break. See D1 (closed).
-- **DB migrations**: `npm run db:generate` / `npm run db:migrate` (`drizzle-kit`, owner
-  role via `MIGRATION_DATABASE_URL` → direct port 54322, **not** the pooler). Migrations
-  live in `supabase/migrations/` and are **mixed-authority**: `0000`–`0003` are
-  drizzle-generated (present in `meta/_journal.json`), `0004`–`0006` are hand-authored and
-  **absent from the journal**. `drizzle-kit generate` therefore reasons from a stale
-  snapshot — read `docs/tasks/2026-09-11-intake-debt-index.md` D4 before generating the
-  next one, and prefer hand-authoring plus an Expand→Contract note.
+- **DB migrations** — the **M4-00 / #89 / ADR-0006 authorship model, in one paragraph**:
+  **migrations are hand-authored** SQL files in `supabase/migrations/`, applied **in filename order
+  by the Supabase CLI** (`supabase start` / `supabase db reset` — CI's path), tracked in
+  `supabase_migrations.schema_migrations`. drizzle-kit is **out of the migration loop**: `npm run
+  db:generate` and `db:migrate` no longer exist, `drizzle.config.ts` declares no `out:` (with it
+  unset, a bare `drizzle-kit generate` falls back to the gitignored `./drizzle/` scratch —
+  measured), and `supabase/migrations/meta/` is gone: the old journal covered only `0000`–`0003`
+  (two of its four entries lacked even snapshots) while the applier ignores journals entirely, and
+  the pre-fix `db:generate` was watched emitting a phantom destructive `0004` **with exit 0** —
+  evidence in ADR-0006 and the #89 audit entry 1. `tests/unit/migration-authority.test.ts` fails CI
+  on any re-introduction (a drizzle-kit npm script, an `out:` in the config, a resurrected `meta/`,
+  or a duplicate/gapped/mis-named version prefix). **To add a migration:** the next contiguous
+  `NNNN_snake_case.sql`, hand-authored and idempotent (0001-style header, `IF NOT EXISTS` / `DO $$`
+  guards — `db reset` re-applies the whole chain), Expand→Contract per STATE §4 item 12, RLS on
+  every touched table per item 6, and a live-DB integration test that *executes* the artifact.
+  `db/schema/index.ts` stays the runtime type view for drizzle-orm but now has no codegen link to
+  the SQL — keep it in step by hand. `MIGRATION_DATABASE_URL` (direct 54322, **not** the pooler)
+  remains owner-only per STATE §4 item 18.
 - **Seeds**: `npm run db:seed` (exercises + routine associations),
   `npm run db:seed:stretches` (deduped stretch content). Both idempotent, both have
   verifying integration tests.

@@ -22,6 +22,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:mutation": "tsx scripts/mutation-check.ts",
+    "perf:sync": "node --env-file-if-exists=.env.local node_modules/tsx/dist/cli.mjs scripts/perf-sync-load.ts",
     "db:up": "supabase start -x realtime,storage-api,imgproxy,edge-runtime,logflare,vector",
     "db:down": "supabase stop",
     "db:status": "supabase status -o env",

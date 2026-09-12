@@ -1,6 +1,6 @@
 # M4-01 (#90) — load harness design, and what is verified before any code is written
 
-Status: **design, pre-implementation.** This file exists so the mechanism and the arithmetic survive a
+Status: **design + pre-flight code reading; no measurements yet.** This file exists so the mechanism and the arithmetic survive a
 context break; nothing in it is a measurement result. Every claim below is either a `file:line` in this repo
 or explicitly named as unverified.
 
@@ -66,14 +66,28 @@ harness nobody has watched fail is an anecdote generator — this is the same cl
 
 ## Unverified, and named as such before it becomes a claim
 
-1. **Connection-pool evidence** (AC scenario 3: pool waits / max concurrent / errors). Where the app's
-   Postgres client exposes pool state — or whether `pg` metrics are reachable in the server runtime at all —
-   has not been read yet. If they are not, the honest output is "not observable from this layer" plus what
-   *is* observable (concurrent-request count from the driver, Supabase's own pool view if reachable), not a
-   proxy presented as the thing itself.
+1. **Connection-pool evidence — RESOLVED by reading the code, and the resolution has a consequence.**
+   `lib/db/client.ts:1,26` builds a real `pg.Pool`, and `DbHandle` **exposes the pool object itself**
+   (`:8`), so `totalCount` / `idleCount` / `waitingCount` and the pool's `error` event are reachable
+   *in the server process*. But the load driver is an external HTTP client: it cannot see that process's
+   memory. Which leaves two routes, and only one of them belongs to this card:
+   - **(chosen) Observe from the database side**, from the driver, using the app's own `DATABASE_URL`:
+     poll `pg_stat_activity` (backends by state — `active` / `idle` / `idle in transaction`) and
+     `pg_stat_database` (`numbackends`, and wait-event columns where the local build exposes them) at
+     intervals across the run. This is the DB's own account of concurrency, needs no change to shipped
+     code, and is reported as what it is: server-side connection state, not the app's pool queue depth.
+   - **(rejected for this card) Sample `pool.waitingCount` inside the server** — that means exposing
+     in-process state over some new surface (endpoint, log scrape, or a test-only import path). #90 is
+     scoped to produce a measurement, not to add production observability, and inventing an endpoint here
+     would pre-empt the `#94` structured-logging card. Recorded as a follow-up rather than smuggled in.
+
+   So the AC's "pool waits / max concurrent / errors" is met as *max concurrent and errors from the DB's
+   view*; if `pg_stat_activity` cannot answer a sub-question, the artifact says so instead of dressing up
+   `n_accepted` as the answer.
 2. Whether ADR-0003's "scales with RTT" caution can be **confirmed or contradicted** from these numbers
-   depends on (1). The card asks for a verdict; if (1) comes up empty the verdict is "undetermined", and the
-   reason is written down.
+   depends on (1) — now narrowed: the DB-side view can speak to concurrency, and ADR-0003's "+1.29 ms p50
+   direct / +1.98 ms pooled" comparison is about RTT-per-acquire, so the load run's `pg_stat_activity`
+   backends-by-state plus the driver's own percentile set is the evidence for a verdict either way.
 3. How long "sustained" is (the card says "a stated duration" without naming one). Proposal: **60 s**, which
    is ~3 000 requests at 50 rps — enough for a p95 to mean something at n≈3 000 and short enough to run
    repeatedly. Recorded here as a choice, so a later reader knows it was made rather than discovered.
@@ -86,7 +100,8 @@ honestly.
 
 ## Next actions (implementation, not design)
 
-1. Read the db client layer for pool observability (resolves unverified item 1).
+1. ~~Read the db client layer for pool observability~~ — done, see unverified item 1: `DbHandle.pool`
+   exists but is in-process, so the driver polls `pg_stat_activity` / `pg_stat_database` instead.
 2. Write the driver as `scripts/perf-sync-load.mjs` with an `npm run perf:sync` wiring (one command sequence,
    per the AC), reusing the auth mechanism above rather than inventing one.
 3. Baseline run on an **unmodified** production build; record it here with its denominators.

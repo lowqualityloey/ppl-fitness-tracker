@@ -332,4 +332,10 @@ followed.
 
 | Pass | Per-step exits | e2e | unit / api | set-tap p95 | `/api/sync` p50 | load before → after | Streak |
 | :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
-| `100r1` | 0 ×8 | **61 passed (5.6 m)** | 45/430 · 11/64 | **18.2 ms** vs 50 | 244.2 vs 200 (MISSES, #92) | 4 cores · see log line | **1/5** |
+| `100r1` | 0 ×8 | **61 passed (5.6 m)** | 45/430 · 11/64 | **18.2 ms** vs 50 | 244.2 vs 200 (MISSES, #92) | 4 cores · **3.42 / 3.78 / 4.68 → 4.96 / 4.32 / 4.61** | **1/5** |
+
+`100r1` is the first *counted* green earned with the 1-minute load **above the core count for most of the
+pass** (4.68 before, 4.96 after, on `nproc=4`), and the set-tap gate measured **18.2 ms p95** — its best
+number of any pass in this ledger, including the quiet ones. Two things follow, and only the second one is
+comfortable: the label/clock fences hold under oversubscription, and a "quiet box" was never the condition
+that made earlier passes pass, because they had no denominator to be quiet about.

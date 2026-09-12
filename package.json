@@ -25,8 +25,6 @@
     "db:up": "supabase start -x realtime,storage-api,imgproxy,edge-runtime,logflare,vector",
     "db:down": "supabase stop",
     "db:status": "supabase status -o env",
-    "db:migrate": "drizzle-kit migrate",
-    "db:generate": "drizzle-kit generate",
     "db:seed": "tsx db/seed/exercises.ts",
     "db:seed:stretches": "tsx db/seed/stretches.ts"
   },

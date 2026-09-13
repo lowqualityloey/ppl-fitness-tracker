@@ -13,6 +13,7 @@ import {
   warmUpAndStart,
 } from './runner-fixtures';
 import { refusedSyncResponseBody } from './sync-fixtures';
+import { latencySummary } from './latency-helpers.js';
 
 /**
  * M3-06 (#63): the runner, and with it the first real execution of everything M3-05
@@ -145,17 +146,16 @@ test.describe('session runner', () => {
       );
       expect(durations.length, 'one measure per tap').toBe(100);
 
-      const median = percentile(durations, 0.5);
-      const p95 = percentile(durations, 0.95);
+      const summary = latencySummary(durations);
       console.info(
-        `[measurement] set-tap local update ms (n=100, live connection): median=${median.toFixed(1)} p95=${p95.toFixed(1)} max=${durations[durations.length - 1]?.toFixed(1)}`,
+        `[measurement] set-tap local update ms (n=${summary.n}, live connection): median=${summary.median.toFixed(1)} p95=${summary.p95.toFixed(1)} max=${summary.max.toFixed(1)} aboveP95=${summary.aboveP95}`,
       );
 
       // The card's own words: "fail the slice if p95 > 50 ms". This line does not move
       // because a measurement disagreed with it. If it goes red the implementation gets
       // faster, or the slice does not merge.
-      expect(p95, `p95 of ${p95.toFixed(1)} ms over 100 taps`).toBeLessThan(50);
-      expect(median, `median of ${median.toFixed(1)} ms`).toBeLessThan(50);
+      expect(summary.p95, `p95 of ${summary.p95.toFixed(1)} ms over 100 taps`).toBeLessThan(50);
+      expect(summary.median, `median of ${summary.median.toFixed(1)} ms`).toBeLessThan(50);
     } finally {
       await auth.cleanup();
     }
@@ -427,11 +427,6 @@ async function finishWorkoutThroughUi(page: import('@playwright/test').Page) {
 
   await page.getByTestId('finish-session').click();
   await waitForSynced(page);
-}
-
-function percentile(sorted: number[], fraction: number): number {
-  const index = Math.min(sorted.length - 1, Math.ceil(sorted.length * fraction) - 1);
-  return sorted[index] ?? Number.NaN;
 }
 
 /** `GET /api/sessions/:id` returns the full session graph; count what landed. */

@@ -33,7 +33,7 @@ This RFC converts the application to a server-authoritative full-stack app: Supa
 
 | Metric | Target |
 | :--- | :--- |
-| `POST /api/sync` p95 latency | < 200 ms @ 50 rps |
+| `POST /api/sync` p95 latency | **Documented, not enforced.** The RFC's stated target is **200 ms @ 50 rps**, which sequential runs never reach and which is **unmet on this 4-core hardware** (#90: 50 rps undeliverable, best offered 43.6 rps, verdict `INCONCLUSIVE`). Measured sequential production p95 is **~203–413 ms** (first prod run p95 272.8 / max 609.9; #90 harness p50 200.5–258.1 / p95 364.5–413.9 over accepted responses; PR #72 CI p95 222.0), against a no-auth `GET /api/exercises` baseline of p95 7–17 ms — so the cost is authenticated-path-specific (two `getUser()` round trips + per-user transaction, ADR-0003). **Enforced regression ceiling: p95 < 800 ms** (M2-06), which holds on all recorded runs. Re-documented by #92 from the measured reality rather than by moving a budget to fit it. |
 | Set-tap to local UI update | < 50 ms (optimistic; no network in the interaction path) |
 | Cross-device propagation (both online) | < 5 s p95 |
 | Outbox drain after reconnect | < 5 s for a 60-mutation queue |

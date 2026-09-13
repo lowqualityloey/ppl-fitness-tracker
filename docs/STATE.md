@@ -462,6 +462,8 @@ and the **rate limiters are process-local**, so N instances multiply the budget 
 measurement (`next:build` + `next:start`) is the natural M4/telemetry task. See the remediation list
 below and `docs/tasks/2026-09-11-intake-debt-index.md`.
 
+*Resolved 2026-09-13 — #92 (re-document, not remediate).* The 200 ms @ 50 rps figure was **documented, never enforced**; the enforced ceiling is M2-06's 800 ms and it holds on all recorded runs. #92 settled the promise by re-documenting to measured reality instead of moving a budget to fit it (locked protocol): sequential production `POST /api/sync` reads **p50 200.5–258.1 / p95 364.5–413.9 ms** on the #90 harness (first-ever prod measurement p95 272.8 / max 609.9; PR #72 CI p95 222.0) — all above 200 and *outside* the 50 rps condition, which no sequential run ever reached (#90: 50 rps undeliverable on this 4-core box, best 43.6 rps, verdict `INCONCLUSIVE`). The RFC §3 SLA row and `tests/e2e/sync-latency.spec.ts` now quote the **measured band + enforced 800 ms ceiling**; the per-run "MISSES vs 200 ms" print is retired. No rate, budget, or threshold moved. The other three residuals on the list below stand.
+
 *Resolved 2026-09-08 — `M0-00`, Node runtime.* Initially filed as "WSL Node is 18.19.1, too old for Next.js 16." That was overstated. `~/.nvm/versions/node/` already contained v22.19.0 and v24.18.0, and the `PATH` prepend at `~/.zshrc:119-122` selects the highest, so the **interactive** shell was already on Node 24 and Next.js 16 would have run fine.
 
 The narrower claim that survived — "non-interactive shells resolve `/usr/bin/node` v18.19.1" — was **also overstated**, re-measured 2026-09-11: plain `bash -c`, `bash -lc`, and `zsh -lc` in this environment all resolve **v24.20.0**, because the nvm `PATH` prepend is inherited from the parent process. Only a stripped environment (`env -i bash -c 'node -v'`) falls back to `/usr/bin/node` **v18.19.1**. `PROMPTKIT.md` §3 is corrected accordingly; `~/.zshenv` was still deliberately not created — no repo-visible change is needed.
@@ -1119,10 +1121,7 @@ Carried forward, still open:
       check, not a louder Lighthouse (handoff §3.6). The same section notes the contrast matrix
       measures only *enumerated* tokens: a new alias must be added to `GATE_MATRIX` by hand, or the
       rows generated from the `@theme inline` mapping.
-    - **And the four things whose measured reality differs from their prose today**: the 200 ms miss
-      above, the process-local limiter, G-M3-3's margin being the 4 s poll interval rather than engine
-      speed, and the missing service worker — G-M3-1's "reopen with no network" is proven with the
-      *API* dead, not the document unfetchable.
+    - **The three things whose measured reality still differs from their prose** (the 200 ms `/api/sync` miss was resolved by #92 — re-documented to the measured ~203–413 ms p95 band + enforced 800 ms ceiling, not relabelled): the process-local limiter, G-M3-3's margin being the 4 s poll interval rather than engine speed, and the missing service worker — G-M3-1's "reopen with no network" is proven with the *API* dead, not the document unfetchable.
 
 ---
 

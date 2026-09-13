@@ -458,7 +458,7 @@ reproduced it independently**: p50 117.8 ms / p95 222.0 ms against a no-auth p95
 runner (vs 272.8 / 16.9 here) — so the miss is not an artifact of this dev box, and the authenticated-path
 attribution holds on both machines (a ~19x p95 gap on CI, ~16x locally). **The 50 rps condition
 §3 actually specifies is still untested** — that is M4's load test, and nothing here satisfies it —
-and the **rate limiters are process-local**, so N instances multiply the budget by N. A production-mode
+and the rate limiters are **accepted as single-instance-only** (PROMPTKIT.md §2): one process holds each budget, so a second instance multiplies every budget by N — a documented limitation, not a TODO. A production-mode
 measurement (`next:build` + `next:start`) is the natural M4/telemetry task. See the remediation list
 below and `docs/tasks/2026-09-11-intake-debt-index.md`.
 
@@ -1029,8 +1029,8 @@ Carried forward, still open:
       state, not a regression**: production-build p95 **234–282 ms** on M3-10's runs (exit report
       §3.1), 222.0 ms on PR #72's CI runner, 272.8 ms when M3-03 first measured. The **enforced**
       ceiling is M2-06's 800 ms and it holds; the 200 ms figure stayed *documented, never enforced*.
-      The 50 rps condition the master RFC specifies is still untested, and the **rate limiters are
-      process-local** (N instances = N × every budget).
+      The 50 rps condition the master RFC specifies is still untested, and the rate limiters are
+      **accepted as single-instance-only** (PROMPTKIT.md §2): N instances = N × every budget — a documented, owned limitation, not a defect.
     - **The two disclosed #73 limits are closed, and the way they were told to be closed.** The
       owner ratified *drop the field* rather than wire a consumer, so `SyncResponseData.state` no
       longer exists to have no consumer, and the `session-runner.spec.ts:174` mock is built through
@@ -1121,7 +1121,7 @@ Carried forward, still open:
       check, not a louder Lighthouse (handoff §3.6). The same section notes the contrast matrix
       measures only *enumerated* tokens: a new alias must be added to `GATE_MATRIX` by hand, or the
       rows generated from the `@theme inline` mapping.
-    - **The three things whose measured reality still differs from their prose** (the 200 ms `/api/sync` miss was resolved by #92 — re-documented to the measured ~203–413 ms p95 band + enforced 800 ms ceiling, not relabelled): the process-local limiter, G-M3-3's margin being the 4 s poll interval rather than engine speed, and the missing service worker — G-M3-1's "reopen with no network" is proven with the *API* dead, not the document unfetchable.
+    - **The two things whose measured reality still differs from their prose** (the 200 ms `/api/sync` miss was resolved by #92 — re-documented to the measured ~203–413 ms p95 band + enforced 800 ms ceiling, not relabelled; the process-local limiter was resolved by #93 — accepted as a documented single-instance-only limitation in PROMPTKIT.md §2, not relabelled): G-M3-3's margin being the 4 s poll interval rather than engine speed, and the missing service worker — G-M3-1's "reopen with no network" is proven with the *API* dead, not the document unfetchable.
 
 ---
 

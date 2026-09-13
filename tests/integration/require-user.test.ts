@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { Client } from 'pg';
-import { requireUser } from '../../lib/auth/require-user.js';
+import { requireUser, requireUserContext } from '../../lib/auth/require-user.js';
 import { AppErrorException } from '../../lib/contracts/envelope.js';
 import { CookieJar, createClientFromCookieJar } from '../../lib/supabase/cookie-jar.js';
 
@@ -126,5 +127,46 @@ describe('M1-12: requireUser()', () => {
 
     expect(result.userId).toBe(userId);
     expect(result.userId).not.toBe(spoofedBody.userId);
+  });
+
+  it('Scenario 4 (control): a shed verification hop MUST surface as 503, NOT 401, and log the cause', async () => {
+    // A Supabase client whose auth verification hop fails (e.g. a network
+    // blip or a GoTrue 5xx). This is a server-side condition, not an auth
+    // rejection, so the mapping must be 503 SERVICE_UNAVAILABLE with a
+    // Retry-After — never 401. The control below proves the test is alive:
+    // if requireUserContext ever maps a hop failure to 401, this test goes
+    // red, forcing the off-the-table direction to be re-litigated.
+    const failingClient = {
+      auth: {
+        getUser: async () => ({
+          data: { user: null },
+          error: { message: 'network timeout', status: 0, code: 'network_error' },
+        }),
+      },
+    } as unknown as SupabaseClient;
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      await expect(requireUserContext(failingClient)).rejects.toBeInstanceOf(AppErrorException);
+
+      // Re-invoke to inspect the emitted envelope (rejects.toBeInstanceOf
+      // swallowed the specific instance).
+      let appError: { status: number; code: string; retryAfter?: number } | null = null;
+      try {
+        await requireUserContext(failingClient);
+      } catch (e) {
+        appError = (e as AppErrorException).appError;
+      }
+      expect(appError).not.toBeNull();
+      expect(appError!.status).toBe(503);
+      expect(appError!.code).toBe('SERVICE_UNAVAILABLE');
+      expect(typeof appError!.retryAfter).toBe('number');
+
+      // The shed hop must be observable: the cause is logged so 1003
+      // rejections can be diagnosed instead of going dark.
+      expect(errorSpy).toHaveBeenCalled();
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 });

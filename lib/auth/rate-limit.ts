@@ -10,9 +10,13 @@ interface RateLimitEntry {
 /**
  * Process-local sliding-window limiter for public sign-in initiation.
  *
- * This deliberately hides storage behind one module so a shared atomic store
- * can replace it before the application runs on multiple instances. Do not
- * treat process memory as a horizontally-scaled production control.
+ * Storage is intentionally process memory. **v1 is documented as
+ * single-instance**: each budget is held per process, so N server instances
+ * give N × the budget (e.g. the 120 req/min sync budget becomes N×120/min).
+ * That is an *owned, accepted* limitation — see `PROMPTKIT.md` §2 (Rate
+ * limiting & instance model) — not a pending TODO. The storage seam is still
+ * isolated here so a shared atomic store could replace it later without
+ * touching callers.
  */
 export class AuthRateLimiter {
   private readonly entries = new Map<string, RateLimitEntry>();
@@ -52,8 +56,8 @@ export const signInRateLimiter = new AuthRateLimiter();
  * documented budget is per user and the request is authenticated before it is
  * counted. An IP key here would let one NAT'd household spend everyone else's
  * allowance; `clientIp` exists only because sign-in can be attempted before an
- * identity exists. The process-local caveat above applies identically: this is a
- * single-instance courtesy limit, not a distributed control.
+ * identity exists. The single-instance caveat above applies identically: this is a
+ * single-instance courtesy limit, not a distributed control — accepted as such in `PROMPTKIT.md` §2.
  */
 export const legacyImportRateLimiter = new AuthRateLimiter(5, 60 * 60 * 1000);
 
@@ -64,8 +68,8 @@ export const legacyImportRateLimiter = new AuthRateLimiter(5, 60 * 60 * 1000);
  * same as not existing — the route would accept any volume a caller sent. It is
  * deliberately far looser than the import limiter: sync is the app's ordinary
  * write path and fires on every reconnect, so its limit is a backstop against a
- * hot loop, not an anti-abuse throttle. Same process-local caveat as every other
- * limiter in this file.
+ * hot loop, not an anti-abuse throttle. Same single-instance caveat as every other
+ * limiter in this file — accepted as such in `PROMPTKIT.md` §2.
  */
 export const syncRateLimiter = new AuthRateLimiter(120, 60 * 1000);
 

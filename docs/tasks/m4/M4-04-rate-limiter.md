@@ -47,3 +47,6 @@ The sentence "the rate limiters are process-local" is removed from `docs/STATE.m
 
 ## Dependencies
 - Independent; interacts with M4-01 (a 50 rps single-user driver hits the limiter; the harness design in M4-01 already records this).
+
+## Resolution (2026-09-13) — option (b), documented single-instance acceptance
+Owner chose **(b)**: v1 ships single-instance. The constraint lives in `PROMPTKIT.md` §2 (Rate limiting is per-instance) as an un-skipable bullet stating N instances = N × every budget (e.g. 120/min → N×120/min), and `lib/auth/rate-limit.ts` now describes the limiters as an *owned, accepted* single-instance limitation pointing at that decision (not a pending TODO). `docs/STATE.md` §5's residual list no longer counts the process-local limiter as an open mismatch — it is a documented, owned limitation. No budget value changed; the limiter's sliding-window semantics, 429 envelope, and `retryAfter` are undisturbed. Honors the locked protocol (no rate/budget moved to fit a story). Option (a) shared-atomic-store remains a future option, explicitly deferred.

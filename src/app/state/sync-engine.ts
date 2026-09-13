@@ -58,6 +58,8 @@ export interface SyncSnapshot {
   /** The queued records themselves, oldest first — what `projectPending` overlays. */
   pending: StoredMutation[];
   pendingCount: number;
+  /** Age in ms of the oldest queued entry, or 0 if the queue is empty. */
+  oldestAgeMs: number;
   rejections: VisibleRejection[];
   lastFatalReason: string | null;
 }
@@ -334,6 +336,7 @@ export class SyncEngine {
     return {
       pending,
       pendingCount: pending.length,
+      oldestAgeMs: pending.length > 0 ? Date.now() - pending[0]!.createdAt : 0,
       rejections: [...this.rejections],
       lastFatalReason: this.fatalReason,
     };

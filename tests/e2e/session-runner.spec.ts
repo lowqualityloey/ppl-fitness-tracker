@@ -101,6 +101,57 @@ test.describe('session runner', () => {
     }
   });
 
+  test('the queue badge shows outbox age so a stall is distinguishable from a drain', async ({
+    page,
+  }) => {
+    test.setTimeout(WORKOUT_FLOW_TIMEOUT_MS);
+    const auth = await signInFreshUser(page, 'e2e-outbox-age');
+    try {
+      await startPushDay(page);
+      await warmUpAndStart(page);
+
+      // Block sync so the mutation stays queued.
+      await page.route('**/api/sync', (route) => route.abort());
+
+      const tick = firstTick(page);
+      await tick.click();
+      await expect(tick).toContainText('Logged');
+
+      // The badge must show age alongside depth.
+      await expect(page.getByTestId('sync-status')).toContainText('waiting to sync · oldest');
+
+      // Backdate the oldest entry to 5 minutes ago, simulating a stall.
+      await page.evaluate(() => {
+        return new Promise<void>((resolve, reject) => {
+          const req = indexedDB.open('ppl-fitness-tracker', 2);
+          req.onsuccess = () => {
+            const db = req.result;
+            const tx = db.transaction('outbox', 'readwrite');
+            const store = tx.objectStore('outbox');
+            const cursor = store.openCursor();
+            cursor.onsuccess = () => {
+              if (cursor.result) {
+                const entry = cursor.result.value as { createdAt: number };
+                entry.createdAt = Date.now() - 5 * 60 * 1000;
+                cursor.result.update(entry);
+              }
+            };
+            tx.oncomplete = () => { db.close(); resolve(); };
+            tx.onerror = () => { db.close(); reject(tx.error); };
+          };
+          req.onerror = () => reject(req.error);
+        });
+      });
+
+      // Trigger a snapshot re-read by tapping the next tick (which calls enqueue →
+      // snapshot update). The backdated entry remains oldest.
+      await page.locator('[data-testid^="tick-"]').nth(1).click();
+      await expect(page.getByTestId('sync-status')).toContainText('oldest 5:0', { timeout: 10_000 });
+    } finally {
+      await auth.cleanup();
+    }
+  });
+
   /*
    * The tap-latency scenario, and a design note that matters more than the number.
    *

@@ -216,6 +216,7 @@ export function useSyncSnapshot(): SyncSnapshot & { ready: boolean } {
   const [snapshot, setSnapshot] = useState<SyncSnapshot>({
     pending: [],
     pendingCount: 0,
+    oldestAgeMs: 0,
     rejections: [] as VisibleRejection[],
     lastFatalReason: null,
   });

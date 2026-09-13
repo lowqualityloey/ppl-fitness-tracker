@@ -515,7 +515,7 @@ function Runner({ userId, sessionId, initialView, unit, initialPrefill }: {
             ? `${snapshot.rejections.length} refused by the server`
             : snapshot.pendingCount === 0
               ? 'All changes synced'
-              : `${snapshot.pendingCount} waiting to sync`}
+              : `${snapshot.pendingCount} waiting to sync · oldest ${formatDuration(snapshot.oldestAgeMs)}`}
         </Badge>
       </div>
 

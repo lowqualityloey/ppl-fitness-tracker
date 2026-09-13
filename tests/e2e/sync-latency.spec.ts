@@ -7,6 +7,7 @@ import {
   type SessionFixture,
   type TestSession,
 } from '../integration/api/fixtures.js';
+import { latencySummary } from './latency-helpers.js';
 
 /**
  * M3-03 (#60), task item 4: the first **production-mode** numbers for the sync
@@ -47,20 +48,12 @@ const documentedBudgetMs = 200;
  */
 const devHarnessCeilingMs = 800;
 
-function percentile(sorted: number[], p: number): number {
-  const index = Math.ceil((p / 100) * sorted.length) - 1;
-  return sorted[Math.max(0, Math.min(index, sorted.length - 1))]!;
-}
-
 function report(label: string, samples: number[]) {
-  const sorted = [...samples].sort((a, b) => a - b);
-  const p50 = percentile(sorted, 50);
-  const p95 = percentile(sorted, 95);
-  const max = sorted[sorted.length - 1]!;
+  const s = latencySummary(samples);
   const summary =
-    `${label} over ${sorted.length} sequential requests on the production build — ` +
-    `p50 ${p50.toFixed(1)} ms, p95 ${p95.toFixed(1)} ms, max ${max.toFixed(1)} ms`;
-  return { p50, p95, max, summary };
+    `${label} over ${s.n} sequential requests on the production build — ` +
+    `p50 ${s.median.toFixed(1)} ms, p95 ${s.p95.toFixed(1)} ms, max ${s.max.toFixed(1)} ms (aboveP95=${s.aboveP95})`;
+  return { p50: s.median, p95: s.p95, max: s.max, summary };
 }
 
 function verdict(result: { p95: number }, summary: string): string {

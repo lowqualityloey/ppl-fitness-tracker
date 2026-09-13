@@ -6,6 +6,7 @@ import {
   waitForSynced,
   warmUpAndStart,
 } from './runner-fixtures';
+import { latencySummary } from './latency-helpers.js';
 
 /**
  * M3-10 (#67): the G-M3 latency goals, **measured on the production build** the Playwright
@@ -72,22 +73,17 @@ const G_M3_3_DECLARED_WAIT_MS = G_M3_3_BADGE_WINDOW_MS + G_M3_3_SAMPLES * G_M3_3
  */
 const G_M3_4_REGRESSION_CEILING_MS = 15_000;
 
-function percentile(sorted: number[], p: number): number {
-  const index = Math.ceil((p / 100) * sorted.length) - 1;
-  return sorted[Math.max(0, Math.min(index, sorted.length - 1))]!;
-}
-
-/** Records the distribution, then hands back p95 for the caller's assertion. */
+/**
+ * Records the distribution (median, p95, max, and — the #121 guard — how many samples sit
+ * strictly above p95), then hands back p95 for the caller's assertion.
+ */
 function report(label: string, samples: number[]): number {
-  const sorted = [...samples].sort((a, b) => a - b);
-  const p50 = percentile(sorted, 50);
-  const p95 = percentile(sorted, 95);
-  const max = sorted[sorted.length - 1]!;
+  const s = latencySummary(samples);
   console.log(
-    `[${label}] n=${sorted.length} median=${p50.toFixed(1)}ms p95=${p95.toFixed(1)}ms ` +
-      `max=${max.toFixed(1)}ms`,
+    `[${label}] n=${s.n} median=${s.median.toFixed(1)}ms p95=${s.p95.toFixed(1)}ms ` +
+      `max=${s.max.toFixed(1)}ms aboveP95=${s.aboveP95}`,
   );
-  return p95;
+  return s.p95;
 }
 
 test.describe('M3 latency goals (production build)', () => {
@@ -141,26 +137,48 @@ test.describe('M3 latency goals (production build)', () => {
         });
       });
 
-      // Every enabled set row, tapped once. Tapping distinct rows (rather than the same row 20×)
-      // exercises 20 separate optimistic commits and avoids the revert-to-server-truth of a repeated
-      // single toggle contaminating the samples.
+      // Pin the denominator (#121): G-M3-2's p95 is only meaningful with a sample count well
+      // above 19, above which the nearest-rank 95th percentile stops collapsing to the maximum.
+      // Tapping only the machine-dependent enabled-row count let CI run 17 taps and decide the
+      // 50 ms gate on a single slow one. We tap a fixed, deterministic number of times —
+      // round-robin across the enabled rows — so n is stable across machines instead of equal to
+      // "however many rows this build happens to render". Distinct-row round-robin avoids the
+      // revert-to-server-truth contamination a single row toggled 100× would cause.
       const ticks = page.locator('[data-testid^="tick-"]:not([disabled])');
       const count = await ticks.count();
       expect(count).toBeGreaterThan(0);
-      for (let index = 0; index < count; index += 1) {
-        await ticks.nth(index).click();
-        await page.waitForTimeout(40);
+      const TARGET_TAPS = 100;
+      const passes = Math.max(1, Math.ceil(TARGET_TAPS / count));
+      for (let pass = 0; pass < passes; pass += 1) {
+        for (let index = 0; index < count; index += 1) {
+          await ticks.nth(index).click();
+          await page.waitForTimeout(40);
+        }
       }
 
       const samples = await page.evaluate<number[]>(() => {
         const w = window as unknown as { __tap?: { samples: number[] } };
         return w.__tap?.samples ?? [];
       });
-      expect(samples.length, 'no tap produced a measurable local update').toBeGreaterThan(3);
-      const p95 = report('G-M3-2 tap→UI', samples);
-      expect(p95, `p95 ${p95.toFixed(1)}ms exceeds the ${G_M3_2_BUDGET_MS}ms goal`).toBeLessThan(
-        G_M3_2_BUDGET_MS,
+      // Fail closed, never on four samples: a meaningful p95 needs a non-degenerate sample size.
+      expect(
+        samples.length,
+        `too few taps produced a measurable local update for a meaningful p95 (issued ${TARGET_TAPS})`,
+      ).toBeGreaterThanOrEqual(60);
+      const summary = latencySummary(samples);
+      console.log(
+        `[G-M3-2 tap→UI] issued=${TARGET_TAPS} measured=${summary.n} aboveP95=${summary.aboveP95}`,
       );
+      // #121 guard: one tap must not decide the gate. If p95 equals the maximum, the percentile
+      // collapsed and this run is decided by a single observation — fail it loudly.
+      expect(
+        summary.degenerate,
+        'p95 collapsed to the maximum at this sample size; the gate is decided by one tap (#121)',
+      ).toBe(false);
+      expect(
+        summary.p95,
+        `p95 ${summary.p95.toFixed(1)}ms exceeds the ${G_M3_2_BUDGET_MS}ms goal`,
+      ).toBeLessThan(G_M3_2_BUDGET_MS);
     } finally {
       await auth.cleanup();
     }

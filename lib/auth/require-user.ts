@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createClient } from '../supabase/server';
-import { AppErrorException, unauthenticatedError } from '../contracts/envelope';
+import { AppErrorException, serviceUnavailableError, unauthenticatedError } from '../contracts/envelope';
 import {
   createVerifiedUserContext,
   type VerifiedUserContext,
@@ -35,7 +35,32 @@ export async function requireUserContext(
   const supabase = client ?? (await createClient());
   const { data, error } = await supabase.auth.getUser();
 
-  if (error || !data.user) {
+  // The verification hop returned an error. We must tell two different
+  // outcomes apart (#125):
+  //   • A shed hop — the request to GoTrue never completed (transport
+  //     error / no HTTP response, status 0), GoTrue shed load (429), or
+  //     GoTrue itself is failing (5xx). This is a server-side, retryable
+  //     condition → 503 with Retry-After, and we log the cause so the
+  //     "1003 rejections, zero recorded causes" mystery cannot recur.
+  //   • A genuine auth rejection — GoTrue answered with a 4xx (missing /
+  //     expired / invalid token). That is a real "signed out" → 401.
+  // Both still fail the request; we only pick the honest status. We never
+  // relax verification: an unverified request is rejected either way.
+  if (error) {
+    const status = error.status ?? 0;
+    const hopShed = status === 0 || status === 429 || status >= 500;
+    if (hopShed) {
+      console.error('[requireUserContext] auth verification hop failed', {
+        message: error.message,
+        status,
+        code: (error as { code?: string }).code ?? null,
+      });
+      throw new AppErrorException(serviceUnavailableError());
+    }
+    throw new AppErrorException(unauthenticatedError());
+  }
+
+  if (!data.user) {
     throw new AppErrorException(unauthenticatedError());
   }
 

@@ -33,7 +33,10 @@ export function appErrorResponse(
   error: AppError,
   headers?: HeadersInit,
 ): NextResponse<AppEnvelope<never>> {
-  return NextResponse.json<AppEnvelope<never>>(appErrorEnvelope(error), { status: error.status, headers });
+  const merged: HeadersInit = error.retryAfter != null
+    ? { ...(headers ?? {}), 'Retry-After': String(error.retryAfter) }
+    : (headers ?? {});
+  return NextResponse.json<AppEnvelope<never>>(appErrorEnvelope(error), { status: error.status, headers: merged });
 }
 
 export function routeErrorResponse(error: unknown): NextResponse<AppEnvelope<never>> {

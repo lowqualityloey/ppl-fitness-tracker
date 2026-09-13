@@ -8,6 +8,7 @@ export const APP_ERROR_CODES = [
   'NOT_FOUND',
   'CONFLICT',
   'RATE_LIMITED',
+  'SERVICE_UNAVAILABLE',
   'INTERNAL_ERROR',
 ] as const;
 
@@ -18,12 +19,15 @@ export interface AppError {
   code: AppErrorCode;
   message: string;
   status: number;
+  /** Optional retry hint (seconds). Emitted as a `Retry-After` header by `appErrorResponse`. */
+  retryAfter?: number;
 }
 
 export const AppErrorSchema = z.object({
   code: AppErrorCodeSchema,
   message: z.string().min(1),
   status: z.number().int().min(400).max(599),
+  retryAfter: z.number().int().min(0).max(86400).optional(),
 }).strict();
 
 export type AppEnvelope<T> =
@@ -88,6 +92,19 @@ export function rateLimitedError(message = 'Too many sign-in attempts.'): AppErr
 
 export function internalError(message = 'Internal server error.'): AppError {
   return { code: 'INTERNAL_ERROR', message, status: 500 };
+}
+
+/**
+ * The auth verification hop failed (GoTrue unreachable / timed out / shed under load) — distinct
+ * from "no session". This is a server-side, retryable condition, so it is 503 with a `Retry-After`,
+ * never a 401. See #125: reporting it as UNAUTHENTICATED makes a healthy cookie look signed-out,
+ * which is how a shed hop becomes a lost session.
+ */
+export function serviceUnavailableError(
+  message = 'Authentication service is temporarily unavailable. Please retry.',
+  retryAfter = 1,
+): AppError {
+  return { code: 'SERVICE_UNAVAILABLE', message, status: 503, retryAfter };
 }
 
 /**

@@ -5,9 +5,20 @@
 - **Installed**: 2026-09-14
 - **Last intake scan**: 2026-09-14 (`pk:onboard`, passive) — findings `O1`–`O12` indexed in
   `docs/tasks/2026-09-14-onboard-drift-index.md`; the doc patches it authorized are applied in §2/§3/§5/§6 below
-- **Engine**: .promptkit (submodule @ `b3c5edf`; `AGENTS.md`'s block re-verified byte-identical to
-  `.promptkit/templates/agent-directive-template.md` apart from the `$KIT_DIR_REL` substitution)
-- **Upgrade**: Run `.promptkit/init.sh --balanced` for full 22 workflows, or `--turbo --experimental` for parallel waves
+- **Engine**: .promptkit (submodule @ `ebfd67e` = **v1.7.0**, synced 2026-09-15 from `b3c5edf`, 10 commits;
+  `AGENTS.md`'s block re-verified byte-identical to `.promptkit/templates/agent-directive-template.md`
+  apart from the `$KIT_DIR_REL` substitution — 9,573 characters each side, measured on this sync)
+- **What v1.7.0 changes for anyone reading the triggers here**: `pk:profile` is **no longer a `pk:perf`
+  alias** — it is the runtime Lite/Balanced/Turbo switcher (the engine's documented minor); the
+  trigger→file exceptions (`pk:spike`→`research.md`, `pk:retro`→`reflect.md`, `pk:grill`→`tutor.md`,
+  `pk:design`→`design-system.md`) are now written into the directive instead of living as folklore; ties
+  in the ceremony-level test take the **higher** level and any downgrade must be announced with a reason;
+  a status card may not carry a number that was not traced to a command or file read in the same turn.
+- **Upgrade**: Run `.promptkit/init.sh --balanced` for the full 23 workflows (`ls .promptkit/workflows |
+  wc -l` → 23 on this sync), or `--turbo --experimental` for parallel waves. `init.sh` re-injects
+  `AGENTS.md`'s block and the `profile:` line at the bottom of this file, and never overwrites an
+  existing `PROMPTKIT.md` — so §0 above is hand-maintained and goes stale on its own, which is why the
+  engine row names the SHA it describes. Profile stays **turbo**.
 
 
 > **Instructions for AI**: Read this file during every session. Adhere strictly to the project domain boundaries, commands, documentation targets, and non-negotiable architectural rules defined below.

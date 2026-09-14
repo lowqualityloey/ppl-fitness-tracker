@@ -3,7 +3,10 @@
 ## 0. PromptKit OS Profile
 - **Profile**: turbo
 - **Installed**: 2026-09-14
-- **Engine**: .promptkit
+- **Last intake scan**: 2026-09-14 (`pk:onboard`, passive) — findings `O1`–`O12` indexed in
+  `docs/tasks/2026-09-14-onboard-drift-index.md`; the doc patches it authorized are applied in §2/§3/§5/§6 below
+- **Engine**: .promptkit (submodule @ `b3c5edf`; `AGENTS.md`'s block re-verified byte-identical to
+  `.promptkit/templates/agent-directive-template.md` apart from the `$KIT_DIR_REL` substitution)
 - **Upgrade**: Run `.promptkit/init.sh --balanced` for full 22 workflows, or `--turbo --experimental` for parallel waves
 
 
@@ -11,7 +14,7 @@
 
 > **This project is mid-migration.** Two stacks coexist, and the split is no longer "built vs. unbuilt" on either side of the seam.
 >
-> - The *target* stack's **server side and its UI are both merged to `main`**: schema + migrations `0000`–`0006` (and `0007`, the auth→profiles cascade FK, **lands with #89 — after that merge this list reads `0000`–`0007`**), RLS on every table, magic-link auth, Zod contracts (including the session-state graph, as of #73), the sessions/profile/prefill/exercises/progress/sync/import APIs, `SessionEngine`, `ProgressionEngine`, and transactional conflict-aware sync (M1 complete bar deferred #16; M2-00 → M2-06 merged as PRs #43–#47, #51, #53; **M3-00 → M3-10 merged as PRs #69–#87 — the milestone is complete, open=0 / closed=19**).
+> - The *target* stack's **server side and its UI are both merged to `main`**: schema + migrations `0000`–`0007` (`0007_auth_user_cascade.sql`, the auth→profiles cascade FK, merged with #89), RLS on every table, magic-link auth, Zod contracts (including the session-state graph, as of #73), the sessions/profile/prefill/exercises/progress/sync/import APIs, `SessionEngine`, `ProgressionEngine`, and transactional conflict-aware sync (M1 complete bar deferred #16; M2-00 → M2-06 merged as PRs #43–#47, #51, #53; **M3-00 → M3-10 merged as PRs #69–#87 — the milestone is complete, open=0 / closed=19**).
 > - The target stack is now a **working app**: `/` (dashboard), `/sign-in`, `/session/[id]` (the runner), `/history` + a one-session report + per-exercise progress, and `/settings` with the legacy-import dialog. What it still is not: **deployable**. Production email delivery (#16), telemetry/Sentry, the 50 rps load test (currently unmet on this 4-core hardware — #90 best 43.6 rps, verdict `INCONCLUSIVE`; #92 re-documents the `/api/sync` SLA to the measured ~203–413 ms p95 band with an enforced 800 ms ceiling), a service worker, volume/streak analytics, body-measurement import and data export do not exist — M4's list, with its measured starting facts in `docs/releases/2026-09-12-m3-exit-report-and-m4-handoff.md`.
 > - The **legacy vanilla-JS app still runs unchanged** on port 3000 beside it and is still the thing `npm run build` builds (a build that emits zero JavaScript — see §2). M3 was required to run beside all of it and never wrote a legacy key; `tests/e2e/legacy-parity.spec.ts` measures that, and is built to fire when M4 deletes them.
 >
@@ -42,15 +45,15 @@
 ### Target stack (v1 — **M3 COMPLETE: 19/19 closed on milestone #3, open=0**. M3-00…M3-09 landed 2026-09-11 as PRs #69–#85; #67 (M3-10, the verification gate) merged as **PR #86 (`8704c19`, 2026-09-11T19:23Z)**; #73 (the session-state contract) merged as **PR #87 (`2d5edfb`, 2026-09-12T02:00Z)**. Everything below is re-verified on merged `main`, not on a feature branch, 2026-09-12.)
 
 - **Language & Runtime**: TypeScript `strict`, Node.js **≥ 20.9** (required by Next.js 16 — Node 18 is unsupported). nvm default is v24.20.0 LTS; see the shell footgun in §3.
-- **Framework**: Next.js 16 (App Router), React 19 — ADR-0001. Live screens: `/` (dashboard), `/sign-in`, `/session/[id]` (the runner), `/history` + one-session report + per-exercise progress, `/settings` (+ import dialog). Route handlers: `src/app/api/{sessions,sessions/[id],sync,import/legacy,exercises,profile,progress}`; `src/middleware.ts` refreshes sessions. Runs on port 3001 alongside the legacy Vite server on 3000 (untouched until M4; `tests/e2e/legacy-parity.spec.ts` guards that no M3 code writes legacy keys).
-- **Domain layer**: `lib/domain/{sessions,progression,sync,import,units}` (pure transition table, Epley e1RM, sync reducer, legacy planner, weight parse/ceiling), `lib/repositories/` (user-scoped, transactional), `lib/views/` (the read-side the screens render — no screen invents its own fetch shape), `lib/db/{client,with-user,auth-context}`, `lib/http/route-error.ts`, `lib/auth/`, `lib/supabase/server.ts`.
+- **Framework**: Next.js 16 (App Router), React 19 — ADR-0001. Live screens: `/` (dashboard), `/sign-in`, `/session/[id]` (the runner), `/history` + one-session report + per-exercise progress, `/settings` (+ import dialog). Route handlers (**11** `route.ts` files): `src/app/api/{sessions,sessions/[id],sessions/prefill,sync,import/legacy,exercises,profile,progress/[exerciseSlug]}` plus `src/app/auth/{confirm,signin,signout}`; `src/middleware.ts` refreshes sessions. Runs on port 3001 alongside the legacy Vite server on 3000 (untouched until M4; `tests/e2e/legacy-parity.spec.ts` guards that no M3 code writes legacy keys).
+- **Domain layer**: `lib/domain/{sessions,progression,sync,import,units}` (pure transition table, Epley e1RM, sync reducer, legacy planner, weight parse/ceiling), `lib/repositories/` (user-scoped, transactional), `lib/views/` (the read-side the screens render — no screen invents its own fetch shape), `lib/db/{client,with-user,auth-context}`, `lib/http/{route-error,request-log}.ts`, `lib/auth/`, `lib/supabase/server.ts`, and `lib/logger/` — the M4-05 (#94) logging seam (`index.ts` barrel = the intended import path, `context.ts` request scope + correlation id, `logger.ts` levels + JSON line + injectable sink, `redact.ts` the deny-list). **Merged: `lib/logger/` is on `main` via PR #145 (2026-09-14).** Import the barrel, never `logger.ts` directly — a caller that bypasses it gets a different default logger than the one an integration test's injected sink swaps, so the line it asserts was never the line that was written.
 - **Styling & Design System** (M3-02, PR #71): Tailwind CSS v4 + shadcn primitives **vendored** under `src/components/ui/` (the CLI is not in the loop — copy-in, then the contrast gate owns them). Token layer in `src/app/globals.css`: `:root` literals from `DESIGN.md`, the shadcn alias block, and the `@theme inline` mapping. `scripts/check-contrast.ts` + `tests/unit/design/contrast.test.ts` measure every matrix pair (35 as of M3-10), **following `var()` indirection to the leaf** and failing on anything unmeasurable — the alias hole closed in `96b5202`, see audit entries 2/14.
 - **State & Data Fetching**: client sync island under `src/app/state/` (M3-05, PR #75; wired through M3-06/07): IndexedDB-backed `outbox.ts`, `sync-engine.ts` (one in-flight batch, jittered backoff, visibility-aware polling at 4 s visible / 30 s hidden, reconnect drain — `notifyConnectivityRestored()` clears offline-grown windows, `9ca17cc`), `provider.tsx`, `reconcile.ts`, `timer-controller.ts` (absolute-deadline arithmetic), `unit-display.ts`, `device-identity.ts`, `audio-cue.ts`. Set-taps are optimistic with the server as sole truth; Server Actions remain unused (deliberate, spec §3.2).
 - **Backend & Database**: Supabase — PostgreSQL **17.6** (measured on the local stack 2026-09-08; earlier drafts said 16), Supabase Auth (email magic link) — ADR-0002. **Realtime is not in use**: zero `.channel(`/realtime references in application code, and `npm run db:up` starts the stack with `-x realtime,...`, so the local stack does not even run it.
 - **Rate limiting is per-instance (single-instance v1).** `lib/auth/rate-limit.ts` keeps each budget in process memory, so running N server instances multiplies every budget by N (the 120 req/min sync budget becomes N×120/min; the 5/hour import and 5/10-min sign-in limits scale the same way). v1 is **documented and accepted as single-instance** — do **not** read these numbers as horizontally-scaled production controls. A second instance for availability needs either a shared store or accepting N× budgets.
 - **ORM**: Drizzle (`db/schema/index.ts`), connecting as a non-owner `app_authenticated` role — ADR-0003. `db/seed/` loads exercise and stretch content.
 - **Validation**: Zod at every boundary (`lib/contracts/` — envelope, auth, sessions, sync, progress, exercises, legacy import). Since **#73** the session graph is one of those boundaries rather than the exception: `SessionStateSchema` is a `.strict()` description of what `mapSessionState` emits, `lib/views/session-view.ts` is a **re-export** of it, and the two producers that ship it (`POST /api/sessions`, `GET /api/sessions/[id]`) validate what they send through `validateOutgoing` in `envelope.ts`. `POST /api/sync` validated the graph too until **#105** deleted `SyncResponseData.state`; it still calls `validateOutgoing`, and its contract is `.strict()`, which is what turns a producer that resurrected the field into a redacted 500 instead of an undocumented key on the wire.
-- **Testing**: Vitest — **56 `.test.ts` files** (re-counted with `find` on merged `main` `324d4b7`, 2026-09-12, i.e. after #100; 52 at `6043990`): **30** under `tests/unit/`, **26** under `tests/integration/` — the earlier split below describing `6043990`: **27** under `tests/unit/`, **15** DB-backed under `tests/integration/` (13 at its root, 2 in `repository/`), **10** route-handler suites under `tests/integration/api/`. `npm test` runs the first two groups — **42 files / 419 tests**, stack up, measured on `6043990` (this line read 416 until that run) — because the API directory boots real servers; `npm run test:api` runs those **10 files / 61 tests**, also re-measured on `6043990`. **Playwright E2E exists and is the merge gate for anything user-visible** — 13 spec files / 61 tests (M3-03 harness, PR #72; grown by M3-06…10), run by `npm run test:e2e` in CI against a **production** build, including `lighthouse.spec.ts` (Lighthouse is a devDependency; the CI job installs browsers `--with-deps` for exactly this; it scores `/sign-in` plus `/history`, `/` and `/session/[id]`, the last three authenticated). Every latency claim this repo makes is quoted from these logs — see `docs/tests/2026-09-11-m3-verification-audit.md` and `docs/tests/2026-09-12-m4-089-break-each-gate-audit.md` for what each gate prints and how it was proven capable of failing. D3 is resolved.
+- **Testing**: Vitest — **62 `.test.ts` files** (re-counted with `find` on `feat/m4-05-structured-logging` @ `18de6da`, 2026-09-14; the API directory is excluded from `npm test`): **36** under `tests/unit/`, **15** DB-backed under `tests/integration/` (13 at its root, 2 in `repository/`), **11** route-handler suites under `tests/integration/api/`. `npm test` runs the first two groups — **51 files** — because the API directory boots real servers; `npm run test:api` runs the **11**. The *line totals* (`419` / `430` tests, `61`) were last measured on `324d4b7` and `6043990` and have **not** been re-run since `18de6da`, so treat them as historical, not current: a count quoted from a merge is not a count measured on your tree. **Playwright E2E exists and is the merge gate for anything user-visible** — 13 spec files / 61 tests (M3-03 harness, PR #72; grown by M3-06…10), run by `npm run test:e2e` in CI against a **production** build, including `lighthouse.spec.ts` (Lighthouse is a devDependency; the CI job installs browsers `--with-deps` for exactly this; it scores `/sign-in` plus `/history`, `/` and `/session/[id]`, the last three authenticated). Every latency claim this repo makes is quoted from these logs — see `docs/tests/2026-09-11-m3-verification-audit.md` and `docs/tests/2026-09-12-m4-089-break-each-gate-audit.md` for what each gate prints and how it was proven capable of failing. D3 is resolved.
 
 ---
 
@@ -102,11 +105,14 @@ each serving correctly, zero collision.
   legacy `npm run build`, which is verified zero-JS (see the note above) and stays
   that way until M4
 - **Start (production)**: `npm run next:start`
-- **Test files that exist today** (re-counted 2026-09-12 on the #89 branch): **51 `.test.ts` files** —
-  26 under `tests/unit/`, 15 DB-backed under `tests/integration/` (13 at its root, 2 in `repository/`),
-  10 route-handler API suites under `tests/integration/api/` (plus `fixtures.ts` and `test-server.ts`
-  helpers) — plus **13 `.spec.ts` files** under `tests/e2e/`. `npm test` (unit + DB integration) runs
-  **45 files / 430 tests** (re-measured on `324d4b7` after #100; 41 / 408 at `2d5edfb`) **with the stack up** and fails `ECONNREFUSED` without it. The unit-layer
+- **Test files that exist today** (re-counted 2026-09-14 at `18de6da`): **62 `.test.ts` files** —
+  36 under `tests/unit/`, 15 DB-backed under `tests/integration/` (13 at its root, 2 in `repository/`),
+  11 route-handler API suites under `tests/integration/api/` (plus `fixtures.ts`, `test-server.ts` and
+  `gotrue-failure.ts` helpers) — plus **13 `.spec.ts` files** under `tests/e2e/`. `npm test` (unit + DB integration) runs
+  **51 files** **with the stack up** and fails `ECONNREFUSED` without it. The per-test totals this
+  section used to quote (`45 files / 430 tests`, and `419`/`416` before that) are **stale** — they were
+  measured on `main` at `324d4b7`/`6043990`, and this branch has since added M4-05's `tests/unit/infra/`
+  specs — so re-run before quoting one. The unit-layer
   split includes `tests/unit/with-user.test.ts`, which opens a real socket to Postgres — still an
   integration test filed in the unit layer (D2, unchanged, listed so the failure mode stays
   recognizable).
@@ -114,7 +120,7 @@ each serving correctly, zero collision.
   (`vitest run --exclude 'tests/integration/api/**'`). **Requires the stack up**: run
   `npm run db:up` first, or every DB-touching file fails with `ECONNREFUSED`.
 - **API suite**: `npm run test:api` (`vitest run tests/integration/api/`, also reachable as
-  `test:red`). These **10** files stay out of `npm test` because they boot a real `next dev` server,
+  `test:red`). These **11** files stay out of `npm test` because they boot a real `next dev` server,
   but **CI runs this step separately, so the route handlers are inside the merge gate**.
   There are no declared-pending skips any more: `tests/integration/api/pending-handlers.ts` and its
   anti-rot guard were **retired in #42** once every M1 route had a handler. If a future slice parks
@@ -186,7 +192,10 @@ each serving correctly, zero collision.
   `tests/integration/pg-error.ts` (`unknown` → SQLSTATE/message, yielding `undefined`/`''` for
   non-database throws) instead of casting to a fake error type — so a spec expecting `42501`
   still fails when the driver throws something else. Warnings fail the build, so "lint clean" is
-  citable evidence now, and a reintroduced `any` is a CI break. See D1 (closed).
+  citable evidence now, and a reintroduced `any` is a CI break. See D1 (closed). Since `#94` the same
+  step also carries the `no-console` ban over `src/app/api/**` and `lib/**` (§6) — lint is the cheap
+  enforcement point, `tests/unit/infra/console-ban.test.ts` is the redundant one that notices if the
+  config loosens.
 - **DB migrations** — the **M4-00 / #89 / ADR-0006 authorship model, in one paragraph**:
   **migrations are hand-authored** SQL files in `supabase/migrations/`, applied **in filename order
   by the Supabase CLI** (`supabase start` / `supabase db reset` — CI's path), tracked in
@@ -219,10 +228,11 @@ each serving correctly, zero collision.
   `app_authenticated` **exists** (created by `0001_app_authenticated_role_trigger.sql`,
   `M1-04`/#6), so `DATABASE_URL` authenticates once the stack is up. Verified attributes:
   `LOGIN NOBYPASSRLS NOSUPERUSER NOINHERIT`, owns nothing.
-  **Stack state as of this file's last refresh (2026-09-12): running** — it was started to re-measure
-  the gates on merged `main`; treat it as a question to ask (`docker ps`), not a fact to inherit. The
-  2026-09-11 intake found it stopped (daemon
-  `29.7.2` reachable) — start it with `npm run db:up` before running any DB-backed gate.
+  **Stack state is asked, never inherited.** `docker ps` is the only source; this file deliberately
+  stops recording it, because every intake that did was wrong within 48 h (2026-09-11: stopped, daemon
+  `29.7.2` reachable · 2026-09-12: running · 2026-09-14: **running**, 11 project containers,
+  `supabase_db_ppl-fitness-tracker` healthy for 29 h). Run `npm run db:up` before any DB-backed gate,
+  or every `tests/integration/` file fails `ECONNREFUSED`.
 
 Node version note: `next build`'s Turbopack warns that it ignored
 `package-lock.json` because `/home/heyloey` (this machine's home directory) sits
@@ -243,8 +253,21 @@ silence it.
 
 All artifacts generated by PromptKit workflows must be saved to these host project paths:
 
-- **Architectural Decision Records (ADRs)**: `docs/adrs/` — 0001–0005 exist, see `docs/STATE.md` §6
-- **Technical RFC Specs**: `docs/specs/` — active spec: `2026-09-08-spec-fullstack-migration.md`
+- **Architectural Decision Records (ADRs)**: `docs/adrs/` — **0001–0006** exist (0006 = hand-authored
+  migration authority, from #89), see `docs/STATE.md` §6
+- **Technical RFC Specs**: `docs/specs/` — the **current** spec is
+  `2026-09-14-spec-m4-hardening-telemetry-decommission.md` (grilled + signed-off, all 13 items ruled);
+  `2026-09-08-spec-fullstack-migration.md` remains the original programme spec
+- **Task Breakdowns & Debt Indices**: `docs/tasks/` — per-milestone cards under `m1/`…`m4/` plus
+  `2026-09-11-intake-debt-index.md` (**owns the `D`-prefix: STATE §1's still-open "D2, D6, D7" are
+  *those* items, not this pass's**) and `2026-09-14-onboard-drift-index.md` (the `O`-prefix)
+- **Task tracking system**: **GitHub Issues + milestones** (`lowqualityloey/ppl-fitness-tracker`,
+  M4 = milestone #4), with `docs/tasks/mN/` as the design record. Query with REST
+  (`gh api repos/lowqualityloey/ppl-fitness-tracker/milestones/4`); GraphQL counts issues only, and
+  `gh issue list --milestone` matches on **title** and returns an empty list on a typo — which looks
+  exactly like a clean board. See STATE §1's three-way note before quoting any board number.
+- **Active MCP servers**: `N/A (Standard CLI Fallback)` — no `.mcp.json` and no `mcpServers` block
+  anywhere in the repo. `gh`, `docker`, `npx supabase` and `npx playwright` are the interface.
 - **Incident Post-Mortems (RCAs)**: `docs/rca/`
 - **Technical Spikes & Benchmarks**: `docs/spikes/`
 - **Design Tokens & UI Specs**: `docs/design/`
@@ -267,6 +290,7 @@ Design source of truth is `DESIGN.md` (a TailAdmin profile). Its brand voice and
 - [ ] **Database Invariants First**: Foreign keys, unique constraints, and check constraints live in the database schema, not just application code.
 - [ ] **WCAG 2.2 AA Compliance**: All interactive elements must support keyboard navigation, visible focus rings, and proper ARIA labels. Status must never be conveyed by colour alone.
 - [ ] **Deterministic Error Handling**: No silent `catch {}` blocks. Unified envelope `{ ok: boolean, data?: T, error?: AppError }`.
+- [ ] **One logging seam, no raw `console.*`** (`#94`; **on `main` via PR #145**): every server-side line goes through `log` from the `lib/logger` barrel, so it is redacted and carries the request's correlation id. ESLint `no-console` is `error` across `src/app/api/**` and `lib/**` — the `lib` scope is the one that matters, because the line #94's AC-1 caught was shed in `lib/auth/require-user.ts`, not in a route file. A spec that must capture output injects the sink (`tests/unit/infra/logger.test.ts`); `tests/unit/infra/console-ban.test.ts` stops the ban itself from being quietly loosened later.
 
 ### Project-specific, derived from ADR-0002/0003/0005
 

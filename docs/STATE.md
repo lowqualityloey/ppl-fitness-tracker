@@ -19,6 +19,12 @@
   decided: #105 shipped in PR #116. **Nothing is in flight** — no open PR, no active branch (last merge PR #137 closed #96, 2026-09-13) — so the
   next card starts by cutting its own branch from `main`, per this repo's one-active-branch rule. **Nothing is
   in flight** as of this `pk:checkpoint`: no open PR, and #80 / #100 / #90 are all closed.
+  **That sentence is no longer true as of 2026-09-14, and is kept only because §1's own rule forbids
+  rewriting the state a past pass recorded:** PR **#143** is now open (`chore/promptkit-engine-sync-b3c5edf`
+  → `main`, the PromptKit engine sync), **#142** (M4-24 CSP baseline) is filed on milestone 4, and active
+  work sits on `feat/m4-05-structured-logging` — which is **unpushed**, so `gh pr list` alone will report a
+  quiet repo while three concerns are in fact in flight here. Check `git log --oneline origin/main..HEAD` and
+  `git status --short` before concluding anything from a remote-only view. #80 / #100 / #90 remain closed.
   The SHA this field used to name is three merges behind the tree it described, which is the failure
   the rule immediately below it exists to prevent; read `git log --oneline -1` when the hash matters.
   Both M3 exit PRs remain merged (#86 → `8704c19`, #87 → `2d5edfb`) and there is no M3 work left to

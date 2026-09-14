@@ -29,6 +29,13 @@ jobs:
       # commit — see .env.example). Needed by tests/integration/require-user.test.ts.
       NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
       NEXT_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
+      # Pre-existing latent gap surfaced by M4-24 (#142) AC-2: the sign-in form's POST to
+      # /auth/signin throws 'NEXT_PUBLIC_APP_URL must be configured' (lib/auth/magic-link.ts
+      # confirmUrl()) without it — an empty-body 500. Nothing caught it because the whole
+      # e2e battery authenticates via GoTrue cookies (tests/e2e/auth.ts) and no spec had
+      # ever submitted the real form. Role matches .env.example (the app's own origin);
+      # the port is the battery's baseURL (playwright.config.ts).
+      NEXT_PUBLIC_APP_URL: http://localhost:3001
 
     steps:
       - name: Checkout code

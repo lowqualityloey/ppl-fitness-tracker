@@ -21,6 +21,14 @@ export interface AppError {
   status: number;
   /** Optional retry hint (seconds). Emitted as a `Retry-After` header by `appErrorResponse`. */
   retryAfter?: number;
+  /**
+   * M4-05 (#94): the opaque request id from the logging seam's scope, stamped
+   * by `appErrorResponse` — never by a call site, so an error path cannot
+   * forget it the way `console.error` forgot the cause. A user quoting this
+   * value to support finds the exact request in the log; it carries no
+   * structure beyond being unique, which is what keeps it client-visible.
+   */
+  requestId?: string;
 }
 
 export const AppErrorSchema = z.object({
@@ -28,6 +36,7 @@ export const AppErrorSchema = z.object({
   message: z.string().min(1),
   status: z.number().int().min(400).max(599),
   retryAfter: z.number().int().min(0).max(86400).optional(),
+  requestId: z.string().min(1).max(64).optional(),
 }).strict();
 
 export type AppEnvelope<T> =

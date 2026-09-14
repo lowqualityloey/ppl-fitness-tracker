@@ -4,6 +4,7 @@ import { appSuccess, notFoundError } from '../../../../lib/contracts/envelope';
 import { requireUserContext } from '../../../../lib/auth/require-user';
 import { getDb } from '../../../../lib/db/client';
 import { appErrorResponse, routeErrorResponse } from '../../../../lib/http/route-error';
+import { loggedRoute } from '../../../../lib/http/request-log';
 import { ProfileRepository } from '../../../../lib/repositories/profile-repository';
 
 /**
@@ -37,7 +38,9 @@ function perUserHeaders(): HeadersInit {
   return { 'Cache-Control': 'no-store' };
 }
 
-export async function GET(): Promise<NextResponse> {
+export const GET = loggedRoute(handleGet);
+
+async function handleGet(): Promise<NextResponse> {
   try {
     const context = await requireUserContext();
     const repository = new ProfileRepository(getDb(), context.claims);
@@ -50,7 +53,9 @@ export async function GET(): Promise<NextResponse> {
   }
 }
 
-export async function PATCH(request: NextRequest): Promise<NextResponse> {
+export const PATCH = loggedRoute(handlePatch);
+
+async function handlePatch(request: NextRequest): Promise<NextResponse> {
   const parsed = ProfilePatchSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return routeErrorResponse(parsed.error);
 

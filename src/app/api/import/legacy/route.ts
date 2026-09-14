@@ -7,6 +7,7 @@ import { LegacyImporter } from '../../../../../lib/domain/import/legacy-import-s
 import { getDb } from '../../../../../lib/db/client';
 import { rateLimitedResponse } from '../../../../../lib/http/rate-limit-response';
 import { routeErrorResponse } from '../../../../../lib/http/route-error';
+import { loggedRoute } from '../../../../../lib/http/request-log';
 import { LegacyImportRepository } from '../../../../../lib/repositories/legacy-import-repository';
 
 /**
@@ -30,7 +31,9 @@ import { LegacyImportRepository } from '../../../../../lib/repositories/legacy-i
  * for archiving its own localStorage keys afterwards (spec §4.5 step 5); this
  * handler has no destructive path at all.
  */
-export async function POST(request: NextRequest): Promise<NextResponse> {
+export const POST = loggedRoute(handlePost);
+
+async function handlePost(request: NextRequest): Promise<NextResponse> {
   const parsed = LegacyImportRequestSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return routeErrorResponse(parsed.error);
 

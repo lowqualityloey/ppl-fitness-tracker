@@ -4,6 +4,7 @@ import { appSuccess } from '../../../../../lib/contracts/envelope';
 import { requireUserContext } from '../../../../../lib/auth/require-user';
 import { getDb } from '../../../../../lib/db/client';
 import { routeErrorResponse } from '../../../../../lib/http/route-error';
+import { loggedRoute } from '../../../../../lib/http/request-log';
 import { WorkoutRepository } from '../../../../../lib/repositories/workout-repository';
 
 /**
@@ -19,7 +20,9 @@ import { WorkoutRepository } from '../../../../../lib/repositories/workout-repos
  * A 200 with `entries: []` is a *complete* answer ("nothing to remember yet"),
  * not an error — which is why there is no 404 branch here at all.
  */
-export async function GET(
+export const GET = loggedRoute(handleGet);
+
+async function handleGet(
   request: NextRequest,
 ): Promise<NextResponse> {
   const parsed = SessionPrefillQuerySchema.safeParse(

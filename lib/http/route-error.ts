@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { ZodError } from 'zod';
+import { currentCorrelation, log } from '../logger';
 import {
   AppErrorException,
   appErrorEnvelope,
@@ -33,10 +34,19 @@ export function appErrorResponse(
   error: AppError,
   headers?: HeadersInit,
 ): NextResponse<AppEnvelope<never>> {
-  const merged: HeadersInit = error.retryAfter != null
-    ? { ...(headers ?? {}), 'Retry-After': String(error.retryAfter) }
+  // M4-05 (#94): the opaque request id is stamped here — the one choke point
+  // every error response passes through — rather than at the eleven call sites
+  // that build these envelopes. Outside a request scope (unit tests, scripts)
+  // `currentCorrelation()` is empty and the payload is byte-for-byte what it
+  // was before the seam; inside one, the id a user can quote to support is
+  // the same id the completion line carries. A caller that set `requestId`
+  // explicitly keeps its value.
+  const requestId = error.requestId ?? currentCorrelation().requestId;
+  const payload: AppError = requestId ? { ...error, requestId } : error;
+  const merged: HeadersInit = payload.retryAfter != null
+    ? { ...(headers ?? {}), 'Retry-After': String(payload.retryAfter) }
     : (headers ?? {});
-  return NextResponse.json<AppEnvelope<never>>(appErrorEnvelope(error), { status: error.status, headers: merged });
+  return NextResponse.json<AppEnvelope<never>>(appErrorEnvelope(payload), { status: payload.status, headers: merged });
 }
 
 export function routeErrorResponse(error: unknown): NextResponse<AppEnvelope<never>> {
@@ -66,5 +76,10 @@ export function routeErrorResponse(error: unknown): NextResponse<AppEnvelope<nev
     return appErrorResponse(notFoundError());
   }
 
+  // #125's complaint in one line: this branch used to discard the cause
+  // entirely. The client still gets the canonical redacted 500 — nothing
+  // internal crosses the wire — but the server now keeps the cause on the
+  // request's own id, so "it 500'd" is answerable without reproduction.
+  log.error('route error: unhandled cause', { error });
   return appErrorResponse(internalError());
 }

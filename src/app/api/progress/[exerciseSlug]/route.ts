@@ -4,6 +4,7 @@ import { appSuccess, notFoundError } from '../../../../../lib/contracts/envelope
 import { requireUserContext } from '../../../../../lib/auth/require-user';
 import { getDb } from '../../../../../lib/db/client';
 import { appErrorResponse, routeErrorResponse } from '../../../../../lib/http/route-error';
+import { loggedRoute } from '../../../../../lib/http/request-log';
 import { ProgressRepository } from '../../../../../lib/repositories/progress-repository';
 
 /**
@@ -27,7 +28,9 @@ import { ProgressRepository } from '../../../../../lib/repositories/progress-rep
  */
 type RouteContext = { params: Promise<{ exerciseSlug: string }> };
 
-export async function GET(
+export const GET = loggedRoute(handleGet);
+
+async function handleGet(
   request: NextRequest,
   { params }: RouteContext,
 ): Promise<NextResponse> {

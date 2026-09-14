@@ -8,6 +8,8 @@ import {
 import { appSuccess, notFoundError, validateOutgoing } from '../../../../../lib/contracts/envelope';
 import { requireUserContext } from '../../../../../lib/auth/require-user';
 import { getDb } from '../../../../../lib/db/client';
+import { attachCorrelation } from '../../../../../lib/logger';
+import { loggedRoute } from '../../../../../lib/http/request-log';
 import { appErrorResponse, routeErrorResponse } from '../../../../../lib/http/route-error';
 import { WorkoutRepository } from '../../../../../lib/repositories/workout-repository';
 
@@ -34,7 +36,9 @@ const NO_STORE = { 'Cache-Control': 'no-store' };
  * The token is `workout_sessions.server_seq` — never `updated_at`, never a
  * client clock.
  */
-export async function GET(
+export const GET = loggedRoute(handleGet);
+
+async function handleGet(
   request: NextRequest,
   { params }: RouteContext,
 ): Promise<NextResponse> {
@@ -44,6 +48,9 @@ export async function GET(
   );
   if (!parsedParams.success) return routeErrorResponse(parsedParams.error);
   if (!parsedQuery.success) return routeErrorResponse(parsedQuery.error);
+  // M4-05 (#94): this route's whole subject is one session; a poll that goes
+  // wrong is findable by `session_id` without knowing its request id first.
+  attachCorrelation({ sessionId: parsedParams.data.id });
 
   try {
     const context = await requireUserContext();

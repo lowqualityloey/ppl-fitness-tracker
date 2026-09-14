@@ -3,8 +3,11 @@ import { confirmQuerySchema, appUrl } from '../../../../lib/auth/magic-link';
 import { safeRedirectPath } from '../../../../lib/auth/redirect-allowlist';
 import { createClient } from '../../../../lib/supabase/server';
 import { validationError, type AppEnvelope } from '../../../../lib/contracts/envelope';
+import { loggedRoute } from '../../../../lib/http/request-log';
 
-export async function GET(request: NextRequest) {
+export const GET = loggedRoute(handleGet);
+
+async function handleGet(request: NextRequest) {
   const parsed = confirmQuerySchema.safeParse({
     token_hash: request.nextUrl.searchParams.get('token_hash'),
     type: request.nextUrl.searchParams.get('type'),

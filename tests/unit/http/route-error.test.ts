@@ -4,6 +4,7 @@ import {
   AppEnvelopeSchema,
   AppErrorException,
   forbiddenError,
+  notFoundError,
 } from '../../../lib/contracts/envelope.js';
 import {
   InvalidSessionCursorError,
@@ -13,7 +14,8 @@ import {
   type SessionState,
 } from '../../../lib/domain/sessions/types.js';
 import { assertPhaseAdvance } from '../../../lib/domain/sessions/transition-table.js';
-import { routeErrorResponse } from '../../../lib/http/route-error.js';
+import { appErrorResponse, routeErrorResponse } from '../../../lib/http/route-error.js';
+import { setLogSink, withRequestScope } from '../../../lib/logger/index.js';
 
 async function expectTranslatedError(
   error: unknown,
@@ -106,5 +108,54 @@ describe('route error translation', () => {
     );
 
     expect(JSON.stringify(body)).not.toContain('workout_sessions_user_id_key');
+  });
+});
+
+/*
+ * M4-05 (#94): the two halves of "an error is findable after the fact" —
+ * the cause kept on the server (the #125 complaint in one line) and the
+ * opaque handle handed to the client — decided at the one choke point every
+ * error response passes through. `route-error.test.ts` already proves the
+ * *unscoped* payload is byte-for-byte what it was before the seam; this is
+ * the scoped half, asserted through the injected sink rather than stdout.
+ */
+describe('error-to-trail correlation', () => {
+  it('stamps the scoped request id onto the client envelope and keeps the cause server-side', async () => {
+    const lines: Array<{ level: string; msg: string; request_id: string | null }> = [];
+    const restore = setLogSink((_line, entry, level) =>
+      lines.push({ level, msg: entry.msg, request_id: entry.request_id }));
+    try {
+      await withRequestScope(async () => {
+        const body = await expectTranslatedError(new Error('duplicate key'), 500, 'INTERNAL_ERROR');
+        const parsed = AppEnvelopeSchema.parse(body);
+        expect(parsed.ok).toBe(false);
+        if (parsed.ok) return;
+        expect(parsed.error.requestId).toBe('req-choke-point');
+      }, { requestId: 'req-choke-point' });
+    } finally {
+      restore();
+    }
+
+    expect(lines).toEqual([
+      { level: 'error', msg: 'route error: unhandled cause', request_id: 'req-choke-point' },
+    ]);
+    // Nothing internal crossed the wire: the cause died on the server, the
+    // id is the only new fact the client got — and the id is not a secret.
+    expect(JSON.stringify(lines)).not.toContain('duplicate key');
+  });
+
+  it('stamps every error class, not just the fall-through', async () => {
+    const restore = setLogSink(() => undefined);
+    try {
+      await withRequestScope(async () => {
+        const response = appErrorResponse(notFoundError());
+        const parsed = AppEnvelopeSchema.parse(await response.json());
+        expect(parsed.ok).toBe(false);
+        if (parsed.ok) return;
+        expect(parsed.error.requestId).toBe('req-404');
+      }, { requestId: 'req-404' });
+    } finally {
+      restore();
+    }
   });
 });

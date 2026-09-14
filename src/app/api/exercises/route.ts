@@ -3,6 +3,7 @@ import { appSuccess } from '../../../../lib/contracts/envelope';
 import { ExercisesListQuerySchema } from '../../../../lib/contracts/exercises';
 import { ContentRepository } from '../../../../lib/repositories/content-repository';
 import { routeErrorResponse } from '../../../../lib/http/route-error';
+import { loggedRoute } from '../../../../lib/http/request-log';
 
 /**
  * M2-06 (#42): `GET /api/exercises` — the shared library, publicly readable.
@@ -26,7 +27,9 @@ import { routeErrorResponse } from '../../../../lib/http/route-error';
  * for everyone, so it belongs in one upstream copy, and staleness costs nothing
  * but a re-read of rows that only change when seeds are re-run.
  */
-export async function GET(request: Request): Promise<NextResponse> {
+export const GET = loggedRoute(handleGet);
+
+async function handleGet(request: Request): Promise<NextResponse> {
   const parsed = ExercisesListQuerySchema.safeParse(
     Object.fromEntries(new URL(request.url).searchParams),
   );

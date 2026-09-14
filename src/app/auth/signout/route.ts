@@ -3,6 +3,7 @@ import { requireUserContext } from '../../../../lib/auth/require-user';
 import { appSuccess } from '../../../../lib/contracts/envelope';
 import { SignoutRequestSchema } from '../../../../lib/contracts/auth';
 import { routeErrorResponse } from '../../../../lib/http/route-error';
+import { loggedRoute } from '../../../../lib/http/request-log';
 import { createClient } from '../../../../lib/supabase/server';
 
 /**
@@ -28,7 +29,9 @@ import { createClient } from '../../../../lib/supabase/server';
  * promise anything to the caller — and reporting success would be the worst
  * available answer.
  */
-export async function POST(request: NextRequest): Promise<NextResponse> {
+export const POST = loggedRoute(handlePost);
+
+async function handlePost(request: NextRequest): Promise<NextResponse> {
   const parsed = SignoutRequestSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return routeErrorResponse(parsed.error);
 

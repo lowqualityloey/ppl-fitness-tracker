@@ -6,6 +6,91 @@ export const apiOrigin = `http://127.0.0.1:${port}`;
 
 let server: ChildProcess | undefined;
 
+/**
+ * M4-05 (#94): the app's structured trail, read where it actually lands.
+ *
+ * `consoleSink` splits streams by severity — `info`/`debug` on stdout,
+ * `warn`/`error` on stderr — so a spec that only watched one would be
+ * blind to half the trail it is asserting on. Both are absorbed here and
+ * rejoined by request id, which is the whole point of the id.
+ *
+ * Lines are filtered by shape (`level` + `request_id` keys), not by a
+ * marker: `next dev` writes its own prose to the same pipes, and a JSON
+ * entry from the seam is the only structured thing in the stream. The
+ * filter is deliberately `in`-based on the two envelope keys every entry
+ * carries, so a malformed seam line surfaces as a failed predicate rather
+ * than as a silently dropped one.
+ */
+export interface ServerLogEntry {
+  time: string;
+  level: string;
+  msg: string;
+  request_id: string | null;
+  [field: string]: unknown;
+}
+
+const capturedLogs: ServerLogEntry[] = [];
+const partialLines: Map<'stdout' | 'stderr', string> = new Map();
+
+function absorbChunk(stream: 'stdout' | 'stderr', chunk: string): void {
+  let buffer = (partialLines.get(stream) ?? '') + chunk;
+  let newlineAt = buffer.indexOf('\n');
+  while (newlineAt >= 0) {
+    const line = buffer.slice(0, newlineAt).trim();
+    buffer = buffer.slice(newlineAt + 1);
+    newlineAt = buffer.indexOf('\n');
+    if (!line.startsWith('{')) continue;
+    try {
+      const parsed: unknown = JSON.parse(line);
+      if (
+        parsed !== null &&
+        typeof parsed === 'object' &&
+        'level' in parsed &&
+        'request_id' in parsed
+      ) {
+        capturedLogs.push(parsed as ServerLogEntry);
+      }
+    } catch {
+      // `next dev`'s own stdout is prose that can start with `{` (webpack
+      // digests). It is not the seam's line, and the seam either writes
+      // whole lines or is the bug under test.
+    }
+  }
+  partialLines.set(stream, buffer);
+}
+
+/** Every structured line captured from the running server, in arrival order. */
+export function serverLogEntries(): readonly ServerLogEntry[] {
+  return capturedLogs;
+}
+
+/**
+ * Polls the captured trail until a matching entry exists. The write happens
+ * in the server child and crosses a pipe, so "the response has arrived" does
+ * not imply "the line has arrived" — the wait is what keeps the spec from
+ * racing its own assertion. On timeout the failure names the predicates'
+ * neighbourhood (captured msgs) rather than nothing, because "found none"
+ * with no context is the worst possible debugging output.
+ */
+export async function waitForLogEntry(
+  predicate: (entry: ServerLogEntry) => boolean,
+  timeoutMs = 5_000,
+): Promise<ServerLogEntry> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const found = capturedLogs.find(predicate);
+    if (found) return found;
+    if (Date.now() >= deadline) {
+      throw new Error(
+        `no log line matched within ${timeoutMs}ms; captured msgs: [${capturedLogs
+          .map((entry) => entry.msg)
+          .join(', ')}]`,
+      );
+    }
+    await delay(25);
+  }
+}
+
 function signalApiServer(child: ChildProcess, signal: NodeJS.Signals): void {
   if (process.platform !== 'win32' && child.pid !== undefined) {
     try {
@@ -34,14 +119,19 @@ export async function startApiServer(): Promise<void> {
         NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
           'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0',
       },
-      stdio: ['ignore', 'ignore', 'pipe'],
+      stdio: ['ignore', 'pipe', 'pipe'],
     },
   );
   server = child;
 
   const stderr: string[] = [];
   child.stderr?.setEncoding('utf8');
-  child.stderr?.on('data', (chunk: string) => stderr.push(chunk));
+  child.stderr?.on('data', (chunk: string) => {
+    stderr.push(chunk);
+    absorbChunk('stderr', chunk);
+  });
+  child.stdout?.setEncoding('utf8');
+  child.stdout?.on('data', (chunk: string) => absorbChunk('stdout', chunk));
 
   let lastError: unknown;
   child.once('error', (error) => {

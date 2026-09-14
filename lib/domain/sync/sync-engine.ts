@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { SyncMutation, SyncRequest } from '../../contracts/sync';
+import { attachCorrelation, log } from '../../logger';
 import { ProgressionValidationError } from '../progression/types';
 import {
   SessionConflictError,
@@ -147,6 +148,13 @@ export class SyncEngine {
       throw new SyncValidationError('All mutations must target one owned session.');
     }
 
+    // M4-05 (#94): the single-session rule above is what makes this safe to
+    // attach for the whole request — beneath this line there is exactly one
+    // session the trail can belong to. Every line emitted below (including
+    // the rejections at the end of this method) carries `session_id` from the
+    // scope, not from a call site that could forget it.
+    attachCorrelation({ sessionId: this.store.sessionId });
+
     const applied: string[] = [];
     const rejected: Array<{ mutationId: string; reason: string }> = [];
     let maximumClockSkewMs = 0;
@@ -217,6 +225,21 @@ export class SyncEngine {
       });
       await this.store.markApplied(mutation.mutationId, serverSeq);
       addUnique(applied, mutation.mutationId);
+    }
+
+    // M4-05 (#94): the card's "reconstruction of a refused mutation" is this
+    // loop — one line per rejection, carrying `mutationId` and the reason code
+    // on the request's own id, so a partially-refused batch is traceable from
+    // the route's completion line down without timestamps and luck. Deliberately
+    // *after* the mutation loop and not inside `addRejection`: every rejection
+    // reaches `rejected` (foreign, replay, stale, lifecycle), so this is the
+    // one choke point that cannot be skipped, and the payload the mutation
+    // carried is never re-read here — the line holds ids and codes only.
+    for (const rejection of rejected) {
+      log.warn('sync mutation rejected', {
+        mutationId: rejection.mutationId,
+        reason: rejection.reason,
+      });
     }
 
     // The batch's own answer, and after #105 nothing else: the sequence the client is now

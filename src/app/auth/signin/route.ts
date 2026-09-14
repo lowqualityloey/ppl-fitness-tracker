@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '../../../../lib/supabase/server';
 import { confirmUrl, signInRequestSchema } from '../../../../lib/auth/magic-link';
 import { clientIp, signInRateLimiter } from '../../../../lib/auth/rate-limit';
+import { loggedRoute } from '../../../../lib/http/request-log';
 import { rateLimitedError, validationError, type AppEnvelope } from '../../../../lib/contracts/envelope';
 
 function errorResponse(error: ReturnType<typeof validationError> | ReturnType<typeof rateLimitedError>) {
@@ -12,7 +13,9 @@ function errorResponse(error: ReturnType<typeof validationError> | ReturnType<ty
   return response;
 }
 
-export async function POST(request: NextRequest) {
+export const POST = loggedRoute(handlePost);
+
+async function handlePost(request: NextRequest) {
   const parsed = signInRequestSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return errorResponse(validationError());

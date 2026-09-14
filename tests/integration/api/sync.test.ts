@@ -19,7 +19,7 @@ import {
   type SessionFixture,
   type TestSession,
 } from './fixtures.js';
-import { apiRequest, jsonRequest, responseBody, startApiServer, stopApiServer } from './test-server.js';
+import { apiRequest, jsonRequest, responseBody, startApiServer, stopApiServer, waitForLogEntry } from './test-server.js';
 
 /**
  * The batch payloads this file posts, built from **this run's** ids.
@@ -388,6 +388,131 @@ describe('M2-04: POST /api/sync', () => {
       tasks: [{ taskKey: 'warm_up' }],
       sets: [{ exerciseId: ids.exercise, setIndex: 0, weightKg: 50, reps: 5, isCompleted: true }],
     });
+  });
+
+  /*
+   * M4-05 (#94): the card's "reconstruct a refused mutation" scenario, asserted
+   * end-to-end against the running server rather than through an in-process sink —
+   * routes cannot be imported here (`contract-graph.test.ts` guards why), and the
+   * claim under test is precisely the one an in-process mock cannot make: that the
+   * scope survives the route, the engine, and the stream split (`consoleSink`
+   * writes `warn` to stderr and `info` to stdout, so a spec watching one pipe
+   * would be blind to half the trail) and still lands every line under one id.
+   *
+   * The batch is one accepted mutation and one refused on a session this spec
+   * starts for itself — `clientId` idempotency means a fresh uuid can come back
+   * as nobody else's fixture session.
+   */
+  it('refuses a mutation on the trail as loudly as it applies one, under a single id', async () => {
+    const trailDevice = '5e5e0000-0000-4000-8000-00000000005e';
+    const started = await jsonRequest(
+      '/api/sessions',
+      { routineDayId: ids.routineDay, clientId: trailDevice },
+      { method: 'POST', headers: authHeaders(owner) },
+    );
+    expect(started.status).toBe(200);
+    const startParsed = SessionStartResponseSchema.safeParse(await responseBody(started));
+    expect(startParsed.success).toBe(true);
+    if (!startParsed.success || !startParsed.data.ok) return;
+    const startData = startParsed.data.data;
+    const sessionId = startData.id;
+    /*
+     * `startSession` is idempotent over *one open session per user and day*, not
+     * per clientId — measured, not read: the first version of this spec assumed a
+     * fresh session and got the drain spec's (all three mutations refused,
+     * `serverSeq` 3 already on it). So the batch adapts to the session actually
+     * in hand: only a session that has not reached the workout needs the
+     * warm-up/advance walk before a logged set is legal. What the spec asserts
+     * — one applied and one refused under one id — does not depend on which
+     * session the idempotency returned.
+     */
+    const batch: unknown[] = [];
+    const expectedApplied: string[] = [];
+    if (startData.phase !== 'exercise') {
+      const warmUp = {
+        op: 'task.complete' as const,
+        mutationId: '9eeeeeee-eeee-4eee-8eee-eeeeeeee0001',
+        clientTs, sessionId, taskKey: 'warm_up' as const, completedAt: clientTs,
+      };
+      const startMainWorkout = {
+        op: 'phase.advance' as const,
+        mutationId: '9eeeeeee-eeee-4eee-8eee-eeeeeeee0002',
+        clientTs, sessionId, phase: 'exercise' as const,
+      };
+      batch.push(warmUp, startMainWorkout);
+      expectedApplied.push(warmUp.mutationId, startMainWorkout.mutationId);
+    }
+    const logged = {
+      op: 'set.upsert' as const,
+      mutationId: '9eeeeeee-eeee-4eee-8eee-eeeeeeee0004',
+      clientTs, sessionId, exerciseId: ids.exercise, setIndex: 1,
+      isCompleted: true, weightKg: 50, reps: 5,
+    };
+    // Refused by the lifecycle (three planned sets, index 9 is beyond them),
+    // exactly the `INVALID_MUTATION` shape the drain spec above pins.
+    const refused = {
+      op: 'set.upsert' as const,
+      mutationId: '9eeeeeee-eeee-4eee-8eee-eeeeeeee0003',
+      clientTs, sessionId, exerciseId: ids.exercise, setIndex: 9,
+      isCompleted: true, weightKg: 50, reps: 5,
+    };
+    batch.push(logged, refused);
+    const response = await jsonRequest(
+      '/api/sync',
+      { deviceId: trailDevice, sinceSeq: 0, mutations: batch },
+      { method: 'POST', headers: authHeaders(owner) },
+    );
+    expect(response.status).toBe(200);
+    const body = await responseBody(response);
+    const data = SyncResponseDataSchema.parse((body as { data: unknown }).data);
+    expectedApplied.push(logged.mutationId);
+    expect(data.applied).toEqual(expectedApplied);
+    expect(data.rejected).toEqual([{ mutationId: refused.mutationId, reason: 'INVALID_MUTATION' }]);
+
+    // The camelCase call-site key arrives snake_cased: `wireKey` is the only
+    // place the mapping happens, and the assertion spelling is the wire's.
+    const rejection = await waitForLogEntry(
+      (entry) => entry.msg === 'sync mutation rejected' && entry.mutation_id === refused.mutationId,
+    );
+    expect(rejection).toMatchObject({
+      level: 'warn',
+      reason: 'INVALID_MUTATION',
+      user_id: owner.userId,
+      session_id: sessionId,
+    });
+    expect(typeof rejection.request_id).toBe('string');
+
+    const completion = await waitForLogEntry(
+      (entry) => entry.msg === 'request completed' && entry.request_id === rejection.request_id,
+    );
+    expect(completion).toMatchObject({
+      level: 'info',
+      method: 'POST',
+      path: '/api/sync',
+      status: 200,
+    });
+    expect(typeof completion.duration_ms).toBe('number');
+
+    // The client-visible half: the opaque id on an error envelope is a handle
+    // into this trail. Quoting it to support — which is the AC's story — is
+    // this predicate, and it must find exactly the request it came from.
+    const refusedAgain = await jsonRequest(
+      '/api/sync',
+      { deviceId: trailDevice, sinceSeq: 0, mutations: [] },
+      { method: 'POST' },
+    );
+    expect(refusedAgain.status).toBe(401);
+    const envelope = AppEnvelopeSchema.safeParse(await responseBody(refusedAgain));
+    expect(envelope.success).toBe(true);
+    if (!envelope.success || envelope.data.ok) return;
+    const quotedId = envelope.data.error.requestId;
+    expect(typeof quotedId).toBe('string');
+    expect(quotedId).not.toBe(rejection.request_id);
+
+    const quotedCompletion = await waitForLogEntry(
+      (entry) => entry.msg === 'request completed' && entry.request_id === quotedId,
+    );
+    expect(quotedCompletion).toMatchObject({ status: 401 });
   });
 
   // Live since #42 wired `syncRateLimiter` into the route. Declared last on

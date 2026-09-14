@@ -41,7 +41,7 @@ const DENIED_KEYS: ReadonlySet<string> = new Set([
   'values', 'raw', 'stack',
 ]);
 
-const REDACTED_BY_KEY = '[redacted:denied-key]';
+export const REDACTED_BY_KEY = '[redacted:denied-key]';
 const REDACTED_JWT = '[redacted:jwt]';
 const REDACTED_EMAIL = '[redacted:email]';
 

@@ -34,7 +34,7 @@
  */
 
 import { currentCorrelation, type RequestCorrelation } from './context';
-import { sanitize, safeKey, scrubString, type SafeValue } from './redact';
+import { isDeniedKey, REDACTED_BY_KEY, sanitize, safeKey, scrubString, type SafeValue } from './redact';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
@@ -151,7 +151,12 @@ export function buildEntry(
         dropped.push(wire);
         continue;
       }
-      extras[wire] = sanitize(value);
+      // The top level is a `sanitize()` call site like any other: `wireKey`
+      // renames a denied key but nothing was consulting `isDeniedKey` about
+      // the *value*, so `{ code }` reached the wire as `code_redacted: "123456"`
+      // — renamed, unredacted. Nested objects already refuse the value via
+      // `sanitize`'s object branch; the entry's own fields must not be exempt.
+      extras[wire] = isDeniedKey(key) ? REDACTED_BY_KEY : sanitize(value);
     }
   }
 

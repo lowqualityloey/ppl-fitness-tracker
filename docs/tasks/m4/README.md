@@ -16,8 +16,9 @@ the master RFC's SLA table, M4 line and FMEA register, and `docs/tasks/2026-09-1
 > settle them before implementation starts. Sizing follows the M3 precedent (one-PR-sized slices, a
 > deliberate deviation from the workflow's 1–4h rule).
 
-## The board (25 new cards + 6 parked issues raised onto M4, per handoff §3.5 — the 25th arrived later,
-ruled in by M4's own spec §3.4 on 2026-09-14)
+## The board (26 new cards + 6 parked issues raised onto M4, per handoff §3.5 — the 25th and 26th
+arrived later: #142 ruled in by M4's own spec §3.4 on 2026-09-14, #149 by an owner ruling during #142's
+implementation on 2026-09-15)
 
 | Slice | Issue | Card | Priority |
 | :--- | :--- | :--- | :--- |
@@ -46,6 +47,7 @@ ruled in by M4's own spec §3.4 on 2026-09-14)
 | M4-22 | #111 | Service-worker shell: true offline reload (G-M3-1's gap) | p1 |
 | M4-23 | #112 | Realtime-vs-poll-margin decision + ADR | p2 |
 | M4-24 | #142 | CSP baseline on every document response — server-sent, nonce'd, Sentry-aware `connect-src` | p1 |
+| M4-25 | **#149** | Lighthouse gate runnable on a WSL dev box — Node API, not chrome-launcher | p2 |
 | parked | **#76** | no API path produces `archived` | p2 |
 | parked | **#77** | rejections carry a code with no message | p2 |
 | parked | **#78** | same-ms writes decided by random UUID | p2 |
@@ -146,7 +148,7 @@ All 24 original issues were created 2026-09-12 with:
 gh issue create --title "test(perf): stand up the 50 rps sustained load harness against POST /api/sync and record the SLA verdict" \
   --body-file docs/tasks/m4/M4-01-load-harness.md \
   --label "area:perf,type:test,priority/p0" \
-  --milestone "M4: Hardening: Telemetry & Decommission"
+  --milestone "M4: Hardening, Telemetry & Decommission"
 # (exact title/label table = the TSV used at /tmp/m4-cards.tsv during filing; issues #89–#112)
 # parked-issue assignment:
 for n in 76 77 78 80 82 84; do gh api -X PATCH repos/lowqualityloey/ppl-fitness-tracker/issues/$n -f milestone=4; done
@@ -155,7 +157,17 @@ for n in 76 77 78 80 82 84; do gh api -X PATCH repos/lowqualityloey/ppl-fitness-
 **#142 (M4-24) was filed 2026-09-14 the same way** — same milestone, `--body-file
 docs/tasks/m4/M4-24-csp-baseline.md --label "area:backend,priority/p1,type:feature"`. It came from the
 spec's §3.4 gap ruling (Owner: FILE), not from the handoff, and it is the board's only card with a hard
-ordering edge into #95. **New issues start at #143.**
+ordering edge into #95.
+
+**#149 (M4-25) was filed 2026-09-15 the same way** — `--body-file
+docs/tasks/m4/M4-25-lighthouse-local-bootstrap.md --label "area:infra,priority/p2,type:test"`. It came
+from an owner ruling during #142's implementation (*file a card, keep that PR clean*), it blocks
+nothing, and it is the board's only card about **where** a gate can be run rather than what it proves.
+**New issues start at #150.**
+
+> Re-typed above from the milestone API (2026-09-15): the title is `M4: Hardening, Telemetry &
+> Decommission` — a **comma**, not the colon this file's `--milestone` string carried, which would make
+> a copy-paste of that block fail on a title that no longer exists anywhere.
 
 > The card files in this directory are **untracked working-tree artifacts** until the M4 kickoff
 > commit lands them (they were written before this decomposition merged, per the repo's M1 lesson that

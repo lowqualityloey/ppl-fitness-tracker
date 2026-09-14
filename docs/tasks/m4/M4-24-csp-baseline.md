@@ -137,6 +137,39 @@ Scenario: The repo holds exactly one CSP statement, and it is the enforced one
        choice, not a silent carry-over
 ```
 
+**AC-7 RECORD (implementation, 2026-09-15): option two — chosen at the gate, not in prose.** Deleting
+the metas reddens `tests/e2e/legacy-parity.spec.ts:77` ("the four legacy modules are untouched on this
+branch"); its diff has no allowlist, and editing that guard inside the PR that needs the edit is the
+self-loosening pattern the verification audit exists to refuse. Both metas are inert where it counts
+(browsers ignore meta `X-Frame-Options`; the CSP meta governed only the estate's own pages, which #103
+deletes anyway). The repo's one **enforced** CSP statement is now `src/middleware.ts`; the estate's dead
+text dies with it.
+
+## Implementation record (2026-09-15, per-AC — every number re-measured this pass)
+
+Server: `next build` → `next start` on `:3001`, the mode the battery runs in. `npm run typecheck` 0 · `npm run lint` 0 ·
+`npm run test` 52 files / 497 tests · `npx playwright test csp.spec.ts` **4/4**.
+
+| AC | Result | Evidence, and where it did not say what the card expected |
+| :--- | :--- | :--- |
+| **1** headers + per-request nonce | **green** | Live `curl -D -` on `/sign-in` returns the policy with `default-src 'self'`, `frame-ancestors 'none'`, `base-uri 'self'`, `form-action 'self'`, `object-src 'none'`, a `script-src` nonce, and `X-Content-Type-Options: nosniff`; two GETs yield two different nonces. Spec covers `/`, `/sign-in`, `/history`, `/settings`, `/progress/{slug}`, an unmatched 404 path and `/api/sync`. |
+| **2** enforced, not decorative | **green** | The srcdoc inline script and the inline `onerror` handler both stayed dead while the form typed and posted. **Watched-red (a)** — header-set removed in `src/middleware.ts` — turned it red on `"un-nonce'd markup executed — script-src is decorative"`, which is also this AC's pre-change control. |
+| **3** zero violations on served documents | **green** | All-page-types sweep (unauth, 404, dashboard, settings, history, history/{id}, runner, progress) observed no violation, and the rest of the battery ran under the shipped policy: **60/62 passed**, the 2 failures being the documented load-sensitive family (`sla.spec.ts:90` G-M3-2 at p95 50.3 ms; `timers.spec.ts:278`) — re-run alone with `--workers=1` both were green, 8/8 in 1.7 min. **Deviation kept:** the card pictures the listener on a shared fixture; the battery has none, and adding one rewrites 13 spec files, which "unmodified" forbids. The sweep substitutes. |
+| **4** clickjacking is real | **green** | Frame refused, browser named `frame-ancestors`. Under watched-red (a) the same test went red on `"no frame-ancestors violation was named"` — the control the AC demands. |
+| **5** Sentry permitted before Sentry | **green** | `tests/unit/http/csp.test.ts` (12 tests) pins `connect-src` by set comparison with mutation controls; the e2e asserts the same set on a live response. **Watched-red (b)** — `'unsafe-inline'` appended to `script-src` — went red on test 1 plus three unit assertions, **but e2e test 2 stayed green**: a CSP3 browser disregards `'unsafe-inline'` whenever `script-src` carries a nonce or hash. Behaviour would not notice the smuggling; the string assertion does. That is why the card bans the token by text. |
+| **6** the nonce price paid on purpose | **green** | Route table after the change: **19/19 routes `ƒ`**, `/_not-found` and `/sign-in` included; the named cause is the `connection()` call in each file. Lighthouse accessibility on `/sign-in`: **100, audits below 0.9: none**. Measured through Lighthouse's Node API against a manually launched Chromium because `chrome-launcher`'s WSL branch builds its temp dir from a Windows profile path this box cannot write (`EACCES: /mnt/c/Users/…/AppData/Local`) — a machine defect, not a build one: the same error precedes any page load. `lighthouse.spec.ts` is untouched and CI runs it. |
+| **7** one CSP statement | **recorded** | Option two, above. |
+
+**Not needed:** the `layout.tsx` nonce plumbing the card lists as conditional. Next reads the policy off the request
+headers the middleware sets and stamps its own tags — measured: the font-preload `Link` header carried the response's
+own nonce, and hydration (typing into the controlled `#email`, submitting) worked against the prod server. The AC that
+decided this was AC-2's second half, so the sign-in form is the proof, as the card said it would be.
+
+**One CI gap this card opened** (shipped in its own commit): the e2e job ran without `NEXT_PUBLIC_APP_URL`, so
+`lib/auth/magic-link.ts`'s `confirmUrl()` threw and `/auth/signin` answered an empty-body 500. AC-2's "the form still
+posts" is the first assertion in the battery that ever submitted that form — everything else authenticates through
+GoTrue cookies (`tests/e2e/auth.ts`). Latent on `main` since M1-13; not caused by the policy.
+
 ## Automated Verification
 
 ```bash

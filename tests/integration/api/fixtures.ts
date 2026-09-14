@@ -1,7 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { Client } from 'pg';
 import { CookieJar, createClientFromCookieJar } from '../../../lib/supabase/cookie-jar.js';
-import { describeGoTrueFailure } from './gotrue-failure';
+import {
+  describeGoTrueFailure,
+  shouldRetryUserDelete,
+  userDeleteRetryDelayMs,
+} from './gotrue-failure';
 
 /**
  * Every identity one fixture set owns.
@@ -62,6 +66,9 @@ const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ??
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU';
 const OWNER_URL = process.env.MIGRATION_DATABASE_URL;
 const TEST_PASSWORD = 'm1-16-route-test-password';
+
+const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => { setTimeout(resolve, ms); });
 
 process.env.NEXT_PUBLIC_SUPABASE_URL ??= SUPABASE_URL;
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??= SUPABASE_ANON_KEY;
@@ -152,15 +159,38 @@ export async function createTestSession(label: string): Promise<TestSession> {
     cookie: jarCookies.map(({ name, value }) => `${name}=${value}`).join('; '),
     cookies: jarCookies,
     cleanup: async () => {
-      const removed = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
-        method: 'DELETE',
-        headers: { apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}` },
-      });
-      if (!removed.ok) {
+      /*
+       * Retried, on exactly one condition, and the reason it is legitimate here and nowhere else:
+       * Postgres rolls a deadlock victim back **completely**, so re-issuing the delete cannot double-apply
+       * anything — which is not true of a timeout, where the row may already be gone. `fixture-isolation
+       * .test.ts` documents that a second clean of a *successful* delete 404s, and this loop cannot cause
+       * that: a 404 is not retryable per `shouldRetryUserDelete`, so only an aborted transaction ever
+       * comes round again.
+       *
+       * This is a teardown retry, not a spec retry. `playwright.config.ts`'s comment is the project's
+       * standing rule that a red gate stays red, and it still holds: nothing here can turn a failed
+       * assertion, a missed budget, or a slow measurement green. The 500 it absorbs is one whose cause is
+       * now named in `gotrue-failure.ts`, on a request that carries no expectation at all.
+       */
+      for (let attempt = 0; ; attempt += 1) {
+        const removed = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
+          method: 'DELETE',
+          headers: { apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}` },
+        });
+        if (removed.ok) return;
         // Read the body *before* assuming there is one: a 500 from the proxy layer is often plain text,
         // and `response.json()` on it would replace a useful error with a parse error.
         const detail = await removed.text().catch(() => '<unreadable response body>');
-        throw new Error(describeGoTrueFailure('cleanup', removed.status, detail));
+        if (shouldRetryUserDelete(removed.status, detail, attempt)) {
+          await sleep(userDeleteRetryDelayMs(attempt));
+          continue;
+        }
+        throw new Error(
+          describeGoTrueFailure('cleanup', removed.status, detail) +
+            (attempt > 0
+              ? ` — gave up after ${attempt + 1} attempts, every one deadlocked`
+              : ''),
+        );
       }
     },
   };

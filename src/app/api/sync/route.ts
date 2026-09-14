@@ -4,11 +4,14 @@ import { appSuccess, validateOutgoing } from '../../../../lib/contracts/envelope
 import { syncRateLimiter } from '../../../../lib/auth/rate-limit';
 import { requireUserContext } from '../../../../lib/auth/require-user';
 import { getDb } from '../../../../lib/db/client';
+import { loggedRoute } from '../../../../lib/http/request-log';
 import { rateLimitedResponse } from '../../../../lib/http/rate-limit-response';
 import { routeErrorResponse } from '../../../../lib/http/route-error';
 import { WorkoutRepository } from '../../../../lib/repositories/workout-repository';
 
-export async function POST(request: NextRequest): Promise<NextResponse> {
+export const POST = loggedRoute(handlePost);
+
+async function handlePost(request: NextRequest): Promise<NextResponse> {
   const parsed = SyncRequestSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return routeErrorResponse(parsed.error);
 

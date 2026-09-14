@@ -59,8 +59,14 @@ describe('contract graph: every API route is an adapter over lib/contracts', () 
         ).toBe(true);
       }
       for (const method of entry.methods) {
+        // M4-05 (#94) widened this: the export may be a raw `async function`
+        // or the wrapped `const GET = loggedRoute(…)` form — what the graph
+        // owns is "the method is exported", and which of the two legal shapes
+        // carries it is the trail guard's business (`route-scope.test.ts`).
         expect(
-          new RegExp(`export async function ${method}\\(`).test(source),
+          new RegExp(
+            `export (async function ${method}\\(|const ${method} =\\s*loggedRoute\\()`,
+          ).test(source),
           `${entry.route} must export ${method}`,
         ).toBe(true);
       }

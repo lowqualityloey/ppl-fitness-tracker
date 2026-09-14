@@ -8,10 +8,13 @@ import { appSuccess, validateOutgoing } from '../../../../lib/contracts/envelope
 import { requireUserContext } from '../../../../lib/auth/require-user';
 import { getDb } from '../../../../lib/db/client';
 import { routeErrorResponse } from '../../../../lib/http/route-error';
+import { loggedRoute } from '../../../../lib/http/request-log';
 import { WorkoutRepository } from '../../../../lib/repositories/workout-repository';
 import { currentUtcDate } from '../../../../lib/domain/local-date';
 
-export async function GET(request: NextRequest): Promise<NextResponse> {
+export const GET = loggedRoute(handleGet);
+
+async function handleGet(request: NextRequest): Promise<NextResponse> {
   const parsed = SessionsListQuerySchema.safeParse(
     Object.fromEntries(request.nextUrl.searchParams.entries()),
   );
@@ -33,7 +36,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
  * `SessionSummarySchema` all along; #73 is about the empty pass-through placeholder that
  * `SessionStateSchema` used to be, so the check goes where that placeholder was consumed.
  */
-export async function POST(request: NextRequest): Promise<NextResponse> {
+export const POST = loggedRoute(handlePost);
+
+async function handlePost(request: NextRequest): Promise<NextResponse> {
   const parsed = SessionStartRequestSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return routeErrorResponse(parsed.error);
 

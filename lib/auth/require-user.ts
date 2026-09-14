@@ -5,6 +5,7 @@ import {
   createVerifiedUserContext,
   type VerifiedUserContext,
 } from '../db/auth-context';
+import { attachCorrelation, log } from '../logger';
 
 /**
  * M1-12: The only legitimate source of a user id anywhere in this app.
@@ -50,10 +51,20 @@ export async function requireUserContext(
     const status = error.status ?? 0;
     const hopShed = status === 0 || status === 429 || status >= 500;
     if (hopShed) {
-      console.error('[requireUserContext] auth verification hop failed', {
-        message: error.message,
+      // M4-05 (#94): this line used to be a `console.error`, which is the one
+      // `console.*` call left in `lib/` and the reason #125 could happen — the
+      // cause was recorded, but not as anything a log consumer could find by
+      // correlation id. The error object is handed to the seam rather than
+      // picked apart here, because `sanitize` renders it as
+      // `{name, message, errorCode}` and `code` is a reserved word at this
+      // boundary: it is the magic-link credential's parameter name
+      // (`lib/logger/redact.ts`), so the seam must never learn to tell the two
+      // apart at runtime.
+      log.error('auth verification hop failed', {
+        phase: 'requireUserContext',
+        hopShed: true,
         status,
-        code: (error as { code?: string }).code ?? null,
+        error,
       });
       throw new AppErrorException(serviceUnavailableError());
     }
@@ -63,6 +74,19 @@ export async function requireUserContext(
   if (!data.user) {
     throw new AppErrorException(unauthenticatedError());
   }
+
+  /*
+   * M4-05 (#94): identity stops being unknown to the log at this exact line.
+   * Everything below — the repository, the transaction, a rejection three
+   * domains away — now writes `user_id` on its lines without being handed a
+   * user, which is the "correlation propagation across the getUser hop" the
+   * card asks for. It is a no-op when no request scope is active (C1 has not
+   * wrapped the route handlers yet; that is #94's next commit), and the seam
+   * renders that as `"user_id":null` rather than dropping the key, so the gap
+   * is visible in the output instead of being something only the reader of
+   * this comment knows about.
+   */
+  attachCorrelation({ userId: data.user.id });
 
   return createVerifiedUserContext(data.user);
 }

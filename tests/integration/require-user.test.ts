@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { Client } from 'pg';
 import { requireUser, requireUserContext } from '../../lib/auth/require-user.js';
 import { AppErrorException } from '../../lib/contracts/envelope.js';
+import { setLogSink } from '../../lib/logger/index.js';
 import { CookieJar, createClientFromCookieJar } from '../../lib/supabase/cookie-jar.js';
 
 /**
@@ -145,7 +146,14 @@ describe('M1-12: requireUser()', () => {
       },
     } as unknown as SupabaseClient;
 
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    // M4-05 (#94) moved this line's channel from `console.error` to the seam,
+    // so the assertion moved with it: `setLogSink` is the seam's injection
+    // point, and asserting through it proves both halves at once — the cause
+    // is logged *and* it reaches the log as a structured line (a console spy
+    // would now sit in front of a method the production path never calls).
+    const lines: Array<{ level: string; msg: string }> = [];
+    const restoreSink = setLogSink((_line, entry, level) =>
+      lines.push({ level, msg: entry.msg }));
     try {
       await expect(requireUserContext(failingClient)).rejects.toBeInstanceOf(AppErrorException);
 
@@ -163,10 +171,13 @@ describe('M1-12: requireUser()', () => {
       expect(typeof appError!.retryAfter).toBe('number');
 
       // The shed hop must be observable: the cause is logged so 1003
-      // rejections can be diagnosed instead of going dark.
-      expect(errorSpy).toHaveBeenCalled();
+      // rejections can be diagnosed instead of going dark — once per call.
+      expect(lines).toEqual([
+        { level: 'error', msg: 'auth verification hop failed' },
+        { level: 'error', msg: 'auth verification hop failed' },
+      ]);
     } finally {
-      errorSpy.mockRestore();
+      restoreSink();
     }
   });
 });

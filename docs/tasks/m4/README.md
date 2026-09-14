@@ -16,7 +16,8 @@ the master RFC's SLA table, M4 line and FMEA register, and `docs/tasks/2026-09-1
 > settle them before implementation starts. Sizing follows the M3 precedent (one-PR-sized slices, a
 > deliberate deviation from the workflow's 1–4h rule).
 
-## The board (24 new cards + 6 parked issues raised onto M4, per handoff §3.5)
+## The board (25 new cards + 6 parked issues raised onto M4, per handoff §3.5 — the 25th arrived later,
+ruled in by M4's own spec §3.4 on 2026-09-14)
 
 | Slice | Issue | Card | Priority |
 | :--- | :--- | :--- | :--- |
@@ -44,6 +45,7 @@ the master RFC's SLA table, M4 line and FMEA register, and `docs/tasks/2026-09-1
 | M4-21 | #110 | Versioned JSON export (the "never hostage" mitigation) | p2 |
 | M4-22 | #111 | Service-worker shell: true offline reload (G-M3-1's gap) | p1 |
 | M4-23 | #112 | Realtime-vs-poll-margin decision + ADR | p2 |
+| M4-24 | #142 | CSP baseline on every document response — server-sent, nonce'd, Sentry-aware `connect-src` | p1 |
 | parked | **#76** | no API path produces `archived` | p2 |
 | parked | **#77** | rejections carry a code with no message | p2 |
 | parked | **#78** | same-ms writes decided by random UUID | p2 |
@@ -64,6 +66,9 @@ the master RFC's SLA table, M4 line and FMEA register, and `docs/tasks/2026-09-1
 #90 (load harness) ──► #91 (batch contention) ──► #92 (p95 decision) ──► #112 (realtime, informed)
 #90 ────────────────────────────────────────────► #92
 #94 (logging) ──► #95 (Sentry) ──► #107 (timer-persistence evidence)
+#142 (CSP baseline) ──► #95 (Sentry)   spec §9.3(1): merge BEFORE OR WITH #95 — its connect-src opens
+                                      the Sentry ingest door before Sentry exists, so the retrofit that
+                                      reintroduces 'unsafe-inline' under deadline cannot happen
 #94 ──► (diagnosability input to) #90's deep dives; land alongside
 #97 (typed rows) ──► (before assertions pile on) #91/#92
 #98 (hermetic unit), #99 (tsconfig) — independent hygiene; cheap, do early
@@ -87,8 +92,11 @@ the master RFC's SLA table, M4 line and FMEA register, and `docs/tasks/2026-09-1
 4. **#80** (parked: per-run fixture ids). Risk: unpriced on everything measurement-shaped below it.
 
 **Wave 1 — the observability spine + the number that gates everything:**
-5. **#94 → #95** (logging → Sentry). Risk of doing these *after* the load work: #90's failure modes
-   get diagnosed by timestamp-archaeology, and #107's evidence window never opens.
+5. **#94 → #142 → #95** (logging → CSP baseline → Sentry), the order the M4 spec's §6 sets: #142 merges
+   before or with #95, because a browser Sentry needs `connect-src` already open. Risk of doing these
+   *after* the load work: #90's failure modes get diagnosed by timestamp-archaeology, and #107's evidence
+   window never opens. Risk of doing #95 before #142: a policy retrofitted under a deadline is how
+   `'unsafe-inline'` sneakily returns (§9.3(1)).
 6. **#90** (50 rps harness). Risk: this is the milestone's epistemic center — everything #91/#92/#112
    say must come from a run, and the harness itself needs the #94 ids to be diagnosable.
 7. **#100** (contention flakes, after #80). Risk: if the load verdict work (#91/#92) lands on a box
@@ -131,7 +139,7 @@ failure — must be **watched to fail** with the capture in its PR, and every bu
 
 ## Reproduce the board
 
-All 24 issues were created 2026-09-12 with:
+All 24 original issues were created 2026-09-12 with:
 
 ```bash
 # per card: <body-file> | <title> | <labels> — e.g.
@@ -143,6 +151,11 @@ gh issue create --title "test(perf): stand up the 50 rps sustained load harness 
 # parked-issue assignment:
 for n in 76 77 78 80 82 84; do gh api -X PATCH repos/lowqualityloey/ppl-fitness-tracker/issues/$n -f milestone=4; done
 ```
+
+**#142 (M4-24) was filed 2026-09-14 the same way** — same milestone, `--body-file
+docs/tasks/m4/M4-24-csp-baseline.md --label "area:backend,priority/p1,type:feature"`. It came from the
+spec's §3.4 gap ruling (Owner: FILE), not from the handoff, and it is the board's only card with a hard
+ordering edge into #95. **New issues start at #143.**
 
 > The card files in this directory are **untracked working-tree artifacts** until the M4 kickoff
 > commit lands them (they were written before this decomposition merged, per the repo's M1 lesson that

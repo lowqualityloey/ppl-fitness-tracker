@@ -1,5 +1,12 @@
 # Project Architectural Profile (`PROMPTKIT.md`)
 
+## 0. PromptKit OS Profile
+- **Profile**: turbo
+- **Installed**: 2026-09-14
+- **Engine**: .promptkit
+- **Upgrade**: Run `.promptkit/init.sh --balanced` for full 22 workflows, or `--turbo --experimental` for parallel waves
+
+
 > **Instructions for AI**: Read this file during every session. Adhere strictly to the project domain boundaries, commands, documentation targets, and non-negotiable architectural rules defined below.
 
 > **This project is mid-migration.** Two stacks coexist, and the split is no longer "built vs. unbuilt" on either side of the seam.
@@ -275,3 +282,5 @@ Design source of truth is `DESIGN.md` (a TailAdmin profile). Its brand voice and
 - [ ] **A security control does not exist until a test proves it runs.** `SECURITY_IMPROVEMENTS.md` in this repo documents an authorization system whose deny branch is unreachable, a second `AuthManager` that no page loads, and a `canAccessPhase()` that returns `true` unconditionally. Three documented layers, zero enforcement. Any authorization or isolation claim must ship with a merge-gating test that would fail if the control were removed.
 - [ ] **Documentation describes what exists, not what is planned.** Two module READMEs in this repo advertise a React/Express/PostgreSQL/JWT/Cloudinary system that was never built. Aspirational docs are worse than absent ones. Mark unbuilt work as unbuilt, including in this file.
 - [ ] **A green typecheck and a green test suite do not prove a route compiles.** A relative import written `from './types.js'` that points at a `./types.ts` file satisfies `tsc` (extension substitution is allowed), and satisfies Vitest, but Next's Turbopack cannot resolve it — so *every request to a route that imports it returns 500 at module load* while the entire suite stays green. This has happened twice: once in the M1-15 contract graph (fixed during M1-16) and again on 2026-09-11 in `lib/domain/import/`, where it cost a full API-suite run before the cause was readable. The rule: source under `lib/` and `src/` that Next compiles uses **extensionless** relative imports; `.js` specifiers belong in test files, which run under Node. Prove a handler exists by sending it one request — the API suite, or `curl` — not by typechecking it.
+
+profile: turbo

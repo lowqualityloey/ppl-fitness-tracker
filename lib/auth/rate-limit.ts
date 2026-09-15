@@ -62,6 +62,16 @@ export const signInRateLimiter = new AuthRateLimiter();
 export const legacyImportRateLimiter = new AuthRateLimiter(5, 60 * 60 * 1000);
 
 /**
+ * M4-21 (#110): five exports per user per hour — import-class (owner call).
+ *
+ * Export is read-only, but each request reads a whole archive, so it belongs
+ * next to the legacy import's budget rather than sync's backstop. Keyed by
+ * verified user id for the same reason as the import limiter, and the same
+ * single-instance caveat applies (PROMPTKIT.md §2).
+ */
+export const exportRateLimiter = new AuthRateLimiter(5, 60 * 60 * 1000);
+
+/**
  * The sync budget the client is documented to: 120 requests per minute per user.
  *
  * Until #42 this number existed only in prose and in a skipped test, which is the

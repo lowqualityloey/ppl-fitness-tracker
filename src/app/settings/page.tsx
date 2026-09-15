@@ -5,6 +5,7 @@ import { AppErrorException } from '../../../lib/contracts/envelope';
 import { requireUserContext } from '../../../lib/auth/require-user';
 import { getDb } from '../../../lib/db/client';
 import { ProfileRepository } from '../../../lib/repositories/profile-repository';
+import { ExportButton } from './export-button';
 import { ImportPanel } from './import-panel';
 import { SignOutButton } from './sign-out-button';
 import { UnitChoices } from './unit-choices';
@@ -56,6 +57,8 @@ export default async function SettingsPage() {
       </Card>
 
       <ImportPanel />
+
+      <ExportButton />
 
       <Card>
         <CardHeader>

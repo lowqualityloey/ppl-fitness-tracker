@@ -107,6 +107,79 @@ test.describe('settings', () => {
     }
   });
 
+  test('downloads a versioned archive containing the account\'s real history', async ({ page }) => {
+    const auth = await signInFreshUser(page, 'e2e-settings-export');
+    const db = await openHistoryDb();
+    try {
+      const sessionId = await seedSession(db, {
+        userId: auth.userId,
+        localDate: '2026-09-04',
+        sets: [{ weightKg: 100, reps: 5 }],
+      });
+
+      await page.goto('/settings');
+      const [download] = await Promise.all([
+        page.waitForEvent('download'),
+        page.getByTestId('export-download').click(),
+      ]);
+      expect(download.suggestedFilename()).toMatch(/^ppl-export-v1-\d{8}\.json$/);
+      const stream = await download.createReadStream();
+      const chunks: Buffer[] = [];
+      for await (const chunk of stream!) chunks.push(Buffer.from(chunk));
+      const archive = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+      // Parsed by hand, not through the client's schema import: this asserts
+      // the bytes that left the server are the versioned envelope the contract
+      // promises, with the seeded session actually inside it.
+      expect(archive.version).toBe('v1');
+      expect(archive.user.id).toBe(auth.userId);
+      expect(archive.sessions.map((s: { id: string }) => s.id)).toContain(sessionId);
+      expect(archive.truncated).toBe(false);
+    } finally {
+      await db.end();
+      await auth.cleanup();
+    }
+  });
+
+  test('names the truncation branch honestly instead of shipping a quiet short file', async ({ page }) => {
+    const auth = await signInFreshUser(page, 'e2e-settings-export-trunc');
+    try {
+      // The 201-session user cannot exist inside a test budget on a real
+      // server, so the *degradation message* is what this page owns and what
+      // it is tested against: a valid-but-truncated v1 payload must render its
+      // warning rather than the silent success the FMEA row forbids.
+      await page.route('**/api/export/v1', (route) => route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          data: {
+            version: 'v1',
+            exportedAt: '2026-09-16T09:00:00.000Z',
+            user: {
+              id: auth.userId,
+              email: 'trunc@example.com',
+              displayName: null,
+              joinedAt: '2026-01-01T00:00:00.000Z',
+              preferredUnit: 'kg',
+            },
+            sessions: [],
+            personalRecords: [],
+            imports: [],
+            measurements: [],
+            truncated: true,
+            oldestExcluded: '2025-01-05',
+          },
+        }),
+      }));
+      await page.goto('/settings');
+      await page.getByTestId('export-download').click();
+      await expect(page.getByTestId('export-truncated')).toContainText('2025-01-05');
+      await expect(page.getByTestId('export-error')).toHaveCount(0);
+    } finally {
+      await auth.cleanup();
+    }
+  });
+
   test('has no detectable accessibility violations', async ({ page }) => {
     const auth = await signInFreshUser(page, 'e2e-settings-axe');
     try {

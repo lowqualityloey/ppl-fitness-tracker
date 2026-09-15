@@ -161,11 +161,24 @@ each serving correctly, zero collision.
   any measurement run. Two environment traps, both in
   `docs/tests/2026-09-11-m3-verification-audit.md` entry 16's preamble: the specs import
   `tests/integration/api/fixtures.ts`, so a missing `.env.local` kills the *whole run at
-  collection*, and on a box without system libs Chromium needs
-  `LD_LIBRARY_PATH=/tmp/pwlibs/ext/usr/lib/x86_64-linux-gnu` (CI: `--with-deps`). Lighthouse is a
+  collection*, and on a box without system libs every browser launch needs
+  `LD_LIBRARY_PATH=/tmp/pw-libs/extracted/usr/lib/x86_64-linux-gnu` (CI: `--with-deps`). **On this box**,
+  `libnspr4` / `libnss3` / `libasound` are absent and un-installable without root, so they live in a
+  user-space copy of apt-extracted `.deb`s under `/tmp` — which means **the path dies on every reboot** and
+  the battery comes back as `error while loading shared libraries`, a machine defect that reads exactly
+  like a product one. The repo detects it and names it rather than owning it (`#149`'s owner ruling: a
+  repository does not own a machine's `.so` files), so re-extract the libraries at that path or export
+  `LD_LIBRARY_PATH` from wherever the copy really is. Lighthouse is a
   devDependency; `lighthouse.spec.ts` asserts **100** on four routes (`/sign-in` unauthenticated;
-  `/history`, `/` and `/session/[id]` authenticated via `--extra-headers`) and prints each score
-  line. Playwright writes its summary to **stderr** — capture `> log 2>&1`. Run the suite **twice**
+  `/history`, `/` and `/session/[id]` authenticated via the API's `extraHeaders`) and prints each score
+  line. Since `#149` it drives **Lighthouse's Node API over CDP against a Chromium the spec launches
+  itself**: `spawn(chromium.executablePath(), ['--headless=new', '--remote-debugging-port=0', …])`, the port
+  read from that profile's `DevToolsActivePort`, `--user-data-dir` from an asserted-POSIX-absolute temp dir.
+  The CLI form it replaced could never run here — `chrome-launcher`'s WSL branch overwrites `TEMP` with a
+  host-Windows profile path derived from `PATH`, so all four audits died at `EACCES: mkdir '/mnt/c/Users/…'`
+  before a single page load. Do not "restore" it, and do not scrub `PATH` to dodge it: that fallback builds
+  `/mnt/undefined/Users/undefined/AppData/Local` **inside the checkout**, and the next `next build` reads it
+  as CSS. Playwright writes its summary to **stderr** — capture `> log 2>&1`. Run the suite **twice**
   before declaring green: the 15 s hang ceilings in `sla.spec.ts` are load-sensitive by design.
   Known load-sensitive specs on this box, all green solo and in CI, none of whose budgets moved:
   `a11y.spec.ts:102`, `sla.spec.ts:69` (audit entry 17) and `timers.spec.ts:277`, `sla.spec.ts:282`

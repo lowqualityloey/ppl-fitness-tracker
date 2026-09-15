@@ -6,6 +6,20 @@ import { withSentryConfig } from "@sentry/nextjs/config";
 
 const nextConfig: NextConfig = {
   /* config options here */
+  async headers() {
+    return [
+      {
+        // M4-22 (#111): `/sw.js` is the update-detection surface, not an asset. Public
+        // files otherwise ship without a Cache-Control and fall to heuristic caching,
+        // which would delay every deploy's byte-check indefinitely; `no-cache` makes the
+        // stamped version observable on the next navigation instead of riding 24 h polls.
+        // (M4-24 rejected headers() *for the CSP nonce* — a static string cannot carry one.
+        // A static per-path header is precisely what this facility is for.)
+        source: '/sw.js',
+        headers: [{ key: 'Cache-Control', value: 'no-cache' }],
+      },
+    ];
+  },
 };
 
 /*

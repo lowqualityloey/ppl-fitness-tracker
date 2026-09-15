@@ -66,6 +66,19 @@ export function firstTick(page: import('@playwright/test').Page) {
   return page.locator('[data-testid^="tick-"]').first();
 }
 
+/**
+ * How many sets the server believes are complete.
+ *
+ * The one read every offline spec ends on — "the tap outlived the page" is only proven
+ * against server truth. Lived in `session-runner.spec.ts` until M4-22's shell spec needed
+ * the same truth-check; a second copy of a response-shape accessor is a rule that drifts
+ * the first time `data.sets` changes shape.
+ */
+export function completedSetCount(body: unknown): number {
+  const state = (body as { data?: { sets?: { isCompleted?: boolean }[] } }).data;
+  return (state?.sets ?? []).filter((set) => set.isCompleted).length;
+}
+
 /** Wait for the queue to empty, which is the screen's own claim that it is synced. */
 export async function waitForSynced(page: import('@playwright/test').Page) {
   await expect(page.getByTestId('sync-status')).toContainText('All changes synced', {

@@ -6,6 +6,7 @@ import { signInFreshUser } from './auth';
 import {
   START_DAY,
   WORKOUT_FLOW_TIMEOUT_MS,
+  completedSetCount,
   expectPhase,
   firstTick,
   startPushDay,
@@ -50,16 +51,19 @@ test.describe('session runner', () => {
       await warmUpAndStart(page);
 
       /*
-       * "Signal drops mid-set" is modelled by refusing the **API**, not the browser
-       * context. `context.setOffline(true)` is the more faithful simulation of a dead
-       * zone and it is unusable here: it blocks the document request too, so a reload
-       * fails with `ERR_INTERNET_DISCONNECTED` before the queue can be inspected. Serving
-       * the app while offline needs a cached shell — a service worker — which M3 does not
-       * ship and no card claims.
+       * "Signal drops mid-set" is modelled by refusing the **API**, and that is now one of
+       * two deliberate simulations, not a workaround. M3 chose it because `context.setOffline(true)`
+       * was unusable: it blocked the document request too, so a reload died with
+       * `ERR_INTERNET_DISCONNECTED` before the queue could be inspected — serving an app while
+       * fully offline needed a cached shell, and M3 shipped none.
        *
-       * What this does prove is the §4.3 claim, unchanged: the tap outlives the page.
-       * The reload is real, and the row it restores comes out of IndexedDB rather than
-       * out of the server, which the assertion below the reload pins down.
+       * M4-22 (#111) built that shell, and `tests/e2e/offline-shell.spec.ts` runs the honest
+       * full-context version of this exact scenario. This spec still refuses only the API on
+       * purpose: its subject is outbox durability across a reload, and borrowing the service
+       * worker to serve the document would weld two contracts together — a queue regression
+       * and a cache regression would then surface as one red line in one file, pointing at
+       * neither. The reload is real either way, and the row it restores comes out of
+       * IndexedDB rather than out of the server, which the assertion below the reload pins down.
        */
       await page.route('**/api/sync', (route) => route.abort());
 
@@ -478,11 +482,5 @@ async function finishWorkoutThroughUi(page: import('@playwright/test').Page) {
 
   await page.getByTestId('finish-session').click();
   await waitForSynced(page);
-}
-
-/** `GET /api/sessions/:id` returns the full session graph; count what landed. */
-function completedSetCount(body: unknown): number {
-  const state = (body as { data?: { sets?: { isCompleted?: boolean }[] } }).data;
-  return (state?.sets ?? []).filter((set) => set.isCompleted).length;
 }
 

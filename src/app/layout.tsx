@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Outfit } from "next/font/google";
+import { ShellRegistration } from "../components/shell-registration";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -24,7 +25,11 @@ const outfit = Outfit({
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={outfit.variable}>
-      <body>{children}</body>
+      <body>
+        {children}
+        {/* M4-22 (#111): the offline-shell registration + update affordance. */}
+        <ShellRegistration />
+      </body>
     </html>
   );
 }

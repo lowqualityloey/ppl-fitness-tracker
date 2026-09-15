@@ -1,6 +1,10 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { createTestSession, type TestSession } from '../integration/api/fixtures.js';
+import {
+  INVISIBLE_NAME_PATTERN,
+  scanForBlankAccessibleNames,
+} from './accessible-name';
 import {
   WORKOUT_FLOW_TIMEOUT_MS,
   armNoMouseGuard,
@@ -288,6 +292,50 @@ test('axe is clean on /history and on a live session', async ({ page }) => {
     await firstTick(page).click();
     const live = await new AxeBuilder({ page }).analyze();
     expect(live.violations.map((v) => `${v.id} on /session/[id]`)).toEqual([]);
+  } finally {
+    await auth.cleanup();
+  }
+});
+
+/**
+ * M4-12 (#101): zero-width-space accessible names are structurally unmergeable.
+ *
+ * Provenance: `docs/tests/2026-09-11-m3-verification-audit.md` entry 11 — a U+200B-only
+ * "Today" link on `/history` scored Lighthouse accessibility 100 and passed axe, so both
+ * score gates are blind to this class. This check computes each focusable element's
+ * effective name (aria-labelledby, then aria-label, then an associated `<label>`, then
+ * text) and fails when nothing visible remains after the invisible family is stripped.
+ * The failure names the element *and* the route, because "1 violation" is a re-run tax.
+ */
+async function expectNoBlankAccessibleNames(page: Page, route: string): Promise<void> {
+  const violations = await page.evaluate(scanForBlankAccessibleNames, INVISIBLE_NAME_PATTERN);
+  const summary = violations.map(
+    (violation) =>
+      `${violation.tag}${violation.id ? `#${violation.id}` : ''} via ${violation.nameSource}: ${violation.snippet}`,
+  );
+  expect(summary, `${route}: focusable elements with no visible accessible name`).toEqual([]);
+}
+
+test('no blank accessible names on /sign-in', async ({ page }) => {
+  await page.goto('/sign-in');
+  await expectNoBlankAccessibleNames(page, '/sign-in');
+});
+
+test('no blank accessible names on /, /history, and a live session', async ({ page }) => {
+  const auth = await createTestSession('e2e-a11y-blank-names');
+  try {
+    await page.goto('/');
+    const origin = new URL(page.url()).origin;
+    await page.context().addCookies(
+      auth.cookies.map((c) => ({ name: c.name, value: c.value, url: origin })),
+    );
+    for (const path of ['/', '/history']) {
+      await page.goto(path);
+      await expectNoBlankAccessibleNames(page, path);
+    }
+    await startPushDay(page);
+    await warmUpAndStart(page);
+    await expectNoBlankAccessibleNames(page, '/session/[id]');
   } finally {
     await auth.cleanup();
   }

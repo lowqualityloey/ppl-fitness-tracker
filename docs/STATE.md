@@ -126,7 +126,16 @@
   open=19 / closed=14** (`gh api …/milestones/4`, read this turn). `gh pr list --state open` is empty.
   `.promptkit` is `ebfd67e` (v1.7.0) with a clean worktree. **Next implementable: wave 2's #108 / #110 /
   #111 / #113 cluster**; **#16** stays the only owner-blocked card.
-- **Last Updated**: 2026-09-15 (**post-#156 checkpoint** — #101/M4-12 merged as `a543188`, keyword
+- **Current Working Branch — 2026-09-15, post-#157 `pk:checkpoint` (supersedes the bullet above for
+  "where am I now")**: no product branch is active. `origin/main` is **`3ef55ab`** — M4-19/#108, merged 11:14:42Z
+  via PR **#157** (squash). Branch content verified empty before pruning, so the local
+  `feat/m4-19-session-analytics` branch was deleted after the fast-forward. **#108 is CLOSED by the
+  merge** (plain `Closes #108`, first line). **Milestone #4 reads open=18 / closed=15**
+  (`gh api …/milestones/4`, read this turn); `gh pr list --state open` is empty. **#113 needs no work —
+  it is the merged M4-kickoff planning PR, not an implementable card**, so wave 2's remaining work is
+  **#110** (M4-21 export) and **#111** (M4-22 offline shell). **#16** stays the only owner-blocked card.
+- **Last Updated**: 2026-09-15 (**post-#157 checkpoint** — #108/M4-19 merged as `3ef55ab`, #113
+  identified as already-merged planning PR, milestone #4 open=18/closed=15. Earlier: **post-#156 checkpoint** — #101/M4-12 merged as `a543188`, keyword
   closed the issue, local branch pruned, milestone #4 open=19/closed=14. Earlier: **post-#155 checkpoint** — #149/M4-25 merged as `5ac4c1c`, local branch pruned,
   milestone #4 open=20/closed=13. Earlier: **#149 / M4-25 implemented** — the Lighthouse gate runs on this box now, four
   audits at 100, both controls watched red, and §5's long-standing chrome-launcher bullet is closed with its
@@ -1353,6 +1362,8 @@ Carried forward, still open:
 
 | 2026-09-15 | Agent (opencode) | `pk:checkpoint` — post-#156 sync: M4-12 merged, #101 keyword-closed | PR **#156** merged `test/m4-12-zwsp-name-gate` into `main` as `a543188` (2026-09-15T10:24:19Z). Body led with plain `Closes #101` and the issue is CLOSED — the keyword path works when unadorned (contrast #95's bold, #150's filing-time close). Content-empty verified, local `main` fast-forwarded, local branch `-D`. Milestone #4 open=19/closed=14 (API, this turn); no open PR. Correction recorded in §7 item 30: #101 was the ZWSP gate, never the 50 rps slice — items 28–30's parenthetical was stale. Machine facts re-earned this pass: browsers needed reinstalling, `/tmp/pw-libs` re-extraction, Kong restart before preflight went green. §1 bullet + §7 item 30 carry this sync. Next: wave 2 cluster; #16 still the only owner-blocked card. |
 
+| 2026-09-15 | Agent (opencode) | `pk:checkpoint` — post-#157 sync: M4-19 merged, #113 identified as merged | PR **#157** merged `feat/m4-19-session-analytics` into `main` as `3ef55ab` (2026-09-15T11:14:42Z); #108 CLOSED by plain `Closes #108`. Content-empty verified, local `main` fast-forwarded, local branch `-D`. Milestone #4 open=18/closed=15 (was 19/14; API, this turn); no open PR. Wave-2 triage: #113 is the merged M4-kickoff planning PR (state MERGED), leaving #110 (export) + #111 (offline shell). §1 bullet + §7 item 31 carry this sync. #16 still the only owner-blocked card. |
+
 23. **M4 STATE OF PLAY — 2026-09-12 checkpoint. Read this before planning anything.**
     - **SESSION STATUS after `pk:checkpoint` 2026-09-13** — four cards have landed since the line above was
       written, all through their own PRs: **#105** (PR #116), **#80** (PR #119), **#100** (PR #120),
@@ -1586,3 +1597,16 @@ Carried forward, still open:
       #90/#92. The parentheticals above stay as written (append-only); read the issue, not the prose.
     - **Next implementable:** wave 2's #108 / #110 / #111 / #113 cluster. **#16** stays the only
       owner-blocked card.
+
+31. **M4 STATE OF PLAY — 2026-09-15, post-#157 checkpoint. #108 (M4-19) is merged.**
+    - **Shipped:** PR **#157** → `3ef55ab` (2026-09-15T11:14:42Z) — the honest training week is on `main`:
+      SQL-counted volume/streak/coverage, kg-canonical, display converts. **#108 auto-closed on merge**
+      (plain `Closes #108`, first line). Branch content verified empty before pruning; local `main`
+      fast-forwarded, local branch deleted. **Milestone #4 reads open=18 / closed=15** (API, this turn);
+      no open PR.
+    - **Wave-2 triage, measured not assumed:** `gh issue view 113` returns state MERGED — #113 is the
+      M4-kickoff planning-cards PR, not an implementable card. The "wave 2 cluster" this file has carried
+      since item 29 is therefore **#110** (M4-21 versioned JSON export, p2, read-side, no hard deps) and
+      **#111** (M4-22 service-worker offline shell, p1, largest — SW lifecycle, `setOffline` e2e upgrade,
+      CSP `worker-src` interplay, coordinates with M4-14/M4-15). Recommended order stands: #110, then #111.
+    - **Next implementable:** **#110**, then **#111**. **#16** stays the only owner-blocked card.

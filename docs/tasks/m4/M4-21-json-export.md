@@ -40,3 +40,20 @@ The FMEA row's mitigation reads true in the shipped product, and `STATE.md` §1'
 
 ## Dependencies
 - None hard (read-side only); schedule after M4-00 anyway so prose about table sets stays singular.
+
+## Implementation record (PR branch `feat/m4-21-json-export`, 2026-09-16)
+
+**Owner calls taken during this build (handoff session, 2026-09-16):**
+- `measurements` reserved as an always-empty v1 key (shape copied from the #109 spec lines so the two contracts cannot drift when the table lands).
+- Rate limit 5/hour per user, import-class (matches `legacyImportRateLimiter`; keyed by verified user id).
+- `preferredUnit` added to `user` despite the spec §4.1 skeleton omitting it — ADR-0005 label, converts nothing.
+- `personalRecords` and `imports` added top-level for the same reason: AC scenario 1 requires per-table counts including PRs and an import batch, and the skeleton listed neither. Recorded in `lib/contracts/export.ts`'s header rather than shipped silently.
+- `syncState` **not** exported: the card says "as needed", the locked skeleton omits it, and the ledger is transport state, not athlete data.
+
+**Deliberately-missing-table control (AC's precondition for trusting the count assertions):** watched red — `ExportRepository` sessions mapped with `tasks: []` → `tests/integration/api/export.test.ts > exports every seeded row per table` failed on the per-table id-set assertion; mapping restored, suite re-run green. Route-absent red also observed (all 7 specs 404) before implementation.
+
+**Quality-gate evidence (this branch, locally measured):**
+- `npm run lint` (max-warnings=0) · `npm run typecheck` · `scripts/check-set-config.sh` · `next build`: all exit 0.
+- `npm test`: 61 files / 594 passed (includes 7 new `buildExportV1` unit specs, contract-graph + route-scope registrations).
+- `npm run test:api`: 12 files / 72 passed — the 7 export specs cover completeness-by-id, kg-canonical-under-lbs-preference, NULL-load honesty, cross-user byte containment, 201-session truncated branch, 5/hour 429 + `Retry-After`, 401/404 postures, `no-store` + `Content-Disposition` filename.
+- E2E: two new `settings.spec.ts` tests (real download parsed by hand; truncated warning rendered via a mocked valid-but-truncated payload). **Not run locally** — `libnspr4.so` missing on this machine, the same documented block #96 recorded; CI is the verification venue for these two.

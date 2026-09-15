@@ -129,11 +129,13 @@ test.describe('settings', () => {
       const archive = JSON.parse(Buffer.concat(chunks).toString('utf8'));
       // Parsed by hand, not through the client's schema import: this asserts
       // the bytes that left the server are the versioned envelope the contract
-      // promises, with the seeded session actually inside it.
-      expect(archive.version).toBe('v1');
-      expect(archive.user.id).toBe(auth.userId);
-      expect(archive.sessions.map((s: { id: string }) => s.id)).toContain(sessionId);
-      expect(archive.truncated).toBe(false);
+      // promises, with the seeded session actually inside it. The wire shape is
+      // the appSuccess envelope — the archive itself rides under `data`.
+      expect(archive.ok).toBe(true);
+      expect(archive.data.version).toBe('v1');
+      expect(archive.data.user.id).toBe(auth.userId);
+      expect(archive.data.sessions.map((s: { id: string }) => s.id)).toContain(sessionId);
+      expect(archive.data.truncated).toBe(false);
     } finally {
       await db.end();
       await auth.cleanup();

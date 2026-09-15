@@ -36,6 +36,7 @@ const GRAPH: GraphEntry[] = [
   { route: 'src/app/api/exercises/route.ts', contracts: ['exercises', 'envelope'], methods: ['GET'] },
   { route: 'src/app/api/progress/[exerciseSlug]/route.ts', contracts: ['progress', 'envelope'], methods: ['GET'] },
   { route: 'src/app/api/import/legacy/route.ts', contracts: ['import', 'envelope'], methods: ['POST'] },
+  { route: 'src/app/api/export/v1/route.ts', contracts: ['export', 'envelope'], methods: ['GET'] },
 ];
 
 function readRoute(path: string): string {
@@ -108,6 +109,7 @@ describe('contract graph: every API route is an adapter over lib/contracts', () 
       ['src/app/api/sessions/route.ts', 'SessionStartResponseSchema'],
       ['src/app/api/sessions/[id]/route.ts', 'SessionDetailResponseSchema'],
       ['src/app/api/sync/route.ts', 'SyncResponseSchema'],
+      ['src/app/api/export/v1/route.ts', 'ExportV1Schema'],
     ];
     for (const [route, schema] of producers) {
       const source = readRoute(route);

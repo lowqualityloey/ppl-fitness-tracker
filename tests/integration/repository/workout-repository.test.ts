@@ -919,4 +919,134 @@ describe('WorkoutRepository', () => {
     expect(new Set(results.map((result) => result.serverSeq))).toEqual(new Set([1]));
     expect((await repository.findSession(userId, sessionId))?.sets).toHaveLength(1);
   });
+
+  it('counts one honest week from completed rows only, through the app write path', async () => {
+    const endDate = '2028-04-10';
+    const finishSession = async (
+      localDate: string,
+      sets: { setIndex: number; weightKg: number | null; reps: number | null }[],
+    ): Promise<void> => {
+      const started = await engine.start(userId, routineDayId, randomUUID(), localDate);
+      const clientTs = new Date(`${localDate}T12:00:00.000Z`);
+      await engine.completeTask(userId, {
+        sessionId: started.id,
+        taskKey: 'warm_up',
+        completedAt: clientTs,
+        clientTs,
+      });
+      await engine.advancePhase(userId, { sessionId: started.id, phase: 'exercise' });
+      for (const set of sets) {
+        await engine.completeSet(userId, {
+          sessionId: started.id,
+          exerciseId,
+          isCompleted: true,
+          clientTs,
+          ...set,
+        });
+      }
+      await engine.completeTask(userId, {
+        sessionId: started.id,
+        taskKey: 'main_workout',
+        completedAt: clientTs,
+        clientTs,
+      });
+      await engine.advancePhase(userId, { sessionId: started.id, phase: 'stretch' });
+      await engine.completeTask(userId, {
+        sessionId: started.id,
+        taskKey: 'stretch',
+        completedAt: clientTs,
+        clientTs,
+      });
+      await engine.advancePhase(userId, { sessionId: started.id, phase: 'post_workout' });
+      await engine.finish(userId, {
+        sessionId: started.id,
+        completedAt: new Date(`${localDate}T13:00:00.000Z`),
+      });
+    };
+
+    // 60×5 × 3 with load, plus one load-less set: volume 900, three load sets.
+    // The phase gate demands the routine's 3 planned sets completed, so the load-less
+    // set rides as an owner row after the engine finishes — it is still a real row the
+    // aggregate reads, and the lifecycle purity claim stays about the session itself.
+    await finishSession('2028-04-10', [
+      { setIndex: 0, weightKg: 60, reps: 5 },
+      { setIndex: 1, weightKg: 60, reps: 5 },
+      { setIndex: 2, weightKg: 60, reps: 5 },
+    ]);
+    await finishSession('2028-04-09', [
+      { setIndex: 0, weightKg: 50, reps: 10 },
+      { setIndex: 1, weightKg: 50, reps: 10 },
+      { setIndex: 2, weightKg: 50, reps: 10 },
+    ]);
+
+    // In-progress work is someone still deciding, not a fact: it must not move a number.
+    await engine.start(userId, routineDayId, randomUUID(), '2028-04-10');
+
+    // An archived session with real sets is history, not training: excluded by status.
+    const archived = await owner.query<{ id: string }>(
+      `INSERT INTO workout_sessions
+         (user_id, routine_day_id, client_id, local_date, status, phase, source,
+          started_at, completed_at)
+       VALUES ($1, $2, $3, '2028-04-08', 'archived', 'post_workout', 'app',
+               '2028-04-08T12:00:00.000Z', '2028-04-08T13:00:00.000Z')
+       RETURNING id`,
+      [userId, routineDayId, randomUUID()],
+    );
+    await owner.query(
+      `INSERT INTO session_sets
+         (user_id, session_id, exercise_id, set_index, is_completed, weight_kg, reps,
+          client_ts, updated_at)
+       VALUES ($1, $2, $3, 0, true, 200, 5, '2028-04-08T12:00:00.000Z', now())`,
+      [userId, archived.rows[0]!.id, exerciseId],
+    );
+
+    // A legacy import without per-set rows is coverage, not volume.
+    await owner.query(
+      `INSERT INTO workout_sessions
+         (user_id, routine_day_id, client_id, local_date, status, phase, source,
+          started_at, completed_at)
+       VALUES ($1, $2, $3, '2028-04-06', 'completed', 'post_workout', 'legacy_import',
+               '2028-04-06T12:00:00.000Z', '2028-04-06T13:00:00.000Z')`,
+      [userId, routineDayId, randomUUID()],
+    );
+
+    // The load-less set the phase gate has no room for: a completed row with reps but
+    // no weight on the finished 04-10 session. It must not move the volume.
+    const finished = await owner.query<{ id: string }>(
+      `SELECT id FROM workout_sessions
+       WHERE user_id = $1 AND routine_day_id = $2 AND local_date = '2028-04-10'
+         AND status = 'completed'`,
+      [userId, routineDayId],
+    );
+    await owner.query(
+      `INSERT INTO session_sets
+         (user_id, session_id, exercise_id, set_index, is_completed, weight_kg, reps,
+          client_ts, updated_at)
+       VALUES ($1, $2, $3, 3, true, NULL, 10, '2028-04-10T12:03:00.000Z', now())`,
+      [userId, finished.rows[0]!.id, exerciseId],
+    );
+
+    // Every number below is a hand-computed literal from the rows above — the aggregate
+    // is asserted against the seeding, never against itself.
+    const week = await repository.getTrainingWeek(userId, endDate);
+    expect(week.days).toEqual([
+      { localDate: '2028-04-04', sessions: 0, volumeKg: 0, loadSets: 0 },
+      { localDate: '2028-04-05', sessions: 0, volumeKg: 0, loadSets: 0 },
+      { localDate: '2028-04-06', sessions: 1, volumeKg: 0, loadSets: 0 },
+      { localDate: '2028-04-07', sessions: 0, volumeKg: 0, loadSets: 0 },
+      { localDate: '2028-04-08', sessions: 0, volumeKg: 0, loadSets: 0 },
+      { localDate: '2028-04-09', sessions: 1, volumeKg: 1500, loadSets: 3 },
+      { localDate: '2028-04-10', sessions: 1, volumeKg: 900, loadSets: 3 },
+    ]);
+    expect(week.trainingDates.slice(0, 3)).toEqual(['2028-04-10', '2028-04-09', '2028-04-06']);
+    // The tail belongs to sibling tests sharing this user (2028-02/03 rows) — the week
+    // above is windowed, but training dates are global history by design. What this
+    // test owns is the head order and the archived date's absence.
+    expect(week.trainingDates).not.toContain('2028-04-08');
+
+    // Cross-user containment: the second user sees an empty week.
+    const foreign = await secondRepository.getTrainingWeek(secondUserId, endDate);
+    expect(foreign.days.every((day) => day.sessions === 0)).toBe(true);
+    expect(foreign.trainingDates).toEqual([]);
+  });
 });

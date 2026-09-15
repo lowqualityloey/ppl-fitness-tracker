@@ -1,8 +1,10 @@
-import { and, asc, desc, eq, inArray, isNotNull, lt, ne, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNotNull, lt, lte, ne, or, sql } from 'drizzle-orm';
 import * as schema from '../../db/schema/index';
 import { assertUserContext } from '../db/auth-context';
 import { withUser } from '../db/with-user';
 import type { Db, Tx, JwtClaims } from '../db/with-user';
+import { shiftIsoDate } from '../domain/local-date';
+import type { TrainingDayBucket } from '../views/dashboard-view';
 import type { SyncMutation, SyncRequest } from '../contracts/sync';
 import type { PrefillData, SessionSummary } from '../contracts/sessions';
 import { SyncEngine, ZERO_UUID } from '../domain/sync/sync-engine';
@@ -280,6 +282,89 @@ export class WorkoutRepository {
         setsCompleted: bySession.get(row.sessionId)?.setsCompleted ?? 0,
         setsTotal: bySession.get(row.sessionId)?.setsTotal ?? 0,
       }));
+    });
+  }
+
+  /**
+   * M4-19 (#108): one counted week for the dashboard, aggregated in SQL.
+   *
+   * The dashboard precedent (M3-04) holds: the screen renders integers, so the rows
+   * stay behind the query. One grouped read over completed sessions in
+   * `[endDate-6, endDate]` joined to their sets, plus the distinct completed dates
+   * (for the streak, which needs history beyond the window) — both user-scoped,
+   * both constant in shape regardless of workout length.
+   *
+   * Volume is `SUM(weight_kg * reps)` over completed sets carrying **both** numbers,
+   * in canonical kg (ADR-0005 — the profile changes rendering, never this). A set
+   * with a null weight or null reps contributes nothing to the sum but still counts
+   * in `loadSets` only when both are present; sessions without any load-carrying set
+   * surface as coverage in the view layer, not as a zero that claims measurement.
+   * `in_progress` and `archived` sessions are excluded — only `completed` is a fact
+   * about training. Days with no sessions are zero-filled here so the view layer
+   * classifies rather than counts.
+   */
+  async getTrainingWeek(
+    userId: string,
+    endDate: string,
+  ): Promise<{ days: TrainingDayBucket[]; trainingDates: string[] }> {
+    return this.forUser(userId, async (tx) => {
+      const startDate = shiftIsoDate(endDate, -6);
+      const loadFilter = and(
+        eq(sessionSets.isCompleted, true),
+        isNotNull(sessionSets.weightKg),
+        isNotNull(sessionSets.reps),
+      );
+      const buckets = await tx
+        .select({
+          localDate: workoutSessions.localDate,
+          sessions: sql<number>`count(distinct ${workoutSessions.id})::int`,
+          volumeKg: sql<string>`coalesce(sum(${sessionSets.weightKg} * ${sessionSets.reps}) filter (where ${loadFilter}), 0)`,
+          loadSets: sql<number>`count(*) filter (where ${loadFilter})::int`,
+        })
+        .from(workoutSessions)
+        .leftJoin(
+          sessionSets,
+          and(
+            eq(sessionSets.sessionId, workoutSessions.id),
+            eq(sessionSets.userId, userId),
+          ),
+        )
+        .where(
+          and(
+            eq(workoutSessions.userId, userId),
+            eq(workoutSessions.status, 'completed'),
+            gte(workoutSessions.localDate, startDate),
+            lte(workoutSessions.localDate, endDate),
+          ),
+        )
+        .groupBy(workoutSessions.localDate);
+
+      const byDate = new Map(buckets.map((row) => [row.localDate, row]));
+      const days: TrainingDayBucket[] = [];
+      for (let back = 6; back >= 0; back -= 1) {
+        const localDate = shiftIsoDate(endDate, -back);
+        const row = byDate.get(localDate);
+        days.push({
+          localDate,
+          sessions: row?.sessions ?? 0,
+          volumeKg: row ? Number(row.volumeKg) : 0,
+          loadSets: row?.loadSets ?? 0,
+        });
+      }
+
+      const dateRows = await tx
+        .selectDistinct({ localDate: workoutSessions.localDate })
+        .from(workoutSessions)
+        .where(
+          and(
+            eq(workoutSessions.userId, userId),
+            eq(workoutSessions.status, 'completed'),
+          ),
+        )
+        .orderBy(desc(workoutSessions.localDate))
+        .limit(400);
+
+      return { days, trainingDates: dateRows.map((row) => row.localDate) };
     });
   }
 

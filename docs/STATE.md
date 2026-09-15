@@ -117,7 +117,17 @@
   prune ruling. **Milestone #4 reads open=20 / closed=13** (`gh api …/milestones/4`, read this turn) and
   `gh pr list --state open` is empty. `.promptkit` is `ebfd67e` (v1.7.0, via #151) with a clean worktree.
   **Next implementable: #101** (M4-12's remaining 50 rps slice); **#16** stays the only owner-blocked card.
-- **Last Updated**: 2026-09-15 (**post-#155 checkpoint** — #149/M4-25 merged as `5ac4c1c`, local branch pruned,
+- **Current Working Branch — 2026-09-15, post-#156 `pk:checkpoint` (supersedes the bullet above for
+  "where am I now")**: no product branch is active. `origin/main` is **`a543188`** — M4-12/#101, merged 10:24:19Z
+  via PR **#156** (squash). Branch content verified empty (`git diff HEAD origin/main --stat` → empty) before
+  pruning, so the local `test/m4-12-zwsp-name-gate` branch was deleted after the fast-forward.
+  **#101 is CLOSED by the merge itself** — the PR body led with plain `Closes #101`, and the keyword parsed
+  (contrast items 27/28: #95's bolded reference and #150's filing-time keyword). **Milestone #4 reads
+  open=19 / closed=14** (`gh api …/milestones/4`, read this turn). `gh pr list --state open` is empty.
+  `.promptkit` is `ebfd67e` (v1.7.0) with a clean worktree. **Next implementable: wave 2's #108 / #110 /
+  #111 / #113 cluster**; **#16** stays the only owner-blocked card.
+- **Last Updated**: 2026-09-15 (**post-#156 checkpoint** — #101/M4-12 merged as `a543188`, keyword
+  closed the issue, local branch pruned, milestone #4 open=19/closed=14. Earlier: **post-#155 checkpoint** — #149/M4-25 merged as `5ac4c1c`, local branch pruned,
   milestone #4 open=20/closed=13. Earlier: **#149 / M4-25 implemented** — the Lighthouse gate runs on this box now, four
   audits at 100, both controls watched red, and §5's long-standing chrome-launcher bullet is closed with its
   `PATH`-scrub prescription recorded as the trap it was. Earlier this pass: #154 merged and the owner closed
@@ -1341,6 +1351,8 @@ Carried forward, still open:
 
 | 2026-09-15 | Agent (opencode) | `pk:checkpoint` — post-#155 sync: M4-25 merged, branch pruned | PR **#155** merged `test/m4-25-lighthouse-node-api` into `main` as `5ac4c1c` (2026-09-15T05:18:13Z), closing #149. Verified content-empty (`git diff HEAD origin/main --stat` → empty), fast-forwarded local `main` past `01a9816`, deleted the local branch with `-D`. `gh pr list --state open` empty; milestone #4 open=20/closed=13 (API, this turn). Remote refs `origin/test/m4-25-lighthouse-node-api` + `origin/docs/m4-25-lighthouse-card` left for the owner's prune ruling. No DEBUG probes, no untracked files, worktree clean. Test battery not re-run this turn — last evidence is PR #155's CI plus the branch-time 15/15. §1 bullet + §7 item 29 carry this sync. Next: #101; #16 still the only owner-blocked card. |
 
+| 2026-09-15 | Agent (opencode) | `pk:checkpoint` — post-#156 sync: M4-12 merged, #101 keyword-closed | PR **#156** merged `test/m4-12-zwsp-name-gate` into `main` as `a543188` (2026-09-15T10:24:19Z). Body led with plain `Closes #101` and the issue is CLOSED — the keyword path works when unadorned (contrast #95's bold, #150's filing-time close). Content-empty verified, local `main` fast-forwarded, local branch `-D`. Milestone #4 open=19/closed=14 (API, this turn); no open PR. Correction recorded in §7 item 30: #101 was the ZWSP gate, never the 50 rps slice — items 28–30's parenthetical was stale. Machine facts re-earned this pass: browsers needed reinstalling, `/tmp/pw-libs` re-extraction, Kong restart before preflight went green. §1 bullet + §7 item 30 carry this sync. Next: wave 2 cluster; #16 still the only owner-blocked card. |
+
 23. **M4 STATE OF PLAY — 2026-09-12 checkpoint. Read this before planning anything.**
     - **SESSION STATUS after `pk:checkpoint` 2026-09-13** — four cards have landed since the line above was
       written, all through their own PRs: **#105** (PR #116), **#80** (PR #119), **#100** (PR #120),
@@ -1562,3 +1574,15 @@ Carried forward, still open:
       `origin/docs/m4-25-lighthouse-card` still exist — prune ruling owed, nothing depends on them.
     - **Next implementable, unchanged:** **#101** (M4-12's remaining 50 rps slice), then wave 2's #108 / #110 /
       #111 / #113 cluster. **#16** stays the only owner-blocked card.
+
+30. **M4 STATE OF PLAY — 2026-09-15, post-#156 checkpoint. #101 (M4-12) is merged — and a correction.**
+    - **Shipped:** PR **#156** → `a543188` (2026-09-15T10:24:19Z) — the ZWSP structural gate is on `main`, and
+      **#101 auto-closed on merge** (plain `Closes #101`, first line of the body). Branch content verified empty
+      before pruning; local `main` fast-forwarded, local branch deleted. **Milestone #4 reads open=19 /
+      closed=14** (API, this turn); no open PR.
+    - **Correction, stated plainly:** items 28–29 called #101 "M4-12's remaining 50 rps slice". It never was —
+      the issue filed and closed here is the ZWSP accessible-name gate, and M4-12's card
+      (`docs/tasks/m4/M4-12-zwsp-name-gate.md`) says the same. The 50 rps load-test work shipped earlier as
+      #90/#92. The parentheticals above stay as written (append-only); read the issue, not the prose.
+    - **Next implementable:** wave 2's #108 / #110 / #111 / #113 cluster. **#16** stays the only
+      owner-blocked card.

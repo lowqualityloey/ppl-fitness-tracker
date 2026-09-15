@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { purgeOfflineShellDocuments } from '../../../lib/offline/shell-cache';
 import { Button } from '../../components/ui/button';
 
 /**
@@ -39,6 +40,11 @@ export function SignOutButton() {
         credentials: 'same-origin',
       });
       if (!response.ok) throw new Error(String(response.status));
+      /*
+       * M4-22 (#111), PD-2's bound: the offline shell stored navigation documents that
+       * carry this athlete's data. The cookie died above; the copies must not outlive it.
+       */
+      await purgeOfflineShellDocuments();
       /*
        * A hard navigation, not `router.push`.
        *

@@ -41,3 +41,43 @@ STATE §5's sentence "'reopen with no network' is proven with the *API* dead rat
 
 ## Dependencies
 - Coordinate with M4-14 (port/build-script changes) and M4-15 (which build is precached).
+
+## Implementation record (PR branch `feat/m4-22-offline-shell`, 2026-09-16)
+
+**Shipped.** Hand-written `public/sw.js` (DECISION-m4-003 — no Workbox/Serwist): precache+update
+with build-id stamping (`scripts/build-sw-manifest.ts` chained into `next:build`), network-first
+verbatim navigation documents, cache-first `/_next/static`, and a pure pass-through for `/api/`
+and `/auth/` — the worker never sees a JSON exchange, which is why `sla.spec.ts` runs against it
+unmodified. `skipWaiting: false`, no `clients.claim()` (ASSUMPTION-m4-004); `/sw.js` served
+`Cache-Control: no-cache` via `next.config.ts`; registration + "reload to apply" chip in
+`src/components/shell-registration.tsx` (prod-only). PD-2's bound: `sign-out-button.tsx` calls
+`purgeOfflineShellDocuments()` (`lib/offline/shell-cache.ts`). AC-3's honesty: `sign-in-form.tsx`
+maps a `TypeError` fetch rejection to "You appear to be offline", asserted distinct from the 4xx
+copy. CSP: **zero edits** — `worker-src 'self'` was pre-paid by #142.
+
+**PD-4 (deviation, recorded before merge):** the eviction predicate left the TS unit layer — a
+classic worker cannot `import`, and a unit test of a second copy grades a double. Runtime
+behaviour lives in `tests/e2e/offline-shell.spec.ts` (5 specs: AC-1 airplane reload + replay, a
+discard control that *must* fail offline without the shell, AC-2 eviction through the real
+activate handler via unregister-reregister, AC-3/PD-7 offline `/sign-in`, PD-2 sign-out purge);
+the never-do policy is pinned as a property of the shipped bytes in
+`tests/unit/infra/sw-shell-source.test.ts` (no `skipWaiting`/`claim`, no `/api/` writes, manifest
+version guard). Controls watched red, before and after the helper fix below: store-disabled →
+AC-1+AC-3 red; keep-previous removed → AC-2 red; purge call deleted → PD-2 red.
+
+**Two harness truths found the expensive way, both documented in the spec header:**
+`next start` snapshots `public/` at boot, so mid-test file swaps cannot simulate a second deploy
+— the waiting-worker/chip path is reviewed, not executed (named residual), and never-steal is
+pinned statically instead. And `page.waitForFunction` with an **async** predicate resolves
+instantly on the truthy Promise — three waits were silently inert until the purge mutant proved
+it; all async predicates now run Node-side through `expect.poll`, which awaits.
+
+**Also:** `completedSetCount` moved to `runner-fixtures.ts` (second use earned the shared seam);
+`session-runner.spec.ts`'s gap comment rewritten to describe both simulations (the card's DoD
+half); e2e census 15 → 16 in `sync-response-fixture.test.ts`. Load evidence, both full-suite
+runs on this 4-core box (76 → 81 specs): run 1 `80 passed / 1 failed`, run 2 `79 passed / 2
+failed` — the reds were only `sla.spec.ts`'s two time-boxed specs (G-M3-3 p95 6113/6152 ms vs
+the 5000 goal; G-M3-4's 60-mutation drain outside its 15 s window once), while all five shell
+specs passed both runs and `sla.spec.ts` is green in isolation with the shell live. This is the
+#100 ledger's documented class — the battery is at this machine's capacity — so the budgets are
+untouched, the numbers are recorded, and CI's re-watch is the arbiter, per #86's precedent.

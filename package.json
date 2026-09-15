@@ -12,7 +12,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "next:dev": "next dev --port 3001",
-    "next:build": "next build",
+    "next:build": "next build && tsx scripts/build-sw-manifest.ts",
     "next:start": "next start --port 3001",
     "typecheck": "next typegen && tsc --noEmit",
     "lint": "eslint --max-warnings=0 .",

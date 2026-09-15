@@ -96,7 +96,9 @@ describe('no e2e spec authors a sync response body beside the builder', () => {
     // 13 → 14: tests/e2e/csp.spec.ts (M4-24, #142) joined the battery.
   // 14 → 15: tests/e2e/error-sink.spec.ts (M4-06, #95) — it reads the built routes
   // manifest, which is the only place the tunnel/CSP agreement is observable at all.
-    expect(readdirSync(E2E_DIR).filter((name) => name.endsWith('.spec.ts'))).toHaveLength(15);
+  // 15 → 16: tests/e2e/offline-shell.spec.ts (M4-22, #111) — it intercepts nothing it
+  // would answer; the worker, not a route stub, is the offline seam it exercises.
+    expect(readdirSync(E2E_DIR).filter((name) => name.endsWith('.spec.ts'))).toHaveLength(16);
   });
 
   it('never finds a hand-written sync body', () => {

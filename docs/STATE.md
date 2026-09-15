@@ -109,7 +109,16 @@
   `LD_LIBRARY_PATH=/tmp/pw-libs/extracted/usr/lib/x86_64-linux-gnu`, and `PROMPTKIT.md` §3 named a path that does
   not exist (`/tmp/pwlibs/ext/…`) — corrected in this PR, since a documented workaround that points at nothing is
   how a machine fact gets rediscovered every session.
-- **Last Updated**: 2026-09-15 (**#149 / M4-25 implemented** — the Lighthouse gate runs on this box now, four
+- **Current Working Branch — 2026-09-15, post-#155 `pk:checkpoint` (supersedes the bullet above for
+  "where am I now")**: no product branch is active. `origin/main` is **`5ac4c1c`** — M4-25/#149, merged 05:18:13Z
+  via PR **#155**. Branch content verified empty (`git diff HEAD origin/main --stat` → empty) before pruning, so
+  the local `test/m4-25-lighthouse-node-api` branch was deleted after the fast-forward; two remote tracking refs
+  (`origin/test/m4-25-lighthouse-node-api`, `origin/docs/m4-25-lighthouse-card`) still exist and await the owner's
+  prune ruling. **Milestone #4 reads open=20 / closed=13** (`gh api …/milestones/4`, read this turn) and
+  `gh pr list --state open` is empty. `.promptkit` is `ebfd67e` (v1.7.0, via #151) with a clean worktree.
+  **Next implementable: #101** (M4-12's remaining 50 rps slice); **#16** stays the only owner-blocked card.
+- **Last Updated**: 2026-09-15 (**post-#155 checkpoint** — #149/M4-25 merged as `5ac4c1c`, local branch pruned,
+  milestone #4 open=20/closed=13. Earlier: **#149 / M4-25 implemented** — the Lighthouse gate runs on this box now, four
   audits at 100, both controls watched red, and §5's long-standing chrome-launcher bullet is closed with its
   `PATH`-scrub prescription recorded as the trap it was. Earlier this pass: #154 merged and the owner closed
   #95; #149 reopened after its own filing PR had burned it). Before that: **post-#153 checkpoint** — M4-06
@@ -1330,6 +1339,8 @@ Carried forward, still open:
 
 
 
+| 2026-09-15 | Agent (opencode) | `pk:checkpoint` — post-#155 sync: M4-25 merged, branch pruned | PR **#155** merged `test/m4-25-lighthouse-node-api` into `main` as `5ac4c1c` (2026-09-15T05:18:13Z), closing #149. Verified content-empty (`git diff HEAD origin/main --stat` → empty), fast-forwarded local `main` past `01a9816`, deleted the local branch with `-D`. `gh pr list --state open` empty; milestone #4 open=20/closed=13 (API, this turn). Remote refs `origin/test/m4-25-lighthouse-node-api` + `origin/docs/m4-25-lighthouse-card` left for the owner's prune ruling. No DEBUG probes, no untracked files, worktree clean. Test battery not re-run this turn — last evidence is PR #155's CI plus the branch-time 15/15. §1 bullet + §7 item 29 carry this sync. Next: #101; #16 still the only owner-blocked card. |
+
 23. **M4 STATE OF PLAY — 2026-09-12 checkpoint. Read this before planning anything.**
     - **SESSION STATUS after `pk:checkpoint` 2026-09-13** — four cards have landed since the line above was
       written, all through their own PRs: **#105** (PR #116), **#80** (PR #119), **#100** (PR #120),
@@ -1541,3 +1552,13 @@ Carried forward, still open:
       (`/tmp/pwlibs/ext/…`, nonexistent) and is fixed.
     - **Next implementable:** **#101** (M4-12's remaining 50 rps slice), then wave 2's #108 / #110 / #111 / #113
       cluster. **#16** stays the only owner-blocked card.
+
+29. **M4 STATE OF PLAY — 2026-09-15, post-#155 checkpoint. #149 (M4-25) is merged.**
+    - **Shipped:** PR **#155** → `5ac4c1c` (2026-09-15T05:18:13Z), closing #149 — the Lighthouse Node-API-over-CDP
+      gate from item 28 is on `main` now. Branch content verified empty before pruning
+      (`git diff HEAD origin/main --stat` → empty); local `main` fast-forwarded from `01a9816`, local branch
+      deleted with `-D`. **Milestone #4 reads open=20 / closed=13** (API, this turn); no open PR.
+    - **Left for the owner:** remote refs `origin/test/m4-25-lighthouse-node-api` and
+      `origin/docs/m4-25-lighthouse-card` still exist — prune ruling owed, nothing depends on them.
+    - **Next implementable, unchanged:** **#101** (M4-12's remaining 50 rps slice), then wave 2's #108 / #110 /
+      #111 / #113 cluster. **#16** stays the only owner-blocked card.

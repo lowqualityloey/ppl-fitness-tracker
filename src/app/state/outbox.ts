@@ -1,3 +1,4 @@
+import { reportError } from '../../../lib/errors/reporter';
 import type { SyncMutation } from '../../../lib/contracts/sync';
 
 /**
@@ -149,6 +150,24 @@ export class Outbox {
     try {
       await this.storage.put(stored);
     } catch (error) {
+      // M4-06 (#95) — "the `Outbox` quota errors are typed already — report, don't
+      // swallow". Typed is not the same as *seen*: this rejection is loud inside the
+      // module and becomes a banner the owner never reads, on a device that will quietly
+      // lose the next fifty taps the same way. Reported at the origin rather than at
+      // `SyncEngine.mutate`, because every caller of `enqueue` gets the fact and the
+      // reporter's once-per-object rule makes a second report from a wrapper pointless.
+      // Then rethrown untouched: a channel that swallowed the rejection would trade a
+      // lost mutation for a silent one, which is the defect §4.3 exists to prevent.
+      reportError(error, {
+        plane: 'client',
+        kind: 'durability',
+        source: 'outbox:enqueue',
+        attributes: {
+          sessionId: this.sessionId,
+          mutationId: stored.mutationId,
+          seq: stored.seq,
+        },
+      });
       throw new OutboxQuotaExceededError(error);
     }
 

@@ -177,6 +177,8 @@ export class SyncEngine {
    * it is reported later, through the drain's outcome and `pending$`.
    */
   async mutate(mutation: SyncMutation): Promise<StoredMutation> {
+    // M4-06 (#95): the storage refusal this call can raise is reported at its origin,
+    // `Outbox.enqueue`, not here — see that module for why.
     const stored = await this.outbox.enqueue(mutation);
     await this.emit();
     // Deliberately not awaited: the caller's promise is durability. A drain that

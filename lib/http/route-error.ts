@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { ZodError } from 'zod';
+import { reportServerError } from '../errors/server-report';
 import { currentCorrelation, log } from '../logger';
 import {
   AppErrorException,
@@ -80,6 +81,16 @@ export function routeErrorResponse(error: unknown): NextResponse<AppEnvelope<nev
   // entirely. The client still gets the canonical redacted 500 — nothing
   // internal crosses the wire — but the server now keeps the cause on the
   // request's own id, so "it 500'd" is answerable without reproduction.
+  //
+  // M4-06 (#95): and the same cause is what the error channel gets. This branch is
+  // the *only* producer of an unintended 500 in the app — every caller-facing
+  // rejection above is typed, and `AppErrorException` is thrown only by
+  // `requireUserContext` with a 401 or a 503 (#125's shed path, which is load rather
+  // than a defect, and is already logged with its cause). So "reported" and "our bug"
+  // are the same set here, which is exactly the distinction AC-3 asks the event to
+  // keep. Reported before the response is built, because a handler that answers a
+  // clean 500 is still a handler that broke.
   log.error('route error: unhandled cause', { error });
+  reportServerError(error, { plane: 'server', source: 'route-error:unhandled', kind: 'producer' });
   return appErrorResponse(internalError());
 }

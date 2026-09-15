@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SENTRY_INGEST_SOURCES, buildCsp } from '../../../lib/http/csp';
+import { buildCsp } from '../../../lib/http/csp';
 
 /**
  * M4-24 (#142) — the CSP baseline policy contract.
@@ -66,17 +66,29 @@ describe('buildCsp — production policy', () => {
     expect(directives.get('style-src')).toEqual([`'self'`, `'nonce-${NONCE}'`]);
   });
 
-  it("connect-src is 'self' + both Sentry ingest shapes, pinned by set comparison", () => {
-    expect(new Set(directives.get('connect-src'))).toEqual(
-      new Set([`'self'`, ...SENTRY_INGEST_SOURCES]),
-    );
-    // Mutation control: the comparator fires on an added origin.
+  // M4-06 (#95) executed M4-24's rule 3: Sentry's browser ingest goes through the
+  // same-origin `tunnelRoute` that `next.config.ts` installs, so the two ingest wildcards
+  // this line carried from #142 through #95 came out. Pinned by *set*, as always — and the
+  // mutation control is now the load-bearing half: an added third-party origin, in any
+  // shape, must go red, because "the app talks to one origin: itself" is the claim.
+  it("connect-src is 'self' and nothing else, pinned by set comparison", () => {
+    expect(directives.get('connect-src')).toEqual([`'self'`]);
+    expect(new Set(directives.get('connect-src'))).toEqual(new Set([`'self'`]));
+
+    // Mutation control 1: an added directive is a different directive set.
     const widened = parse(`${policy}; extra-src https://evil.example`);
     expect([...widened.keys()]).not.toEqual(PROD_DIRECTIVES);
-    const smuggled = parse(policy.replace(`'self' https://`, `'self' https://x.example https://`));
-    expect(new Set(smuggled.get('connect-src'))).not.toEqual(
-      new Set([`'self'`, ...SENTRY_INGEST_SOURCES]),
-    );
+    // Mutation control 2: an origin smuggled *inside* connect-src is caught by the
+    // comparator rather than by token order — which is the whole reason #142 pinned this
+    // by set instead of by substring. Watched red: with the assertion below flipped to
+    // `toEqual`, the spec fails on `Set{ 'self', 'https://o456.ingest.sentry.io' }`.
+    const smuggled = parse(policy.replace(`connect-src 'self'`, `connect-src 'self' https://o456.ingest.sentry.io`));
+    expect(new Set(smuggled.get('connect-src'))).not.toEqual(new Set([`'self'`]));
+  });
+
+  it('names no Sentry host anywhere in the production policy (#95 took the tunnel)', () => {
+    expect(policy).not.toContain('sentry.io');
+    expect(policy.toLowerCase()).not.toContain('https://o');
   });
 
   it('denies framing, bases, form targets and plugins per §5', () => {

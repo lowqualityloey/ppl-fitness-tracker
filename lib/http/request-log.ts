@@ -24,6 +24,7 @@
  * the answer kept, the cause discarded).
  */
 
+import { reportServerError } from '../errors/server-report';
 import { log, withRequestScope } from '../logger';
 
 export function loggedRoute<A extends readonly unknown[], R extends Response>(
@@ -56,6 +57,19 @@ export function loggedRoute<A extends readonly unknown[], R extends Response>(
           ...route,
           durationMs: Math.round(performance.now() - startedAt),
           error,
+        });
+        // M4-06 (#95): the escape path. A handler that returns a 500 through
+        // `routeErrorResponse` is reported there; a handler that *throws* — because a
+        // call site forgot its `try`, or because the throw came from underneath one
+        // that only catches typed rejections — reaches this line and nowhere else.
+        // The route is the source here (`POST /api/sync`), which is the field that
+        // makes the two seams' events distinguishable, and the reporter's own
+        // once-per-object rule is what keeps a defect that visits both seams to one.
+        reportServerError(error, {
+          plane: 'server',
+          source: `${route.method ?? 'unknown'} ${route.path ?? 'unknown'}`,
+          kind: 'producer',
+          attributes: { durationMs: Math.round(performance.now() - startedAt) },
         });
         throw error;
       }

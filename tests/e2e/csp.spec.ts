@@ -109,10 +109,16 @@ test.describe('M4-24 CSP baseline', () => {
     // and this server is the prod build the battery runs).
     expect(syncCsp).not.toContain(`'unsafe-inline'`);
 
-    // AC-5's live half: the Sentry door, pinned by set comparison.
+    // AC-5's live half, as amended by M4-06 (#95): #142 opened two Sentry ingest
+    // wildcards *before Sentry existed*, and #95 exercised that card's rule 3 — browser
+    // envelopes now go to the same-origin `tunnelRoute` `next.config.ts` installs, so both
+    // wildcards came out and the policy's only connect source is the app itself. Pinned by
+    // set, on the served header, exactly as AC-5 demanded; the sweep below is what would
+    // catch a future SDK upgrade that started posting to the ingest host directly.
     expect(new Set(connectSrcFrom(a.headers()['content-security-policy']!))).toEqual(
-      new Set([`'self'`, 'https://*.sentry.io', 'https://*.ingest.sentry.io']),
+      new Set([`'self'`]),
     );
+    expect(a.headers()['content-security-policy']).not.toContain('sentry.io');
   });
 
   test('the policy is enforced, not decorative: injected HTML script never runs while the app does', async ({

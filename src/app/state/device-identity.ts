@@ -19,6 +19,8 @@
  * two accounts on one phone share it. Nothing user-derived may be stored here.
  */
 
+import { reportError } from '../../../lib/errors/reporter';
+
 /** The single key this store holds. Deliberately not configurable. */
 export const DEVICE_ID_KEY = 'deviceId';
 
@@ -64,12 +66,23 @@ export async function getDeviceId(
   if (!UUID.test(minted)) {
     // A caller-injected generator that returns junk would poison the store, so it
     // fails here rather than on the wire.
-    throw new DeviceIdUnavailableError(new Error(`generated id is not a UUID: ${minted}`));
+    const defect = new Error(`generated id is not a UUID: ${minted}`);
+    // M4-06 (#95): `producer`, not `durability`. The browser is fine and our caller is
+    // not, and putting a wiring bug in the same bucket as a full disk is how a channel
+    // stops being worth reading.
+    reportError(defect, { plane: 'client', kind: 'producer', source: 'device-id:mint' });
+    throw new DeviceIdUnavailableError(defect);
   }
 
   try {
     await store.set(DEVICE_ID_KEY, minted);
   } catch (error) {
+    // M4-06 (#95): a device that cannot persist its identity cannot sync anything, ever,
+    // and the only symptom today is one sentence on one screen. The banner stays —
+    // `provider.tsx` still owns what the user is told — but the fact also reaches the
+    // channel, which is the difference between "report, don't swallow" and a nicer
+    // comment on a rejection nobody sees.
+    reportError(error, { plane: 'client', kind: 'durability', source: 'device-id:store' });
     throw new DeviceIdUnavailableError(error);
   }
   return minted;

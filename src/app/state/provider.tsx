@@ -94,6 +94,10 @@ export function SessionSyncProvider(props: {
       } catch (error) {
         if (!cancelled && error instanceof DeviceIdUnavailableError) {
           setUnavailable('This browser cannot store a device id, so changes cannot sync.');
+          // M4-06 (#95): this branch stays presentation-only on purpose. The defect is
+          // reported where it is raised — `getDeviceId`, which every caller shares — so a
+          // second report here would be the same object counted twice, and the banner is
+          // the user's half of the answer, not the channel's.
         }
         return;
       }

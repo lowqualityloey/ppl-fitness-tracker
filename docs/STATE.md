@@ -134,7 +134,18 @@
   (`gh api …/milestones/4`, read this turn); `gh pr list --state open` is empty. **#113 needs no work —
   it is the merged M4-kickoff planning PR, not an implementable card**, so wave 2's remaining work is
   **#110** (M4-21 export) and **#111** (M4-22 offline shell). **#16** stays the only owner-blocked card.
-- **Last Updated**: 2026-09-15 (**post-#157 checkpoint** — #108/M4-19 merged as `3ef55ab`, #113
+- **Current Working Branch — 2026-09-16, post-#158 `pk:checkpoint` (supersedes the bullet above for
+  "where am I now")**: no product branch is active. `origin/main` is **`b74b6aa`** — M4-21/#110, the
+  versioned JSON export, merged 2026-09-15T13:42Z via PR **#158** (squash). Local `main` fast-forwarded,
+  local branch deleted, remote ref already gone (`git ls-remote --heads` → 0). **#110 is CLOSED by the
+  merge** (plain `Closes #110`; `closedAt 2026-09-15T13:42:04Z`). **Milestone #4 reads open=17 /
+  closed=16** (`gh api …/milestones/4`, read this turn); `gh pr list --state open` is empty. The
+  merge-commit CI tells the honest story: the first run (`34973217307`) went **RED on the new e2e** —
+  the raw-download assertion read the `appSuccess` wrapper as the archive (`archive.version` → undefined),
+  fixed in `51951e7` by asserting through the envelope, and run `34975082132` came back **exit 0 —
+  e2e 76/76, unit 594/594, api 72/72**. Wave 2's remainder is **#111** alone; **#16** stays the only
+  owner-blocked card.
+- **Last Updated**: 2026-09-16 (**post-#158 checkpoint** — #110/M4-21 export merged as `b74b6aa`, its CI-first-run e2e RED and fix recorded, §1's "does not exist" list loses its analytics+export entries, milestone #4 open=17/closed=16. Earlier: **post-#157 checkpoint** — #108/M4-19 merged as `3ef55ab`, #113
   identified as already-merged planning PR, milestone #4 open=18/closed=15. Earlier: **post-#156 checkpoint** — #101/M4-12 merged as `a543188`, keyword
   closed the issue, local branch pruned, milestone #4 open=19/closed=14. Earlier: **post-#155 checkpoint** — #149/M4-25 merged as `5ac4c1c`, local branch pruned,
   milestone #4 open=20/closed=13. Earlier: **#149 / M4-25 implemented** — the Lighthouse gate runs on this box now, four
@@ -177,7 +188,7 @@ progress, settings with the legacy-import report, and the Playwright/axe/Lightho
 legacy-parity gates that defend all of it in CI — merged as PRs #69–#87, with the measured
 residuals listed in §5 rather than smoothed.
 
-**What does not exist yet, stated plainly (2026-09-12, corrected 2026-09-15 after #153 — this list's telemetry entry is now false and the correction is the point of keeping the sentence dated)**: production email delivery (issue #16, deferred since M1); the 50 rps load test (M4-12 #101);— and note what replaced the deleted words: structured logging and one correlation id shipped as #94, the CSP baseline as #142, and Sentry's error sink on both bundles as #95, so "no telemetry" now means "no *tracing*", which is DEFERRED-m4-005 and not an absence; Realtime (deferred by owner decision — §5's poll-margin note says what that costs); a service worker, which means G-M3-1's "reopen with no network" is proven with the *API* dead rather than the document unfetchable (handoff §3.4 owns the difference); volume/streak analytics, body-measurement import, and export (named non-goals, each on a card). What does exist now: the full UI — dashboard, runner, history, progress, settings — with its measured claims in `docs/releases/2026-09-12-m3-exit-report-and-m4-handoff.md` §1. The legacy vanilla-JS app still runs unchanged alongside the target stack (M4's decommission, guarded meanwhile by `tests/e2e/legacy-parity.spec.ts`), and `npm run build` still emits zero JavaScript — re-verified 2026-09-11, not inherited from the old note.
+**What does not exist yet, stated plainly (2026-09-12, corrected 2026-09-16 after #158 — this list's analytics and export entries are now false and the correction is the point of keeping the sentence dated)**: production email delivery (issue #16, deferred since M1);— and note what replaced the deleted words: the 50 rps harness was *never* a true absence here — it shipped as M4-01/#90 on 2026-09-12, and the entry's long-standing "(M4-12 #101)" attribution was doubly wrong (#101 was the ZWSP name gate; §8's post-#156 row owns that half); structured logging and one correlation id shipped as #94, the CSP baseline as #142, and Sentry's error sink on both bundles as #95, so "no telemetry" now means "no *tracing*", which is DEFERRED-m4-005 and not an absence; Realtime (deferred by owner decision — §5's poll-margin note says what that costs); a service worker, which means G-M3-1's "reopen with no network" is proven with the *API* dead rather than the document unfetchable (handoff §3.4 owns the difference); body-measurement import (#109, open). What does exist now: the full UI — dashboard, runner, history, progress, settings — with its measured claims in `docs/releases/2026-09-12-m3-exit-report-and-m4-handoff.md` §1, a training week counted from completed-session rows (#108), and the FMEA row's escape hatch — `GET /api/export/v1` ships the versioned archive (#110). The legacy vanilla-JS app still runs unchanged alongside the target stack (M4's decommission, guarded meanwhile by `tests/e2e/legacy-parity.spec.ts`), and `npm run build` still emits zero JavaScript — re-verified 2026-09-11, not inherited from the old note.
 
 ---
 
@@ -1364,6 +1375,8 @@ Carried forward, still open:
 
 | 2026-09-15 | Agent (opencode) | `pk:checkpoint` — post-#157 sync: M4-19 merged, #113 identified as merged | PR **#157** merged `feat/m4-19-session-analytics` into `main` as `3ef55ab` (2026-09-15T11:14:42Z); #108 CLOSED by plain `Closes #108`. Content-empty verified, local `main` fast-forwarded, local branch `-D`. Milestone #4 open=18/closed=15 (was 19/14; API, this turn); no open PR. Wave-2 triage: #113 is the merged M4-kickoff planning PR (state MERGED), leaving #110 (export) + #111 (offline shell). §1 bullet + §7 item 31 carry this sync. #16 still the only owner-blocked card. |
 
+| 2026-09-16 | Agent (opencode) | `pk:checkpoint` — post-#158 sync: M4-21 export merged, §1's export entry retired, first-run CI red earned | PR **#158** merged `feat/m4-21-json-export` into `main` as `b74b6aa` (2026-09-15T13:42:04Z, when the plain `Closes #110` keyword closed the issue — API-read `closedAt`). Local `main` fast-forwarded, local branch `-D`, remote ref already gone (`git ls-remote --heads` → 0), tree clean. **The first merge-time run (`34973217307`) failed the new e2e**: the raw-bytes download assertion read the `appSuccess` wrapper as the archive (`archive.version` → undefined) — the product was right, the test was wrong, fixed in `51951e7` to assert through the envelope; run `34975082132` **exit 0 — e2e 76/76, unit 594/594, api 72/72**, the two export specs among them (this box's `libnspr4.so` block means CI is the e2e venue, per #96's recorded precedent). Owner calls + spec-skeleton amendments (`preferredUnit`, top-level `personalRecords`/`imports`, `syncState` excluded, `measurements` reserved) and the deliberately-missing-table RED control are on `docs/tasks/m4/M4-21-json-export.md`. §1's "does not exist" paragraph lost its analytics + export entries and its stale 50-rps line — the harness shipped as #90 on 09-12 and the "(#101)" attribution was wrong twice over. **Milestone #4 reads open=17 / closed=16** (API, this turn); no open PR. Wave 2's remainder: **#111**. §1 bullet + §7 item 32 carry this sync. #16 still the only owner-blocked card. |
+
 23. **M4 STATE OF PLAY — 2026-09-12 checkpoint. Read this before planning anything.**
     - **SESSION STATUS after `pk:checkpoint` 2026-09-13** — four cards have landed since the line above was
       written, all through their own PRs: **#105** (PR #116), **#80** (PR #119), **#100** (PR #120),
@@ -1610,3 +1623,21 @@ Carried forward, still open:
       **#111** (M4-22 service-worker offline shell, p1, largest — SW lifecycle, `setOffline` e2e upgrade,
       CSP `worker-src` interplay, coordinates with M4-14/M4-15). Recommended order stands: #110, then #111.
     - **Next implementable:** **#110**, then **#111**. **#16** stays the only owner-blocked card.
+
+32. **M4 STATE OF PLAY — 2026-09-16, post-#158 checkpoint. #110 (M4-21 export) is merged.**
+    - **Shipped:** PR **#158** → `b74b6aa` (2026-09-15T13:42Z) — `GET /api/export/v1`: Zod-locked v1
+      envelope (profile, newest-first 200-session cap with an honest `truncated`/`oldestExcluded`
+      branch, sets/tasks/PRs/imports, `measurements: []` reserved until #109), pure builder over a
+      single-transaction `withUser()` read, 5/hr per-user limiter, `/settings` download button.
+      **#110 auto-closed on merge** (plain `Closes #110`, `closedAt 13:42:04Z`). Owner calls and two
+      spec-skeleton amendments (`user.preferredUnit`; top-level `personalRecords`/`imports`) are on
+      the task card; `syncState` deliberately not exported. **Milestone #4 reads open=17 / closed=16**
+      (API, this turn); no open PR.
+    - **The CI loop, recorded because it earned its keep:** the merge-time first run went RED on the
+      new e2e — the hand-parsed download assertion read the `appSuccess` wrapper as the archive —
+      fixed by asserting through the envelope (`51951e7`), second run green. Local gates on the
+      branch: lint 0 · typecheck 0 · `check-set-config.sh` 0 · unit 594/594 · `test:api` 72/72 ·
+      CI e2e 76/76. Deliberately-missing-table control watched red before the count assertions were
+      trusted. Local e2e remains blocked by `libnspr4.so` (the #96 note); CI is this box's e2e venue.
+    - **Wave-2 remainder, measured:** #110's merge leaves **#111** (M4-22 service-worker shell, p1)
+      as the only implementable card from the wave-2 cluster. **#16** stays the only owner-blocked card.

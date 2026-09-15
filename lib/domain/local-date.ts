@@ -19,3 +19,15 @@
 export function currentUtcDate(): string {
   return new Date().toISOString().slice(0, 10);
 }
+
+/**
+ * Calendar-day arithmetic on `YYYY-MM-DD` strings, in UTC — the same clock
+ * `currentUtcDate()` files sessions under, so a window drawn with this function
+ * queries the edges it means to.
+ */
+export function shiftIsoDate(isoDate: string, deltaDays: number): string {
+  const [year, month, day] = isoDate.split('-').map(Number);
+  const shifted = new Date(Date.UTC(year ?? 0, (month ?? 1) - 1, day ?? 1));
+  shifted.setUTCDate(shifted.getUTCDate() + deltaDays);
+  return shifted.toISOString().slice(0, 10);
+}

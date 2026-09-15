@@ -4,9 +4,16 @@ import { requireUserContext } from '../../lib/auth/require-user';
 import { AppErrorException } from '../../lib/contracts/envelope';
 import { getDb } from '../../lib/db/client';
 import { currentUtcDate } from '../../lib/domain/local-date';
+import { formatWeight } from '../../lib/domain/units';
 import { ContentRepository, type SystemDayPlan } from '../../lib/repositories/content-repository';
 import { ProfileRepository } from '../../lib/repositories/profile-repository';
 import { WorkoutRepository, type DaySessionSnapshot } from '../../lib/repositories/workout-repository';
+import {
+  computeStreakDays,
+  describeTrainingDay,
+  describeTrainingWeek,
+  type TrainingDayBucket,
+} from '../../lib/views/dashboard-view';
 import { StartButton } from '../components/start-button';
 import type { BadgeProps } from '../components/ui/badge';
 import { Badge } from '../components/ui/badge';
@@ -77,10 +84,11 @@ export default async function DashboardPage() {
   const workoutRepository = new WorkoutRepository(getDb(), context.claims);
   const profileRepository = new ProfileRepository(getDb(), context.claims);
 
-  const [days, sessions, profile] = await Promise.all([
+  const [days, sessions, profile, trainingWeek] = await Promise.all([
     contentRepository.listSystemDayPlans(),
     workoutRepository.getSessionsOnDate(context.userId, date),
     profileRepository.getProfile(context.userId),
+    workoutRepository.getTrainingWeek(context.userId, date),
   ]);
 
   const byDay = new Map<string, DaySessionSnapshot>();
@@ -125,6 +133,13 @@ export default async function DashboardPage() {
           ))}
         </ul>
       )}
+
+      <TrainingWeek
+        days={trainingWeek.days}
+        trainingDates={trainingWeek.trainingDates}
+        unit={profile?.preferredUnit ?? 'kg'}
+        today={date}
+      />
 
       <p className="text-xs text-muted-foreground">
         Workouts are filed under the server&apos;s date. Your own timezone is honoured once
@@ -188,6 +203,106 @@ function volumeLine(day: SystemDayPlan, session?: DaySessionSnapshot): string {
   }`;
   if (!session) return plan;
   return `${session.setsCompleted} of ${session.setsTotal} sets logged · ${plan}`;
+}
+
+/**
+ * M4-19 (#108): the training week. Every number rendered here is a counted
+ * completed-session row from `WorkoutRepository.getTrainingWeek` — computed in kg,
+ * converted only at this display edge via `formatWeight` (ADR-0005). No schedule, no
+ * estimates: a week with no sessions says so, and sessions without load say that too
+ * (the importer's shape), rather than printing a zero that claims measurement.
+ */
+function TrainingWeek({
+  days,
+  trainingDates,
+  unit,
+  today,
+}: {
+  days: readonly TrainingDayBucket[];
+  trainingDates: readonly string[];
+  unit: 'kg' | 'lbs';
+  today: string;
+}) {
+  const week = describeTrainingWeek(days);
+  const streak = computeStreakDays(trainingDates, today);
+  return (
+    <section aria-labelledby="training-heading" data-testid="training-week">
+      <h2 id="training-heading" className="text-lg font-medium">
+        Training week
+      </h2>
+      {week.kind === 'empty' ? (
+        <p className="text-sm text-muted-foreground">
+          No training logged in the last 7 days. Your first logged session starts the
+          record — nothing here is estimated.
+        </p>
+      ) : (
+        <>
+          <p className="text-sm text-muted-foreground" data-testid="training-week-summary">
+            {weekSummaryLine(week, unit)}
+          </p>
+          <ul className="flex flex-col gap-1">
+            {days.map((day) => (
+              <TrainingDayRow key={day.localDate} day={day} unit={unit} />
+            ))}
+          </ul>
+        </>
+      )}
+      {trainingDates.length > 0 && (
+        <p className="text-sm text-muted-foreground" data-testid="training-streak">
+          {streak > 0 ? `${streak}-day streak` : 'No active streak.'}
+        </p>
+      )}
+    </section>
+  );
+}
+
+function weekSummaryLine(
+  week: Extract<ReturnType<typeof describeTrainingWeek>, { kind: 'loaded' | 'coverage' }>,
+  unit: 'kg' | 'lbs',
+): string {
+  const sessions = `${week.sessions} ${week.sessions === 1 ? 'session' : 'sessions'}`;
+  if (week.kind === 'coverage') return `${sessions} logged — no load recorded.`;
+  return `${sessions} · ${formatWeight(week.volumeKg, unit)} this week`;
+}
+
+function TrainingDayRow({
+  day,
+  unit,
+}: {
+  day: TrainingDayBucket;
+  unit: 'kg' | 'lbs';
+}) {
+  const view = describeTrainingDay(day);
+  const label = formatShortDay(day.localDate);
+  if (view.kind === 'rest') {
+    return (
+      <li className="text-sm text-muted-foreground">
+        {label} · Rest
+      </li>
+    );
+  }
+  const sessions = `${view.sessions} ${view.sessions === 1 ? 'session' : 'sessions'}`;
+  if (view.kind === 'coverage') {
+    return (
+      <li className="text-sm text-muted-foreground">
+        {label} · {sessions} · no load recorded
+      </li>
+    );
+  }
+  return (
+    <li className="text-sm text-muted-foreground">
+      {label} · {formatWeight(view.volumeKg, unit)} · {sessions}
+    </li>
+  );
+}
+
+function formatShortDay(isoDate: string): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  }).format(new Date(`${isoDate}T00:00:00Z`));
 }
 
 function EmptyState() {

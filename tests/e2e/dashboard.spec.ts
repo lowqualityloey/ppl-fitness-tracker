@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { authHeaders } from '../integration/api/fixtures';
+import { authHeaders, createTestSession } from '../integration/api/fixtures';
+import { openHistoryDb, seedSession } from './history-fixtures';
 import { signInFreshUser } from './auth';
 
 /**
@@ -179,6 +180,71 @@ test.describe('dashboard', () => {
       expect(results.violations.map((violation) => violation.id)).toEqual([]);
     } finally {
       await session.cleanup();
+    }
+  });
+
+  /**
+   * M4-19 (#108): a fresh week reads as no training, not as zeros.
+   *
+   * AC Scenario 2 at the screen level: the honest empty state is a sentence about the
+   * log, and a zero-shaped "0 kg this week" would be the legacy fiction in new clothes.
+   */
+  test('a fresh week reads as no training, not as zeros', async ({ page }) => {
+    const session = await signInFreshUser(page, 'e2e-week-empty');
+    try {
+      await page.goto('/');
+      const week = page.getByTestId('training-week');
+      await expect(week).toContainText('No training logged in the last 7 days.');
+      await expect(week).toContainText('nothing here is estimated');
+    } finally {
+      await session.cleanup();
+    }
+  });
+
+  /**
+   * M4-19 (#108): seeded rows render as repository-counted volume in the display unit.
+   *
+   * AC Scenario 1 at the screen level (the row-level proof lives in
+   * `tests/integration/repository/workout-repository.test.ts`): 2 × (60 kg × 5) seeded
+   * for today renders as the converted `1322.8 lb` under an lbs profile — computation
+   * in kg, conversion only at the edge (ADR-0005, AC Scenario 3).
+   */
+  test('seeded sessions render repository-counted volume in the display unit', async ({
+    page,
+  }) => {
+    const auth = await createTestSession('e2e-week-volume');
+    try {
+      const db = await openHistoryDb();
+      try {
+        const today = new Date().toISOString().slice(0, 10);
+        await seedSession(db, {
+          userId: auth.userId,
+          localDate: today,
+          status: 'completed',
+          sets: [
+            { weightKg: 60, reps: 5 },
+            { weightKg: 60, reps: 5 },
+          ],
+        });
+        await db.query(`UPDATE profiles SET preferred_unit = 'lbs' WHERE id = $1`, [
+          auth.userId,
+        ]);
+      } finally {
+        await db.end();
+      }
+
+      await page.goto('/');
+      const origin = new URL(page.url()).origin;
+      await page.context().addCookies(
+        auth.cookies.map((cookie) => ({ name: cookie.name, value: cookie.value, url: origin })),
+      );
+      await page.goto('/');
+
+      const week = page.getByTestId('training-week');
+      await expect(week).toContainText('1322.8 lb');
+      await expect(page.getByTestId('training-streak')).toContainText('1-day streak');
+    } finally {
+      await auth.cleanup();
     }
   });
 });

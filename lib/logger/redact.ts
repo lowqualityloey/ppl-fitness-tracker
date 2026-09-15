@@ -53,7 +53,7 @@ export const MAX_OBJECT_KEYS = 32;
 
 const JWT_SHAPE = /^[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}$/;
 const EMAIL_SHAPE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
-const SCHEME = /^[a-z][a-z0-9+.-]*:\/\//i;
+const URL_IN_TEXT = /\b[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]*/gi;
 const BEARER_PREFIX = /^(bearer|basic)\s+\S+/i;
 
 /** `refreshToken`, `refresh_token`, `Refresh-Token` and `refresh token` are one key. */
@@ -71,19 +71,42 @@ function truncate(value: string): string {
 }
 
 /**
+ * A URL is reduced to its scheme+host+path, wherever it sits in the text: the
+ * fragment goes (it carries GoTrue's `access_token` in the implicit flow) and the
+ * query is replaced wholesale, because this app's most credential-bearing query is
+ * the magic-link `?code=`. Punctuation that ended the sentence rather than the URL is
+ * handed back, so a scrubbed message stays readable.
+ */
+function scrubUrlMatch(match: string): string {
+  let url = match;
+  let tail = '';
+  while (url.length > 0 && /[.,;:!?)\]]/.test(url[url.length - 1]!)) {
+    tail = url[url.length - 1] + tail;
+    url = url.slice(0, -1);
+  }
+  const hashAt = url.indexOf('#');
+  if (hashAt !== -1) url = url.slice(0, hashAt);
+  const queryAt = url.indexOf('?');
+  if (queryAt !== -1) url = `${url.slice(0, queryAt)}?[redacted:query]`;
+  return url + tail;
+}
+
+/**
  * Scrub the shapes that are secrets regardless of the key that carried them.
- * Order matters: a URL is reduced to its origin+path *first*, so a token sitting
- * in a query string never reaches the email/JWT scanners as a live substring.
+ *
+ * "Regardless" includes *where in the string*: an exception message almost always
+ * names the URL that failed it inside a sentence, and the URL rule used to be
+ * anchored to the start of the value — so `verify https://…/verify?access_token=X
+ * failed` kept its token on the wire. M4-06 (#95) is the consumer that turned that
+ * into a third-party disclosure (Sentry receives exactly what this function approves),
+ * which is why the scan is global now. Order still matters: a URL loses its query
+ * *first*, so a credential inside it never reaches the email/JWT scanners as a live
+ * substring.
  */
 export function scrubString(value: string): string {
   let out = value;
 
-  if (SCHEME.test(out)) {
-    const hashAt = out.indexOf('#');
-    if (hashAt !== -1) out = out.slice(0, hashAt);
-    const queryAt = out.indexOf('?');
-    if (queryAt !== -1) out = `${out.slice(0, queryAt)}?[redacted:query]`;
-  }
+  out = out.replace(URL_IN_TEXT, scrubUrlMatch);
 
   if (BEARER_PREFIX.test(out) || JWT_SHAPE.test(out.trim())) return REDACTED_JWT;
   out = out.replace(EMAIL_SHAPE, REDACTED_EMAIL);
@@ -182,4 +205,22 @@ export function sanitize(value: unknown, depth = 0, seen: WeakSet<object> = new 
  */
 export function safeKey(key: string): string {
   return isDeniedKey(key) ? `${key}Redacted` : key;
+}
+
+/**
+ * The wire spelling of a field name: `email` → `email`, `emailRedacted` →
+ * `email_redacted`, `requestId` → `request_id`.
+ *
+ * Owned here rather than in `logger.ts` because it is a *rule about names*, not about
+ * lines, and M4-06 (#95)'s error transport has to spell the same fields the same way —
+ * a `requestId` tag beside a `request_id` log line is two spellings of one id, and the
+ * join that G-M4-2 promises is exactly what breaks. `logger.ts` defines the shape of a
+ * line and pulls in `node:async_hooks`; a browser-safe consumer cannot import it.
+ */
+export function wireKey(key: string): string {
+  return safeKey(key)
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, '_');
 }

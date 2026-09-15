@@ -108,6 +108,25 @@ describe('AC-2: nothing secret reaches the wire through the real log export', ()
     expect((wire(captured)['note'] as string)).toContain('[redacted:email]');
   });
 
+  // Found by M4-06 (#95), which is the first consumer to put an error *message* on a
+  // third party's wire: Sentry receives what `scrubString` approved. An exception
+  // text almost always names the URL that failed it *inside a sentence*, and the
+  // predicate's URL rule was anchored to the start of the value — so a GoTrue verify
+  // link pasted mid-message kept its `access_token`. The whole-value case below was
+  // always green; this one was red against `main` and is why the predicate now scans
+  // URLs wherever they sit.
+  it('strips a credential from a URL embedded in the middle of a sentence', () => {
+    const captured = capture();
+    log.error(
+      'verify https://proj.supabase.co/auth/v1/verify?access_token=SECRET-IN-SENTENCE failed',
+    );
+    const msg = wire(captured)['msg'] as string;
+    expect(msg).toContain('https://proj.supabase.co/auth/v1/verify');
+    expect(msg).toContain('?[redacted:query]');
+    expect(msg).not.toContain('SECRET-IN-SENTENCE');
+    expect(captured.lines[0]).not.toContain('SECRET-IN-SENTENCE');
+  });
+
   it('keeps a URL diagnosable but strips the credential its query carries', () => {
     const captured = capture();
     log.info('handing off', {

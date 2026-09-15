@@ -143,9 +143,23 @@
   merge-commit CI tells the honest story: the first run (`34973217307`) went **RED on the new e2e** —
   the raw-download assertion read the `appSuccess` wrapper as the archive (`archive.version` → undefined),
   fixed in `51951e7` by asserting through the envelope, and run `34975082132` came back **exit 0 —
-  e2e 76/76, unit 594/594, api 72/72**. Wave 2's remainder is **#111** alone; **#16** stays the only
-  owner-blocked card.
-- **Last Updated**: 2026-09-16 (**post-#158 checkpoint** — #110/M4-21 export merged as `b74b6aa`, its CI-first-run e2e RED and fix recorded, §1's "does not exist" list loses its analytics+export entries, milestone #4 open=17/closed=16. Earlier: **post-#157 checkpoint** — #108/M4-19 merged as `3ef55ab`, #113
+   e2e 76/76, unit 594/594, api 72/72**. Wave 2's remainder is **#111** alone; **#16** stays the only
+   owner-blocked card.
+- **Current Working Branch — 2026-09-16, post-#159 `pk:checkpoint` (supersedes the bullet above for
+  "where am I now")**: no product branch is active. `origin/main` is **`491fb1a`** — M4-22/#111, the
+  hand-written service-worker offline shell, merged 2026-09-15T23:22:44Z via PR **#159** (squash).
+  Local `main` fast-forwarded, branch pruned both ends (`git ls-remote --heads` → 0), tree clean.
+  **#111 is CLOSED by the merge** (plain `Closes #111`, first line). **Wave 2 is complete — measured:**
+  **Milestone #4 reads open=16 / closed=17** (`gh api …/milestones/4`, read this turn); `gh pr list
+  --state open` is empty. Gates re-run on merged `main` this turn: typecheck 0 · lint 0 · unit
+  **603/603** (63 files). CI's `test` job: **e2e 81/81 (7.1 m)** — the five new shell specs green in
+  the production build, and both time-boxed `sla.spec.ts` margins held on CI hardware even after two
+  local full-suite runs red them at 60 s+ contention (see §7 item 33). Also settled this session, and
+  it belongs to the whole board now: **local e2e is no longer `libnspr4.so`-blocked** — the box runs
+  the browser with `LD_LIBRARY_PATH=/tmp/pw-libs/extracted/usr/lib/x86_64-linux-gnu` and env sourced
+  from `.env.local` (playwright's script passes no env file); item 32's "CI is this box's e2e venue"
+  is history, kept only because it is dated.
+- **Last Updated**: 2026-09-16 (**post-#159 checkpoint** — #111/M4-22 offline shell merged as `491fb1a`, wave 2 complete (milestone #4 open=16/closed=17), §1's service-worker entry retired, local-e2e venue unblocked, the battery is at this box's capacity (sla contention documented). Earlier: **post-#158 checkpoint** — #110/M4-21 export merged as `b74b6aa`, its CI-first-run e2e RED and fix recorded, §1's "does not exist" list loses its analytics+export entries, milestone #4 open=17/closed=16. Earlier: **post-#157 checkpoint** — #108/M4-19 merged as `3ef55ab`, #113
   identified as already-merged planning PR, milestone #4 open=18/closed=15. Earlier: **post-#156 checkpoint** — #101/M4-12 merged as `a543188`, keyword
   closed the issue, local branch pruned, milestone #4 open=19/closed=14. Earlier: **post-#155 checkpoint** — #149/M4-25 merged as `5ac4c1c`, local branch pruned,
   milestone #4 open=20/closed=13. Earlier: **#149 / M4-25 implemented** — the Lighthouse gate runs on this box now, four
@@ -188,7 +202,7 @@ progress, settings with the legacy-import report, and the Playwright/axe/Lightho
 legacy-parity gates that defend all of it in CI — merged as PRs #69–#87, with the measured
 residuals listed in §5 rather than smoothed.
 
-**What does not exist yet, stated plainly (2026-09-12, corrected 2026-09-16 after #158 — this list's analytics and export entries are now false and the correction is the point of keeping the sentence dated)**: production email delivery (issue #16, deferred since M1);— and note what replaced the deleted words: the 50 rps harness was *never* a true absence here — it shipped as M4-01/#90 on 2026-09-12, and the entry's long-standing "(M4-12 #101)" attribution was doubly wrong (#101 was the ZWSP name gate; §8's post-#156 row owns that half); structured logging and one correlation id shipped as #94, the CSP baseline as #142, and Sentry's error sink on both bundles as #95, so "no telemetry" now means "no *tracing*", which is DEFERRED-m4-005 and not an absence; Realtime (deferred by owner decision — §5's poll-margin note says what that costs); a service worker, which means G-M3-1's "reopen with no network" is proven with the *API* dead rather than the document unfetchable (handoff §3.4 owns the difference); body-measurement import (#109, open). What does exist now: the full UI — dashboard, runner, history, progress, settings — with its measured claims in `docs/releases/2026-09-12-m3-exit-report-and-m4-handoff.md` §1, a training week counted from completed-session rows (#108), and the FMEA row's escape hatch — `GET /api/export/v1` ships the versioned archive (#110). The legacy vanilla-JS app still runs unchanged alongside the target stack (M4's decommission, guarded meanwhile by `tests/e2e/legacy-parity.spec.ts`), and `npm run build` still emits zero JavaScript — re-verified 2026-09-11, not inherited from the old note.
+**What does not exist yet, stated plainly (2026-09-12, corrected 2026-09-16 after #158 and again after #159 — the earlier pass retired the analytics and export entries, this pass retires the service-worker entry, and the correction is the point of keeping the sentence dated)**: production email delivery (issue #16, deferred since M1);— and note what replaced the deleted words: the 50 rps harness was *never* a true absence here — it shipped as M4-01/#90 on 2026-09-12, and the entry's long-standing "(M4-12 #101)" attribution was doubly wrong (#101 was the ZWSP name gate; §8's post-#156 row owns that half); structured logging and one correlation id shipped as #94, the CSP baseline as #142, and Sentry's error sink on both bundles as #95, so "no telemetry" now means "no *tracing*", which is DEFERRED-m4-005 and not an absence; and the service worker absence retired by #159 kept its own honesty trail — DECISION-m4-003's hand-written `public/sw.js` precaches, stores navigation documents verbatim, and never touches an `/api` exchange, so G-M3-1's "reopen with no network" is finally proven against the document being unfetchable (`context.setOffline(true)` reload, five e2e specs, controls watched red first) rather than against the *API* dead as handoff §3.4's difference used to require. Realtime (deferred by owner decision — §5's poll-margin note says what that costs); body-measurement import (#109, open). What does exist now: the full UI — dashboard, runner, history, progress, settings — with its measured claims in `docs/releases/2026-09-12-m3-exit-report-and-m4-handoff.md` §1, a training week counted from completed-session rows (#108), the FMEA row's escape hatch — `GET /api/export/v1` ships the versioned archive (#110) — and a true offline shell whose cached documents are bounded by sign-out purge and keep-previous eviction (#111). The legacy vanilla-JS app still runs unchanged alongside the target stack (M4's decommission, guarded meanwhile by `tests/e2e/legacy-parity.spec.ts`), and `npm run build` still emits zero JavaScript — re-verified 2026-09-11, not inherited from the old note.
 
 ---
 
@@ -1377,6 +1391,8 @@ Carried forward, still open:
 
 | 2026-09-16 | Agent (opencode) | `pk:checkpoint` — post-#158 sync: M4-21 export merged, §1's export entry retired, first-run CI red earned | PR **#158** merged `feat/m4-21-json-export` into `main` as `b74b6aa` (2026-09-15T13:42:04Z, when the plain `Closes #110` keyword closed the issue — API-read `closedAt`). Local `main` fast-forwarded, local branch `-D`, remote ref already gone (`git ls-remote --heads` → 0), tree clean. **The first merge-time run (`34973217307`) failed the new e2e**: the raw-bytes download assertion read the `appSuccess` wrapper as the archive (`archive.version` → undefined) — the product was right, the test was wrong, fixed in `51951e7` to assert through the envelope; run `34975082132` **exit 0 — e2e 76/76, unit 594/594, api 72/72**, the two export specs among them (this box's `libnspr4.so` block means CI is the e2e venue, per #96's recorded precedent). Owner calls + spec-skeleton amendments (`preferredUnit`, top-level `personalRecords`/`imports`, `syncState` excluded, `measurements` reserved) and the deliberately-missing-table RED control are on `docs/tasks/m4/M4-21-json-export.md`. §1's "does not exist" paragraph lost its analytics + export entries and its stale 50-rps line — the harness shipped as #90 on 09-12 and the "(#101)" attribution was wrong twice over. **Milestone #4 reads open=17 / closed=16** (API, this turn); no open PR. Wave 2's remainder: **#111**. §1 bullet + §7 item 32 carry this sync. #16 still the only owner-blocked card. |
 
+| 2026-09-16 | Agent (opencode) | `pk:checkpoint` — post-#159 sync: M4-22 offline shell merged, **wave 2 complete**, and this box can run e2e again | PR **#159** merged `feat/m4-22-offline-shell` into `main` as `491fb1a` (2026-09-15T23:22:44Z, plain `Closes #111` closed the issue). Local `main` fast-forwarded, branch pruned both ends, tree clean. DECISION-m4-003 + ASSUMPTION-m4-004 shipped as written: hand-written `public/sw.js` (precache+update with build-id stamping, network-first verbatim documents, `/api`+`/auth` pass-through that never calls `respondWith` — `sla.spec.ts` unmodified), `skipWaiting: false`/never-claim, PD-2's sign-out purge + keep-previous eviction, PD-7's honest offline-vs-refusal copy, CSP zero-edit (#142 prepaid). **Three harness truths, all pinned in the spec header**: `next start` snapshots `public/` at boot (no mid-test second deploy — the update chip is reviewed-not-executed, named residual, never-steal pinned statically instead); `page.waitForFunction` with an **async** predicate resolves instantly on the truthy Promise — three waits were silently inert until a purge mutant caught it, all such waits are now Node-side `expect.poll` (no other victims estate-wide); and a stale pre-`public/` server on :3001 manufactures false 404s — kill by PID. Controls culture held: six mutants watched red (3 unit-source, 3 e2e) before any green was trusted. **Venue unblocked and it changes the board's prose**: local e2e runs now — `LD_LIBRARY_PATH=/tmp/pw-libs/extracted/usr/lib/x86_64-linux-gnu` + `.env.local` sourced (the npm script passes no env file); item 32's "CI is this box's e2e venue" is dated history. **Capacity, measured not assumed**: two full runs on this 4-core box red only `sla.spec.ts`'s two time-boxed specs (G-M3-3 p95 6113/6152 vs 5000; G-M3-4 drain once) with the shell green throughout and sla green isolated — the #100 ledger class, budgets untouched — and **CI agreed: e2e 81/81 in 7.1 m**, both margins holding on runner hardware. Re-measured on merged `main` this turn: typecheck 0 · lint 0 · unit 603/603 (63 files). **Milestone #4 reads open=16 / closed=17**; no open PR; wave 2 (#108/#110/#111 + merged-planning-#113) is **complete**. §1 bullet + §7 item 33 carry this sync. #16 still the only owner-blocked card. |
+
 23. **M4 STATE OF PLAY — 2026-09-12 checkpoint. Read this before planning anything.**
     - **SESSION STATUS after `pk:checkpoint` 2026-09-13** — four cards have landed since the line above was
       written, all through their own PRs: **#105** (PR #116), **#80** (PR #119), **#100** (PR #120),
@@ -1641,3 +1657,25 @@ Carried forward, still open:
       trusted. Local e2e remains blocked by `libnspr4.so` (the #96 note); CI is this box's e2e venue.
     - **Wave-2 remainder, measured:** #110's merge leaves **#111** (M4-22 service-worker shell, p1)
       as the only implementable card from the wave-2 cluster. **#16** stays the only owner-blocked card.
+
+33. **M4 STATE OF PLAY — 2026-09-16, post-#159 checkpoint. Wave 2 is complete.**
+    - **Shipped:** PR **#159** → `491fb1a` (2026-09-15T23:22:44Z) — the offline shell: hand-written
+      `public/sw.js` + build-time manifest stamping + registration chip + sign-out purge + honest
+      offline copy, with `tests/e2e/offline-shell.spec.ts` (5 specs, every control watched red) and
+      the source-pin unit suite. **#111 auto-closed on merge** (plain `Closes #111`). **Milestone #4
+      reads open=16 / closed=17** (API, this turn); no open PR. The PD-4 venue deviation (worker
+      runtime behavior proven in e2e against the shipped bytes, not a TS double) and the executed-gap
+      on the update chip (`next start` snapshots `public/` — named residual) are on
+      `docs/tasks/m4/M4-22-offline-shell.md`; the chip is wired and reviewed, so the first owner who
+      deploys twice gets the real-world proof CI's boot-snapshot rule can't simulate.
+    - **What the board gains:** local e2e works (see §8's post-#159 row for the recipe) — the
+      #96-era "CI is this box's e2e venue" sentences everywhere should be read as dated. What the
+      board pays: the 81-spec battery is at this box's capacity — expect `sla.spec.ts`'s two
+      time-boxed specs to flake under full-suite load locally (#100 ledger class, budgets untouched,
+      CI green 81/81 is the arbiter); isolate them when iterating.
+    - **Next implementable, measured from the board (16 open, API this turn):** wave 3's head is
+      **#109** (body measurements — ratification is already in spec §8.1: build properly, no apology
+      field; it hard-precedes #103 because legacy `localStorage` keys are the one data-loss hazard,
+      and #109 is its replacement). Also live from wave 2's epistemic tail: **#112**'s ADR-0007
+      write-up (ratified: keep the 4 s poll) and **#91**'s concurrent re-measure (spine #94/#95/#107
+      now exists to diagnose it). **#16** stays the only owner-blocked card.

@@ -34,7 +34,7 @@
  */
 
 import { currentCorrelation, type RequestCorrelation } from './context';
-import { isDeniedKey, REDACTED_BY_KEY, sanitize, safeKey, scrubString, type SafeValue } from './redact';
+import { isDeniedKey, REDACTED_BY_KEY, sanitize, scrubString, wireKey, type SafeValue } from './redact';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
@@ -110,14 +110,9 @@ export function levelFromEnv(value: string | undefined): LogLevel {
     : DEFAULT_LEVEL;
 }
 
-/** `email` → `email`; `emailRedacted` → `email_redacted`; `requestId` → `request_id`. */
-export function wireKey(key: string): string {
-  return safeKey(key)
-    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
-    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
-    .toLowerCase()
-    .replace(/[^a-z0-9_]/g, '_');
-}
+/** Re-exported from `redact.ts` (M4-06 moved the name rule next to `safeKey`); the
+ * logger's public surface is unchanged. */
+export { wireKey } from './redact';
 
 function correlationFields(
   correlation: RequestCorrelation,

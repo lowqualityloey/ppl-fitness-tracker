@@ -94,7 +94,9 @@ describe('no e2e spec authors a sync response body beside the builder', () => {
   it('finds the specs it claims to have scanned', () => {
     // Counted, so the loop below cannot pass by having nothing to check.
     // 13 → 14: tests/e2e/csp.spec.ts (M4-24, #142) joined the battery.
-    expect(readdirSync(E2E_DIR).filter((name) => name.endsWith('.spec.ts'))).toHaveLength(14);
+  // 14 → 15: tests/e2e/error-sink.spec.ts (M4-06, #95) — it reads the built routes
+  // manifest, which is the only place the tunnel/CSP agreement is observable at all.
+    expect(readdirSync(E2E_DIR).filter((name) => name.endsWith('.spec.ts'))).toHaveLength(15);
   });
 
   it('never finds a hand-written sync body', () => {

@@ -9,21 +9,19 @@
  * The token set is exactly the card's table (docs/tasks/m4/M4-24-csp-baseline.md §Scope):
  * RFC §5's server-sent, nonce-based policy — no `'unsafe-inline'` in any mode, ever — plus
  * the two dev concessions Next documents (`'unsafe-eval'` for React's dev stack, gated on
- * `NODE_ENV`) and nothing else. `connect-src` pre-opens both documented Sentry ingest shapes
- * per spec §9.3(1): #95 proves their width and narrows to the configured DSN origin in its
- * own PR; widening any *other* directive to make Sentry work violates this card.
+ * `NODE_ENV`) and nothing else. `connect-src` opened with both documented Sentry ingest
+ * shapes per spec §9.3(1) — *"must already carry Sentry ingest"*, so the policy could not
+ * be retrofitted under #95's deadline — and M4-06 (#95) exercised this card's **rule 3**:
+ * Sentry's browser SDK sends through the same-origin `tunnelRoute` `next.config.ts`
+ * installs, so both wildcards came out and `connect-src` is `'self'` again. Nothing in
+ * this policy may widen to make a third party work; #95 proved the tighter shape instead
+ * of loosening the old one.
  *
  * Deliberately absent, each with a card-named reason: report-uri/report-to (no sink exists;
  * the e2e violation battery gives the same signal against the enforced header) · HSTS
  * (unverifiable on a plain-HTTP harness) · COOP/COEP/CORP (no open card owns isolation) ·
  * frame-src (the YouTube allowance lived only in the estate #103 deletes).
  */
-
-/** Both documented Sentry ingest host shapes; #95 narrows to one in its own PR. */
-export const SENTRY_INGEST_SOURCES = [
-  'https://*.sentry.io',
-  'https://*.ingest.sentry.io',
-] as const;
 
 export interface CspOptions {
   /** Per-request nonce; this module never generates one and never hardcodes one. */
@@ -41,7 +39,10 @@ export function buildCsp({ nonce, dev }: CspOptions): string {
     // Strict style is affordable because zero style={{…}} and zero <style> were measured
     // in src/. A later card that needs one edits this line with a test, not unsafe-inline.
     `style-src 'self' 'nonce-${nonce}'`,
-    `connect-src 'self' ${SENTRY_INGEST_SOURCES.join(' ')}`,
+    // `'self'` only, because Sentry's browser ingest is same-origin: `tunnelRoute` in
+    // `next.config.ts` adds the rewrite, and the sweep in `tests/e2e/csp.spec.ts` is what
+    // notices if a future SDK upgrade starts posting to the ingest host directly.
+    `connect-src 'self'`,
     `img-src 'self'`,
     `font-src 'self'`,
     `media-src 'self'`,

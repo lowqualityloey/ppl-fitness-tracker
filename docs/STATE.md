@@ -1998,3 +1998,18 @@ Carried forward, still open:
       #16 the owner-blocked one; **#164 sits outside the milestone awaiting
       `pk:tasks`/owner triage** — it is the only card the #91 evidence justifies, and
       promoting it is not this checkpoint's to decide.
+
+40. **#164 decomposed — 2026-09-16, `pk:tasks` ran and produced a spike-then-fix pair, not a
+    refactor on faith** (direct docs commit; the two cards are the record).
+    - **M4-26** (research): price the apply path — per-phase ms costs for a 60-mutation apply under
+      solo vs the committed contended condition, scratch code never committed, one falsifiable
+      workstream recommendation with a predicted post-fix p95. The known clue it must test rather
+      assume: the 6 500 ms injection landed ~1:1 client-side, so the pipe is honest and the
+      solo→contended delta lives in lock/pool/fan-out/commit, which the table separates.
+    - **M4-27** (implementation): bring the contended drain inside 5 s using the ratified pick —
+      AC is the #91 instrument itself (contended p95 < 5 000 HOLDS, applied=offered, solo band and
+      bystanders move < ~20 %, 81 e2e + api green with no weakened specs, budgets frozen, solo
+      control still discriminating). Hard gate: nothing starts before the owner ratifies the
+      workstream on #164; oversized picks go back through `pk:tasks`, not through scope creep.
+    - **#164 stays the parent and open**; M4-27's PR carries the `Closes #164`. Board after filing:
+      quote only from the milestone API (`gh api repos/lowqualityloey/ppl-fitness-tracker/milestones/4`).

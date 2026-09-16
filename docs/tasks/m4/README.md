@@ -165,6 +165,14 @@ from an owner ruling during #142's implementation (*file a card, keep that PR cl
 nothing, and it is the board's only card about **where** a gate can be run rather than what it proves.
 **New issues start at #150.**
 
+**#164 was filed 2026-09-16 from #91's measured verdict** — the breach itself, deliberately *outside*
+milestone #4, because promoting a breach to cards is `pk:tasks`' decision and #91's checkpoint refused
+to make it. **It was decomposed the same day into M4-26/M4-27**: spike-then-fix, where M4-27 may not
+start until the owner ratifies M4-26's workstream pick in a one-line comment on #164, and M4-27's
+verification is the instruments #91 already merged. These two cards landed as a direct docs-only
+commit on `main` — a recorded deviation from the #150 PR precedent (no runtime code in the tree; the
+CI runner is not the arbiter of markdown). **New issues start at #168.**
+
 > Re-typed above from the milestone API (2026-09-15): the title is `M4: Hardening, Telemetry &
 > Decommission` — a **comma**, not the colon this file's `--milestone` string carried, which would make
 > a copy-paste of that block fail on a title that no longer exists anywhere.

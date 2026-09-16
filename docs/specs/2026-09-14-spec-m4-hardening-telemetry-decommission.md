@@ -428,7 +428,7 @@ This branch selection, the §0 task-record links, and each wave's consumed recor
 | #93 | Accept process-local limiter + written ADR | PR #135; acceptance doc in `PROMPTKIT.md` §2 |
 | #96 | Surface outbox depth **and age** | PR #137 |
 | #105 | Drop `SyncResponseData.state`; honest e2e mock | PR #116 |
-| #112 | Keep 4 s poll; decide by ADR-0007 | ADR pending (wave 2) |
+| #112 | Keep 4 s poll; decide by ADR-0007 | **Decided** — `docs/adrs/0007-realtime-declined-poll-floor-accepted.md` (2026-09-16) |
 | #109 | Build body measurements **properly** (no apology field) | This spec's §4.1 + m4-001 are its shape |
 | #103 | Follow #109, then delete legacy + flip parity scan | §6 wave-4 gate |
 | #107 | No timer-persistence work until #94/#95 telemetry evidence exists | §6 wave 3 block |

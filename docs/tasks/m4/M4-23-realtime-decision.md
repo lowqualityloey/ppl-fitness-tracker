@@ -76,3 +76,8 @@ npx playwright test sla.spec.ts -g "G-M3-3"   # margin re-measured under the cho
 - **Gates for this change** (docs + one e2e *comment* only): typecheck · lint · unit claimed from
   the runs recorded in the PR conversation — no suite input changed except a comment in
   `sla.spec.ts`, and CI's full battery is the arbiter of that claim like every row above.
+
+**Post-merge**: PR **#163** merged as `36f62a3` (squash, 2026-09-16T05:05:49Z; plain first-line
+`Closes #112`, issue closedAt same second — API-read). **CI `test` PASS 16m43s + Vercel PASS** —
+the battery rode the comment-only head, so the change-nothing claim is runner-proven. Card closed
+decision-only, per its own verification path. Milestone #4: open=12 / closed=21.

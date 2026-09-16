@@ -2011,5 +2011,6 @@ Carried forward, still open:
       bystanders move < ~20 %, 81 e2e + api green with no weakened specs, budgets frozen, solo
       control still discriminating). Hard gate: nothing starts before the owner ratifies the
       workstream on #164; oversized picks go back through `pk:tasks`, not through scope creep.
-    - **#164 stays the parent and open**; M4-27's PR carries the `Closes #164`. Board after filing:
-      quote only from the milestone API (`gh api repos/lowqualityloey/ppl-fitness-tracker/milestones/4`).
+    - **#164 stays the parent and open**; M4-27's PR carries the `Closes #164`. Filed as **#166/#167**
+      (milestone #4, both OPEN, API-verified this turn); board now **open=13 / closed=22** — measured,
+      not computed; new issues start at #168.

@@ -39,8 +39,11 @@ const user: ArchiveUserRow = {
   preferredUnit: 'lbs',
 };
 
-function archive(sessions: ArchiveSessionRow[]): ExportArchiveRows {
-  return { user, sessions, personalRecords: [], imports: [] };
+function archive(
+  sessions: ArchiveSessionRow[],
+  measurements: ExportArchiveRows['measurements'] = [],
+): ExportArchiveRows {
+  return { user, sessions, personalRecords: [], imports: [], measurements };
 }
 
 const at = new Date('2026-09-16T09:00:00.000Z');
@@ -85,7 +88,18 @@ describe('buildExportV1', () => {
     expect(payload.sessions[0]!.sets[0]!.weightKg).toBe(100);
   });
 
-  it('reserves measurements: the key exists and v1 fills it empty', () => {
+  it('fills the reserved slot from rows, numeric-string to number (OC-2)', () => {
+    const payload = buildExportV1(
+      archive([], [{ measuredOn: '2026-09-16', kind: 'body_weight', value: '82.50' }]),
+      at,
+    );
+    expect(payload.measurements).toEqual([
+      { measuredOn: '2026-09-16', kind: 'body_weight', value: 82.5 },
+    ]);
+    expect(ExportV1Schema.safeParse(payload).success).toBe(true);
+  });
+
+  it('an athlete with no measurements still gets the key, empty not absent', () => {
     const payload = buildExportV1(archive([]), at);
     expect(payload.measurements).toEqual([]);
   });

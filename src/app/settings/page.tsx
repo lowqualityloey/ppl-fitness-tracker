@@ -7,6 +7,7 @@ import { getDb } from '../../../lib/db/client';
 import { ProfileRepository } from '../../../lib/repositories/profile-repository';
 import { ExportButton } from './export-button';
 import { ImportPanel } from './import-panel';
+import { MeasurementsPanel } from './measurements-panel';
 import { SignOutButton } from './sign-out-button';
 import { UnitChoices } from './unit-choices';
 
@@ -62,16 +63,22 @@ export default async function SettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Not imported</CardTitle>
-          <CardDescription>Body measurements</CardDescription>
+          <CardTitle>Body measurements</CardTitle>
+          <CardDescription>
+            Weight, body fat, and girths are stored on the server — one row per
+            day and kind, so correcting a measurement overwrites it instead of
+            stacking a duplicate.
+          </CardDescription>
         </CardHeader>
-        <CardContent>
-          <p className="text-sm">
-            The legacy dashboard also kept body measurements (weight, height) under{' '}
-            <code>userStats</code>. Nothing in this app models them yet, so importing does not read
-            that slot and it stays where it is. This is stated rather than left to be discovered — a
-            log that silently covers two of three kinds of old data is worse than one that says which
-            two it covers.
+        <CardContent className="flex flex-col gap-4">
+          <MeasurementsPanel unit={unit} />
+          <p className="text-xs text-muted-foreground">
+            The legacy dashboard had no measurements to import: the storage key
+            its summary screen read was never written by any code in that app —
+            those figures were invented at render time (whole-estate audit,
+            2026-09-16). What the legacy keys really held arrived through the
+            importer above, and the guest-mode flag is device-local state with
+            nothing to archive.
           </p>
         </CardContent>
       </Card>

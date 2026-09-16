@@ -66,6 +66,7 @@ describe('M1-03: Schema Constraints & Verification', () => {
       
       const tableNames = result.rows.map(row => row.table_name);
       const expectedTables = [
+        'body_measurements',
         'exercises',
         'import_batches', 
         'personal_records',

@@ -37,6 +37,7 @@ const GRAPH: GraphEntry[] = [
   { route: 'src/app/api/progress/[exerciseSlug]/route.ts', contracts: ['progress', 'envelope'], methods: ['GET'] },
   { route: 'src/app/api/import/legacy/route.ts', contracts: ['import', 'envelope'], methods: ['POST'] },
   { route: 'src/app/api/export/v1/route.ts', contracts: ['export', 'envelope'], methods: ['GET'] },
+  { route: 'src/app/api/measurements/route.ts', contracts: ['measurements', 'envelope'], methods: ['GET', 'POST'] },
 ];
 
 function readRoute(path: string): string {

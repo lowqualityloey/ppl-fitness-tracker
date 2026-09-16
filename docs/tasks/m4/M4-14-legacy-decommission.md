@@ -52,3 +52,6 @@ M3's boundary sentence ("run *beside* all of it") retires; the flipped guard is 
 
 ## Dependencies
 - Blocks: M4-15. Coordinate ordering with the owner after the telemetry cards (M4-05/06) so the removal has no unobserved window.
+
+## Implementation record (PR #161, branch `feat/m4-14-legacy-decommission`, merged as `6660172` 2026-09-16)
+Four in-order commits: inversion-first spec flip watched **RED** against the living estate (2 failed/1 passed) → 21-file deletion (−14 914 lines) watched **GREEN**, plus the AC-1 resurrection control — a *tracked* restore went red again, an *untracked* one passed, pinning the guard's index-only boundary into the spec's comments → prose pass (README, PROMPTKIT, STATE, code citations) → `vercel.json` (the preview deploy's default `npm run build` was vite on every prior branch; this deletion made the lie unbuildable, so the Next command is now pinned in-repo). AC-1..4 all evidenced; stranding decision + accepted residual recorded pre-deletion in STATE §7 item 35, per the card's step-1 order. Gates on `3f0be8c`: census 0 · lint/typecheck 0 · unit 619/619 · api 81/81 · mutation green · e2e battery 81/81 · CI `test` 15m56s + Vercel pass. Hands #104 its exact inputs: three fail-at-startup scripts, the `vite` devDependency, and the `next:build` pin it must keep or amend in-commit.

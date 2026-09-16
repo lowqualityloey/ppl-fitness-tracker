@@ -190,3 +190,39 @@ milliseconds are machine properties), and the shape transferred fine: the breach
 distribution-shaped, not machine-snowflake-shaped. A quieter-but-still-contended box
 would shift the magnitudes, not the direction — the margin is 3 s solo and gone at 2
 batch clients.
+
+## M4-27 slice A (#167): paired pre/post legs, same day, same box
+
+Venue law honored (#166): paired same-day legs on one box, cross-day absolutes never
+compared. Pre = `main` at `1da1e22` (BUILD_ID `kf2_OzELLLOpfp5aSrQe3`), post = branch
+`perf/m4-27-slice-a` at `f181221` (BUILD_ID `yM10dNcyG-ZekZ_7aKfsH`); one production
+build each, `next start` on :3001, `.env.local` sourced, the **unmodified committed
+driver** run directly per the card's verification block (`git diff main -- scripts/`
+empty — only the AC-mandated integration test was added under `tests/`).
+
+Leg-start load: pre contended `load1min=2.71` → leg stamp 17.58; post contended `3.67`
+→ 17.85. The solo legs ran after their contended sibling, so both are tail-hot
+(pre 4.14, post 7.36) — disclosed, not smoothed.
+
+| Leg (n = batches) | p50 | p95 | max | applied/offered |
+| :-- | :-- | :-- | :-- | :-- |
+| PRE contended 2×batch60 + 8×bg (62) | 5 951.4 ms | 10 538.4 ms | 13 177.0 ms | 3 720/3 720, rejected=0 |
+| POST contended 2×batch60 + 8×bg (82) | 4 702.5 ms (**−21.0 %**) | 6 337.9 ms (**−39.9 %**) | 7 276.6 ms (−44.8 %) | 4 920/4 920, rejected=0 |
+| PRE solo 1×batch60 (100) | 1 965.8 ms | 2 476.7 ms | 2 708.5 ms | 6 000/6 000, rejected=0 |
+| POST solo 1×batch60 (126) | 1 282.4 ms (**−34.8 %**) | 2 015.5 ms (**−18.6 %**) | 3 387.6 ms | 7 560/7 560, rejected=0 |
+
+Bystander single-mutation syncs under the contended legs: p50 990.2 / p95 1 467.8 pre vs
+1067.4 / 1481.8 post — flat inside each other's noise; the slice took latency out of the
+batch class, not the queue.
+
+Reading the band honestly: the card predicted 25–40 % and the contended **p95 lands at
+−39.9 %, the top of the band**, but the spread across the four statistics is real —
+contended p50 −21.0 % and solo p95 −18.6 % sit below it. Throughput tells the rest of the
+story the closed-loop percentiles compress: the same 200 s carried 82 vs 62 contended
+batches (+32 %) and 126 vs 100 solo (+26 %) at identical offered cadence, i.e. each
+60-mutation apply got ~a third cheaper end to end. All legs applied=offered, zero rejects;
+solo **HOLDS** the 5 s read-only budget copy before and after, contended **MISSES before
+and after** (6 337.9 > 5 000) — exactly the card's claim that slice A moves the wall by the
+priced share and does not clear the budget; the tail/reserve/version groups in M4-28 (#168)
+carry that. The post-fix verdict sentence for #164 belongs to M4-28, not here.
+

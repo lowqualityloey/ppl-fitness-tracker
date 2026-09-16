@@ -39,3 +39,45 @@ npm run test:api:preflight && npm test && npm run test:api && npx playwright tes
 
 ## Dependencies
 - Blocked by: M4-14.
+
+## Record — implemented 2026-09-16 (branch `feat/m4-15-retire-legacy-build`; written pre-merge, CI is the arbiter)
+
+**Shape decision — rewire, not drop.** STATE §7 item 36 summarized this card as "drop
+`dev`/`build`/`preview`", but the card's own AC-1 is Given **the rewired scripts** … Then `npm run start`
+serves the app — unsatisfiable if the names merely vanish. The card is the authority; item 36's
+concern (nothing vite-reachable survives, and the deploy pin never points at a dead name) is met
+a different way: the legacy scripts were **replaced** and the transitional `next:*` aliases — which
+existed only to dodge the legacy names — were **retired**, so `dev`/`build`/`start` are the single
+canonical set and `preview` is gone (vite-preview's job belongs to `start`). `vercel.json`'s
+`buildCommand` flipped to `npm run build` **in the same commit** as the rename, per the pin #103
+handed over; no commit in this branch's history has Vercel pointing at a name that doesn't resolve.
+
+**Port decision (AC-3), recorded as the scope demands: stay on 3001.** No port change was made, so
+`playwright.config.ts`, the CI env, `supabase/config.toml`, and `.env.example` keep their one truth;
+3000 stays vacant rather than becoming a second. `supabase/config.toml`'s stale "legacy Vite app
+remains on 3000" comment was corrected in passing.
+
+**Build is the whole chain**: `build` = `next build && tsx scripts/build-sw-manifest.ts` — what
+#111 chained into `next:build` (its design §"one line") moved up with the name, so the sw
+BUILD_VERSION stamp is present wherever "the real build" runs, including the e2e webServer.
+
+**AC evidence:**
+- *AC-1, build builds*: from `npm ci` on this branch — `npm run build` printed the 19-route `ƒ`
+  table and `[sw-manifest] version dd59166778a3: 21 precache URLs`; `npm run start` served :3001
+  (`curl -sf` exit 0, `/` → 307 to sign-in as expected unauthenticated). The command table in
+  PROMPTKIT §3 was rewritten to match this branch's `package.json`, verified by re-grep (zero live
+  `next:*`/vite references outside dated history).
+- *AC-2, footgun dead not sleeping*: new unit guard `tests/unit/infra/legacy-build-scripts.test.ts`
+  (CI-executed, same package.json-scan shape as ADR-0006's drizzle-kit gate; `\bvite\b` keeps
+  `vitest` legal by construction) — **watched RED first**: 3 failed / 1 passed on the pre-rewire
+  scripts, 4/4 green after. `npm ls vite`: vite@7.3.6 exists **only** as vitest's own dependency,
+  which is the "unaffected and says so" leg; `git ls-files dist vite.config.js` → 0; `dist/`
+  deleted and removed from `.gitignore`.
+- *AC-3, port recorded*: no change, so nothing to repoint; decision above, and the e2e battery ran
+  green against the unchanged 3001 truth.
+
+**Gates on this head (measured, this pass):** typecheck 0 · lint 0 (`--max-warnings=0`) ·
+`npm test` **65 files / 623** · `test:api` **13 files / 81** · full e2e battery **81/81 in 4.2 m**,
+booted through the renamed webServer command (`npm run build && npm run start`) — the battery is
+itself AC-1 evidence. `public/sw.js` BUILD_VERSION re-stamps from local builds were discarded before
+staging (harness discipline, #160/#161 convention).

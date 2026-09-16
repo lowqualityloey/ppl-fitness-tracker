@@ -28,7 +28,10 @@
 >
 > - The *target* stack's **server side and its UI are both merged to `main`**: schema + migrations `0000`–`0007` (`0007_auth_user_cascade.sql`, the auth→profiles cascade FK, merged with #89), RLS on every table, magic-link auth, Zod contracts (including the session-state graph, as of #73), the sessions/profile/prefill/exercises/progress/sync/import APIs, `SessionEngine`, `ProgressionEngine`, and transactional conflict-aware sync (M1 complete bar deferred #16; M2-00 → M2-06 merged as PRs #43–#47, #51, #53; **M3-00 → M3-10 merged as PRs #69–#87 — the milestone is complete, open=0 / closed=19**).
 > - The target stack is now a **working app**: `/` (dashboard), `/sign-in`, `/session/[id]` (the runner), `/history` + a one-session report + per-exercise progress, and `/settings` with the legacy-import dialog, the body-measurements panel (#109), and the versioned JSON export (#110). Analytics (#108) and the offline shell's service worker (#111) shipped too. What it still is not: **deployable**. Production email delivery (#16), the 50 rps load test (currently unmet on this 4-core hardware — #90 best 43.6 rps, verdict `INCONCLUSIVE`; #92 re-documents the `/api/sync` SLA to the measured ~203–413 ms p95 band with an enforced 800 ms ceiling), and a production deployment do not exist — M4's remaining list, with its measured starting facts in `docs/releases/2026-09-12-m3-exit-report-and-m4-handoff.md`.
-> - The **legacy vanilla-JS app was deleted by #103**: root `index.html`, `ppl-workout-dashboard/`, the three day folders (with their two fictional READMEs), `SECURITY_IMPROVEMENTS.md`, and `vite.config.js` are gone from the tree. Nothing strands: the importer never read a field out of `userStats` because no code ever wrote it (F-1 sweep, `docs/design/2026-09-16-m4-20-body-measurements.md` §2), and the measurements model that would have received it shipped as #109. `tests/e2e/legacy-parity.spec.ts` **survived the deletion inverted** — it now fails when the estate *reappears*. The `npm run dev`/`build`/`preview` scripts in `package.json` outlived their inputs; #104/M4-15 retires them.
+> - The **legacy vanilla-JS app was deleted by #103**: root `index.html`, `ppl-workout-dashboard/`, the three day folders (with their two fictional READMEs), `SECURITY_IMPROVEMENTS.md`, and `vite.config.js` are gone from the tree. Nothing strands: the importer never read a field out of `userStats` because no code ever wrote it (F-1 sweep, `docs/design/2026-09-16-m4-20-body-measurements.md` §2), and the measurements model that would have received it shipped as #109. `tests/e2e/legacy-parity.spec.ts` **survived the deletion inverted** — it now fails when the estate *reappears*. The `npm run dev`/`build`/`preview` scripts outlived their inputs until **#104 (M4-15)**
+retired them and rewired the bare names onto the real Next commands — `preview` is gone, and
+`tests/unit/infra/legacy-build-scripts.test.ts` now fails CI on any `vite` command or direct
+`vite` dependency in `package.json`.
 >
 > Do not describe unbuilt target-stack components as if they exist, and do not describe the merged backend **or the merged M3 UI** as if either were still a plan. See `docs/STATE.md` for the live position.
 
@@ -52,7 +55,7 @@
 - Four independent static pages: `index.html` (dashboard) + `push-day-workout/`, `pull-day-workout/`, `legs-day-workout/`
 - Persistence: `localStorage`, three divergent keys (`pushWorkoutProgress`, `pullDayProgress`, `legsWorkoutProgress`)
 - No tests, no backend, no auth
-- **Was known broken**: `npm run build` exited 0 but emitted **zero JavaScript** — all four `<script>` tags were classic scripts, so Vite neither transformed nor copied them. The rule it taught survives the deletion: *a successful build exit code is not evidence of a working build.* `dist/` and every source file are gone; see `tests/e2e/legacy-parity.spec.ts` (inverted) for the live guard.
+- **Was known broken**: `npm run build` exited 0 but emitted **zero JavaScript** — all four `<script>` tags were classic scripts, so Vite neither transformed nor copied them. The rule it taught survives the deletion: *a successful build exit code is not evidence of a working build.* `dist/` and every source file are gone; see `tests/e2e/legacy-parity.spec.ts` (inverted) for the live guard. The name itself was reclaimed by **#104 (M4-15)**: since 2026-09-16 `npm run build` is the real Next build, and `tests/unit/infra/legacy-build-scripts.test.ts` keeps a decoy `vite` build from ever returning to that name.
 
 ### Target stack (v1 — **M3 COMPLETE: 19/19 closed on milestone #3, open=0**. M3-00…M3-09 landed 2026-09-11 as PRs #69–#85; #67 (M3-10, the verification gate) merged as **PR #86 (`8704c19`, 2026-09-11T19:23Z)**; #73 (the session-state contract) merged as **PR #87 (`2d5edfb`, 2026-09-12T02:00Z)**. Everything below is re-verified on merged `main`, not on a feature branch, 2026-09-12.)
 
@@ -71,14 +74,15 @@
 
 ## 3. Project Commands
 
-### Legacy (**deleted — do not use**)
+### Legacy (**deleted #103; scripts retired by #104 — this section is provenance**)
 
-- `npm run dev`, `npm run build`, `npm run preview` still exist in `package.json` but lost
-  their inputs on 2026-09-16: `vite.config.js` and every page it built are deleted, so each
-  now fails immediately. The scripts themselves are retired by **M4-15 (#104)**, sequenced
-  immediately after this card.
+- The Vite-era `dev`/`build`/`preview` scripts lost their inputs on 2026-09-16 (#103 deleted
+  `vite.config.js` and every page) and were removed by **#104 (M4-15)** with the `vite`
+  devDependency. **The bare names now mean the real Next commands** (§ Target below) — do
+  not read `npm run build` as the legacy one, and do not resurrect `next:*`-style aliases:
+  `tests/unit/infra/legacy-build-scripts.test.ts` fails CI if vite re-enters any script path.
 
-> Package manager is **npm** (`package-lock.json` present, no `packageManager` field). Do not run `pnpm` or `yarn` commands against this repo.
+> Package manager is **npm** (pinned via `packageManager: npm@11.19.0`; `package-lock.json` present). Do not run `pnpm` or `yarn` commands against this repo.
 
 ### Running commands in this environment — two footguns
 
@@ -98,7 +102,7 @@ as live risk in CI-style sandboxes, systemd units, and cron. Cheap belt-and-brac
 for any automation that might not inherit the nvm `PATH`:
 
 ```bash
-. "$HOME/.nvm/nvm.sh" >/dev/null 2>&1; cd /home/heyloey/personal/ppl-fitness-tracker && npm run next:dev
+. "$HOME/.nvm/nvm.sh" >/dev/null 2>&1; cd /home/heyloey/personal/ppl-fitness-tracker && npm run dev
 ```
 
 Verify before trusting a result: `node --version` must report ≥ 20.9. v18 means nvm was not sourced.
@@ -106,15 +110,17 @@ Verify before trusting a result: `node --version` must report ≥ 20.9. v18 mean
 ### Target (M3 complete, nothing in flight; commands and counts re-verified 2026-09-12 on merged `main` with the stack up)
 
 Next.js 16 lives at the repo root (single `package.json` — §4: no monorepo). It runs on
-**port 3001**; port 3000 is simply free now that #103 has deleted the Vite estate. The
-historical rule — never quote a `next:dev` number measured on a shared port, and never
-trust a green `build` from the legacy scripts — is discharged by the deletion, not edited
-away.
+**port 3001**; the #104 port decision was to **stay on 3001** — 3000 stayed vacant rather
+than becoming a second truth for `playwright.config.ts`, the CI env, the GoTrue config, and
+the e2e base URLs at once. The historical rule — never quote a dev-server number measured on
+a shared port, and never trust a green `build` from the legacy scripts — is discharged by
+those scripts' removal, not edited away.
 
-- **Dev Server**: `npm run next:dev` (port 3001)
-- **Build**: `npm run next:build` — emits real JS chunks under `.next/`, unlike the
-  legacy `npm run build` it replaced, which is verified to have emitted zero JavaScript
-- **Start (production)**: `npm run next:start`
+- **Dev Server**: `npm run dev` (port 3001)
+- **Build**: `npm run build` — `next build && tsx scripts/build-sw-manifest.ts`; emits real
+  JS chunks under `.next/`, unlike the legacy `npm run build` this name belonged to before
+  #104, which is verified to have emitted zero JavaScript
+- **Start (production)**: `npm run start` (port 3001)
 - **Test files that exist today** (re-counted 2026-09-14 at `18de6da`): **62 `.test.ts` files** —
   36 under `tests/unit/`, 15 DB-backed under `tests/integration/` (13 at its root, 2 in `repository/`),
   11 route-handler API suites under `tests/integration/api/` (plus `fixtures.ts`, `test-server.ts` and
@@ -154,7 +160,7 @@ away.
   control removed made its named file go red, and restoring it made it pass again.
 - **E2E Tests**: `npm run test:e2e` (`playwright test`) — **13 spec files, 61 tests, and they are
   the CI merge gate.** `playwright.config.ts` boots its own **production** server
-  (`npm run next:build && npm run next:start` on :3001; `reuseExistingServer: !process.env.CI`),
+  (`npm run build && npm run start` on :3001; `reuseExistingServer: !process.env.CI`),
   so a leftover `next dev` on 3001 silently makes "production-build" latency numbers dev-mode
   fictions — that is what `harness.spec.ts` detects, and why a stale-server check is step zero of
   any measurement run. Two environment traps, both in

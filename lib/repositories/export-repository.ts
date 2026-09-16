@@ -1,5 +1,6 @@
 import { asc, desc, eq, inArray } from 'drizzle-orm';
 import {
+  bodyMeasurements,
   importBatches,
   personalRecords,
   profiles,
@@ -13,6 +14,7 @@ import type { Db, JwtClaims, Tx } from '../db/with-user';
 import { EXPORT_SESSION_CAP } from '../contracts/export';
 import type {
   ArchiveImportRow,
+  ArchiveMeasurementRow,
   ArchivePersonalRecordRow,
   ArchiveSessionRow,
   ArchiveSetRow,
@@ -129,7 +131,17 @@ export class ExportRepository {
         .where(eq(importBatches.userId, userId))
         .orderBy(asc(importBatches.createdAt), asc(importBatches.id));
 
-      return { user, sessions, personalRecords: prRows, imports: importRows };
+      const measurementRows: ArchiveMeasurementRow[] = await tx
+        .select({
+          measuredOn: bodyMeasurements.measuredOn,
+          kind: bodyMeasurements.kind,
+          value: bodyMeasurements.value,
+        })
+        .from(bodyMeasurements)
+        .where(eq(bodyMeasurements.userId, userId))
+        .orderBy(asc(bodyMeasurements.measuredOn), asc(bodyMeasurements.kind));
+
+      return { user, sessions, personalRecords: prRows, imports: importRows, measurements: measurementRows };
     });
   }
 

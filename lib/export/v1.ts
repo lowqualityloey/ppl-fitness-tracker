@@ -1,6 +1,7 @@
 import { EXPORT_SESSION_CAP } from '../contracts/export';
 import type {
   ExportV1,
+  MeasurementExport,
   PersonalRecordExport,
   SessionExport,
 } from '../contracts/export';
@@ -80,6 +81,12 @@ export interface ArchiveUserRow {
   readonly preferredUnit: 'kg' | 'lbs';
 }
 
+export interface ArchiveMeasurementRow {
+  readonly measuredOn: string;
+  readonly kind: string;
+  readonly value: string;
+}
+
 export interface ExportArchiveRows {
   readonly user: ArchiveUserRow;
   /**
@@ -90,6 +97,9 @@ export interface ExportArchiveRows {
   readonly sessions: readonly ArchiveSessionRow[];
   readonly personalRecords: readonly ArchivePersonalRecordRow[];
   readonly imports: readonly ArchiveImportRow[];
+  /** Chronological (`measured_on asc, kind asc`) — the archive reads a life
+   * in order, unlike the newest-first window the settings GET returns. */
+  readonly measurements: readonly ArchiveMeasurementRow[];
 }
 
 const toIso = (value: Date): string => value.toISOString();
@@ -135,6 +145,14 @@ function toPersonalRecordExport(row: ArchivePersonalRecordRow): PersonalRecordEx
   };
 }
 
+function toMeasurementExport(row: ArchiveMeasurementRow): MeasurementExport {
+  return {
+    measuredOn: row.measuredOn,
+    kind: row.kind as MeasurementExport['kind'],
+    value: toNumber(row.value),
+  };
+}
+
 export function buildExportV1(
   rows: ExportArchiveRows,
   exportedAt: Date = new Date(),
@@ -159,8 +177,9 @@ export function buildExportV1(
       report: JSON.parse(row.report) as ImportReport,
       createdAt: toIso(row.createdAt),
     })),
-    // Reserved slot (#109 fills it later); v1 ships it empty, never absent.
-    measurements: [],
+    // The slot #110 reserved and #109 fills (OC-2): same version, no bump —
+    // a reserved key arriving with rows is not a contract break.
+    measurements: rows.measurements.map(toMeasurementExport),
     truncated,
     // The newest session that did NOT make the cut — the honest bound the
     // degradation branch promised in ASSUMPTION-m4-003.

@@ -162,6 +162,7 @@ describe('/api/export/v1', () => {
   }
 
   async function deleteArchiveRows(userId: string): Promise<void> {
+    await client.query('DELETE FROM body_measurements WHERE user_id = $1', [userId]);
     await client.query('DELETE FROM import_batches WHERE user_id = $1', [userId]);
     await client.query('DELETE FROM personal_records WHERE user_id = $1', [userId]);
     await client.query('DELETE FROM session_sets WHERE user_id = $1', [userId]);
@@ -232,6 +233,16 @@ describe('/api/export/v1', () => {
        FROM generate_series(0, $3) AS i`,
       [heavy.userId, heavyRoutineDayId, EXPORT_SESSION_CAP],
     );
+
+    // #109 (OC-2): the archive must carry measurements too — two kinds on one
+    // day for the owner (ordering proof) and one for `other` (containment).
+    await client.query(
+      `INSERT INTO body_measurements (user_id, measured_on, kind, value) VALUES
+        ($1, '2026-09-10', 'body_weight', 81.20),
+        ($1, '2026-09-10', 'chest_cm', 107.50),
+        ($2, '2026-09-11', 'waist_cm', 84.00)`,
+      [owner.userId, other.userId],
+    );
   });
 
   afterAll(async () => {
@@ -268,7 +279,10 @@ describe('/api/export/v1', () => {
     expect(body.version).toBe('v1');
     expect(body.user.id).toBe(owner.userId);
     expect(body.user.displayName).toBe('Export Owner');
-    expect(body.measurements).toEqual([]);
+    expect(body.measurements).toEqual([
+      { measuredOn: '2026-09-10', kind: 'body_weight', value: 81.2 },
+      { measuredOn: '2026-09-10', kind: 'chest_cm', value: 107.5 },
+    ]); // chronological, kind-ASC tie-break, numeric('81.20') → 81.2
     expect(body.truncated).toBe(false);
     expect(body.oldestExcluded).toBeNull();
 
@@ -320,6 +334,12 @@ describe('/api/export/v1', () => {
     const theirs = dataOf(ExportResponseSchema.safeParse(await responseBody(await get(other))));
     expect(theirs.sessions.map((s) => s.id)).toEqual([foreignSessionId]);
     expect(theirs.personalRecords).toEqual([]);
+    expect(theirs.measurements).toEqual([
+      { measuredOn: '2026-09-11', kind: 'waist_cm', value: 84 },
+    ]);
+    const theirsRaw = JSON.stringify(theirs);
+    expect(theirsRaw).not.toContain('81.2'); // the owner's rows are not reachable from here
+    expect(theirsRaw).not.toContain('107.5');
   });
 
   it('truncates honestly above the cap over the wire (ASSUMPTION-m4-003)', async () => {

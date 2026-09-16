@@ -19,7 +19,7 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   webServer: {
-    command: "npm run next:build && npm run next:start",
+    command: "npm run build && npm run start",
     url: "http://localhost:3001",
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

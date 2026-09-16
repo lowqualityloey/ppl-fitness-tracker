@@ -58,7 +58,7 @@ test.describe('E2E harness self-proof', () => {
   test('the suite is pointed at a production server, not a dev one', async ({ request }) => {
     /**
      * Every number this directory produces is a prod-mode number, because
-     * `webServer` runs `next:build && next:start`. That only holds if nothing else
+     * `webServer` runs `npm run build && npm run start`. That only holds if nothing else
      * is sitting on :3001 — and a dev server on the port is invisible in the
      * results: the tests still pass, the latencies are just measuring a different
      * build. M2-06 already refused to quote a dev-mode p95 as production evidence,

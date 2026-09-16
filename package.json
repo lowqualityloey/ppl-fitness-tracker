@@ -8,12 +8,9 @@
     "node": ">=20.9.0"
   },
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "next:dev": "next dev --port 3001",
-    "next:build": "next build && tsx scripts/build-sw-manifest.ts",
-    "next:start": "next start --port 3001",
+    "dev": "next dev --port 3001",
+    "build": "next build && tsx scripts/build-sw-manifest.ts",
+    "start": "next start --port 3001",
     "typecheck": "next typegen && tsc --noEmit",
     "lint": "eslint --max-warnings=0 .",
     "test": "node --env-file-if-exists=.env.local node_modules/vitest/vitest.mjs run --exclude 'tests/integration/api/**'",
@@ -64,7 +61,6 @@
     "supabase": "2.117.0",
     "tsx": "^4.7.0",
     "typescript": "^5",
-    "vite": "^7.1.7",
     "vitest": "^5.0.0"
   },
   "allowScripts": {

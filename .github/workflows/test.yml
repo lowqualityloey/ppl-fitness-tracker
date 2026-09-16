@@ -113,7 +113,7 @@ jobs:
       # M3-03 (#60): the browser gate, deliberately last. Every suite above proves a
       # contract; this one proves the thing a user can see, and it is the only job
       # that boots a **production** build (`playwright.config.ts` webServer runs
-      # `next:build && next:start` on :3001) — which is what makes its latency numbers
+      # `npm run build && npm run start` on :3001) — which is what makes its latency numbers
       # quotable and the API suites' dev-mode numbers not.
       #
       # `--with-deps` is not optional. The first local run of this directory failed

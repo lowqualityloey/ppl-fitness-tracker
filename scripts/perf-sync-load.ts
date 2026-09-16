@@ -174,7 +174,7 @@ async function main(): Promise<number> {
   const options = parseArgs(process.argv.slice(2));
   if (!process.env.MIGRATION_DATABASE_URL) {
     console.error('M4-01: MIGRATION_DATABASE_URL is required (it is also how the DB side is observed).');
-    console.error('Reproduce with:  npm run db:up && npm run next:build && npm run next:start');
+    console.error('Reproduce with:  npm run db:up && npm run build && npm run start');
     return 2;
   }
   const perUserRps = options.targetRps / options.users;

@@ -6,6 +6,7 @@ import {
   MeasurementKindSchema,
   MeasurementSchema,
 } from '../../../lib/contracts/measurements.js';
+import type { Measurement } from '../../../lib/contracts/measurements.js';
 import { authHeaders, createTestSession, type TestSession } from './fixtures.js';
 import { apiRequest, jsonRequest, responseBody, startApiServer, stopApiServer } from './test-server.js';
 
@@ -34,6 +35,11 @@ const get = (path: string, session?: TestSession) =>
   apiRequest(path, session ? { headers: authHeaders(session) } : {});
 const post = (body: unknown, session: TestSession) =>
   jsonRequest('/api/measurements', body, { method: 'POST', headers: authHeaders(session) });
+
+function rowsOf(envelope: Awaited<ReturnType<typeof envelopeOf>>) {
+  if (!envelope.ok) throw new Error(`expected success envelope, got ${JSON.stringify(envelope.error)}`);
+  return envelope.data as Measurement[];
+}
 
 async function envelopeOf(response: Response) {
   const parsed = AppEnvelopeSchema.safeParse(await responseBody(response));
@@ -88,7 +94,7 @@ describe('/api/measurements', () => {
     const rows = await get('/api/measurements?from=2026-09-16&to=2026-09-16', owner);
     const envelope = await envelopeOf(rows);
     expect(envelope.ok && envelope.data).toHaveLength(1);
-    if (envelope.ok) expect(envelope.data[0].value).toBe(83.1);
+    expect(rowsOf(envelope)[0]?.value).toBe(83.1);
   });
 
   it('rejects a kind OC-1 said no to, and unknown keys, without writing anything', async () => {
@@ -96,7 +102,7 @@ describe('/api/measurements', () => {
     expect((await post({ measuredOn: '2026-09-16', kind: 'body_weight', value: 80, unit: 'lbs' }, owner)).status).toBe(400);
     const check = await get('/api/measurements?from=2026-09-16&to=2026-09-16', owner);
     const envelope = await envelopeOf(check);
-    if (envelope.ok) expect(envelope.data.map((r: { kind: string }) => r.kind)).toEqual(['body_weight']);
+    expect(rowsOf(envelope).map((r) => r.kind)).toEqual(['body_weight']);
   });
 
   it('rejects a backwards or unbounded window (OC-3: both ends are required)', async () => {
@@ -111,23 +117,51 @@ describe('/api/measurements', () => {
     const envelope = await envelopeOf(
       await get('/api/measurements?from=2026-09-10&to=2026-09-10', owner),
     );
-    if (envelope.ok) {
-      expect(envelope.data.map((r: { kind: string }) => r.kind)).toEqual(['chest_cm', 'waist_cm']);
-    }
+    expect(rowsOf(envelope).map((r) => r.kind)).toEqual(['chest_cm', 'waist_cm']);
     const filtered = await envelopeOf(
       await get('/api/measurements?from=2026-09-10&to=2026-09-10&kind=waist_cm', owner),
     );
-    if (filtered.ok) expect(filtered.data).toHaveLength(1);
+    expect(rowsOf(filtered)).toHaveLength(1);
   });
 
   it('keeps the second athlete whole: B sees nothing of A, and B owns B’s triple', async () => {
     const bSees = await envelopeOf(await get('/api/measurements?from=2020-01-01&to=2030-12-31', other));
-    if (bSees.ok) expect(bSees.data).toEqual([]);
+    expect(rowsOf(bSees)).toEqual([]);
     expect((await post({ measuredOn: '2026-09-16', kind: 'body_weight', value: 61.0 }, other)).status).toBe(200);
     const bRows = await envelopeOf(await get('/api/measurements?from=2026-09-16&to=2026-09-16', other));
-    if (bRows.ok) expect(bRows.data).toEqual([{ measuredOn: '2026-09-16', kind: 'body_weight', value: 61 }]);
+    expect(rowsOf(bRows)).toEqual([{ measuredOn: '2026-09-16', kind: 'body_weight', value: 61 }]);
     const aRows = await envelopeOf(await get('/api/measurements?from=2026-09-16&to=2026-09-16', owner));
-    if (aRows.ok) expect(aRows.data[0].value).toBe(83.1); // untouched by B
+    expect(rowsOf(aRows)[0]?.value).toBe(83.1); // untouched by B
+  });
+
+  it('holds at the raw app-role layer too — AC-3\'s third wall is RLS, not politeness', async () => {
+    // Same credentials as tests/integration/tenancy.test.ts: a direct
+    // app_authenticated connection, claims set the way PostgREST would.
+    const app = new Client({
+      connectionString: 'postgresql://app_authenticated:Wd7EmwRWWqY9s7jMVD3kVqnt+OaW5PowxNIxCY5Ful0=@127.0.0.1:54322/postgres',
+    });
+    await app.connect();
+    try {
+      await app.query(
+        `SELECT set_config('request.jwt.claims', $1, false)`,
+        [JSON.stringify({ sub: other.userId })],
+      );
+      const asOther = await app.query(
+        `SELECT count(*)::int AS mine,
+                (SELECT count(*) FROM public.body_measurements)::int AS everything
+           FROM public.body_measurements`,
+      );
+      expect(asOther.rows[0]!.mine).toBe(1); // B's own body_weight row
+      expect(asOther.rows[0]!.everything).toBe(1); // A's rows invisible to B's claims
+      const forged = await app.query(
+        `INSERT INTO public.body_measurements (user_id, measured_on, kind, value)
+         VALUES ($1, '2026-09-17', 'body_weight', 99.9)`,
+        [owner.userId],
+      ).catch((error: unknown) => error);
+      expect(forged).toBeInstanceOf(Error); // WITH CHECK: auth.uid() ≠ owner.userId
+    } finally {
+      await app.end();
+    }
   });
 
   it('turns a would-truncate range into an honest 400 that names the remedy (G-1)', async () => {
@@ -149,6 +183,6 @@ describe('/api/measurements', () => {
 
     // Same user, same data, one day: the cap is a bound, not a wall.
     const day = await envelopeOf(await get('/api/measurements?from=2020-02-01&to=2020-02-01', owner));
-    if (day.ok) expect(day.data.length).toBeGreaterThan(0);
+    expect(rowsOf(day).length).toBeGreaterThan(0);
   });
 });

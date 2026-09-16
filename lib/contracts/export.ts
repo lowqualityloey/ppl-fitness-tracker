@@ -13,6 +13,7 @@ import {
 } from './common';
 import { PreferredUnitSchema } from './profile';
 import { ImportReportSchema } from './import';
+import { MeasurementKindSchema } from './measurements';
 
 /**
  * M4-21 (#110): the versioned JSON export envelope — the FMEA row's "data is
@@ -87,16 +88,13 @@ export const SessionExportSchema = z.object({
 }).strict();
 
 /**
- * The #109 measurement row shape, copied from the spec's `MeasurementUpsert`
- * kinds and bounds so the two contracts cannot drift the moment #109 lands.
- * v1 producers must return `[]` — the schema describes a slot, not a claim
- * that data exists.
+ * The #109 measurement row shape. Since M4-20 the kind list and bounds are
+ * *the same schema objects* as `lib/contracts/measurements.ts` — a copy that
+ * "cannot drift once #109 lands" was a promise; an import is a proof.
  */
 export const MeasurementExportSchema = z.object({
   measuredOn: LocalDateSchema,
-  kind: z.enum([
-    'body_weight', 'body_fat_pct', 'neck_cm', 'waist_cm', 'chest_cm', 'hip_cm',
-  ]),
+  kind: MeasurementKindSchema,
   value: WeightKgSchema,
 }).strict();
 

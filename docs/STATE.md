@@ -2014,3 +2014,13 @@ Carried forward, still open:
     - **#164 stays the parent and open**; M4-27's PR carries the `Closes #164`. Filed as **#166/#167**
       (milestone #4, both OPEN, API-verified this turn); board now **open=13 / closed=22** — measured,
       not computed; new issues start at #168.
+
+41. **M4-26 (#166) spike done — 2026-09-16, the contended seconds are priced and they all live
+    in the fan-out** (`docs/spikes/2026-09-16-m4-26-apply-path-costing.md`, merged by this commit).
+    Pool acquire p50 7.6 ms (6/427 over 100), row-lock 29 ms, commit 16 ms — the other two
+    workstreams are excluded by measurement, not taste: every query inflates ~4.2× uniformly
+    because a 60-batch issues ~900–1 000 sequential round-trips (tail 35 %, state-remap 24 %,
+    progression 14 %, reserve 12 %, version 8 %). Recommendation: workstream 1 in five
+    request-level groups, predicted contended p95 ≤ 3 500 ms; venue drift disclosed (hot box:
+    clean solo p50 1 889.8). Owner ratifies on #164; the sizing law fires — pk:tasks splits
+    #167 on the spike doc before it starts.

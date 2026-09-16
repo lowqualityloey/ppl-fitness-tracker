@@ -243,6 +243,20 @@ export const importBatches = pgTable('import_batches', {
   userSourceUnique: uniqueIndex('import_batches_fingerprint').on(t.userId, t.sourceFingerprint),
 }));
 
+export const bodyMeasurements = pgTable('body_measurements', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+  measuredOn: date('measured_on').notNull(),
+  kind: text('kind').notNull(),
+  value: numeric('value', { precision: 6, scale: 2 }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  userDayKindUnique: uniqueIndex('body_measurements_user_day_kind_unique').on(t.userId, t.measuredOn, t.kind),
+  userRangeLookup: index('body_measurements_user_range_lookup').on(t.userId, t.measuredOn),
+  kindValid: check('body_measurements_kind_valid', sql`kind IN ('body_weight', 'body_fat_pct', 'neck_cm', 'waist_cm', 'chest_cm', 'hip_cm')`),
+  valueSane: check('body_measurements_value_sane', sql`value >= 0 AND value <= 1000`),
+}));
+
 // ============================================================================
 // Drizzle Relations (for ORM convenience, not schema generation)
 // ============================================================================
@@ -255,6 +269,7 @@ export const profilesRelations = relations(profiles, ({ many }) => ({
   syncEntityVersions: many(syncEntityVersions),
   syncChanges: many(syncChanges),
   importBatches: many(importBatches),
+  bodyMeasurements: many(bodyMeasurements),
   ownedExercises: many(exercises),
   ownedRoutineDays: many(routineDays),
 }));

@@ -49,12 +49,32 @@ test.describe('settings', () => {
     }
   });
 
-  test('says plainly that body measurements are not imported', async ({ page }) => {
-    const auth = await signInFreshUser(page, 'e2e-settings-stats');
+  test('logs a body measurement server-side and keeps it through a reload (M4-20)', async ({ page }) => {
+    const auth = await signInFreshUser(page, 'e2e-settings-measure');
     try {
       await page.goto('/settings');
-      await expect(page.getByText('userStats')).toBeVisible();
-      await expect(page.getByText('Nothing in this app models them yet')).toBeVisible();
+      // The apology card is gone, and its replacement quotes the audit, not the memory.
+      await expect(page.getByText('never written by any code')).toBeVisible();
+      await expect(page.getByTestId('measurement-empty')).toBeVisible();
+
+      await page.getByTestId('measurement-value').fill('82.5');
+      await page.getByTestId('measurement-submit').click();
+      await expect(page.getByTestId('measurement-status')).toContainText('82.5kg saved');
+      await expect(page.getByTestId('measurement-row')).toContainText('Body weight');
+
+      // Server-echo (G-3): after reload the row comes back from GET, not from memory.
+      await page.reload();
+      await expect(page.getByTestId('measurement-row')).toContainText('82.5 kg');
+
+      // A second athlete on the same triple sees their own nothing.
+      const auth2 = await signInFreshUser(page, 'e2e-settings-measure-b');
+      try {
+        await page.goto('/settings');
+        await expect(page.getByTestId('measurement-empty')).toBeVisible();
+        await expect(page.getByTestId('measurement-row')).toHaveCount(0);
+      } finally {
+        await auth2.cleanup();
+      }
     } finally {
       await auth.cleanup();
     }

@@ -44,3 +44,35 @@ npx playwright test sla.spec.ts -g "G-M3-3"   # margin re-measured under the cho
 
 ## Dependencies
 - Informed by: M4-01 (load data), M4-05 (margin monitoring option). Coordinated with: M4-04 (limiter model changes what budgets mean).
+
+## Record (2026-09-16, decision-only close per this card's own verification block)
+
+- **Owner ruling, taken before writing**: of the card's {Realtime, accept, accept-with-hybrid},
+  the owner chose **accept + monitor** — matching the M4 spec's pre-ratification ("#112 is
+  *ratified*: keep the 4 s poll, write ADR-0007"), so the decision was confirmed, not improvised.
+- **Renumbered against the card body**: this card's Scope names `docs/adrs/0006-…`; slot 0006 was
+  taken by #89's migration-authorship ADR while this card waited its wave. Filed-number drift is
+  why the board tracks ADRs by STATE §6 rows, not card text. The record is
+  `docs/adrs/0007-realtime-declined-poll-floor-accepted.md`; **#78 stays open and gets 0008 if it
+  ever wants an ADR** — the first-merge-wins slot note in §7 resolved in this card's favor by
+  merge order, not by claim.
+- **AC-1**: ADR states the widening (policies/role/tables as costed above), the §8.3 arithmetic
+  (120 req/min, ≤40 %), the measured p95 (4 388–4 451 audit band; 4 353/4 503 at exit; 4.42 s
+  post-#92 re-measure), and four revisit triggers. Linked from STATE §6 (its verification command's
+  decision-only path).
+- **AC-2**: no Realtime ships, so the gate never fires — but its rule ("tenancy precedes traffic")
+  is written into the ADR as a permanent precondition for any future implementation PR, not a dead
+  branch of this card.
+- **AC-3**: sweep run first, edit second — `grep -i "under 5 s|< ?5 s|cross-device"` across
+  README/PROMPTKIT/DESIGN/STATE/handoff/M4-spec found **no** document calling G-M3-3 fast without
+  the poll-floor sentence beside it (STATE §5's line 1023 entry already carried it verbatim); the
+  spec amendment M3 §8.3 got is therefore additive, and the M4 spec's "ADR pending" status cell
+  flipped to "Decided". `sla.spec.ts` gained a comment pointer only — **`G_M3_3_BUDGET_MS` and
+  every wait constant untouched**; `db:up` keeps `-x realtime`.
+- **DoD**: "M4 owns whether to revisit" → revisited, recorded, answered; §5's prose-vs-reality
+  list lost its G-M3-3 entry — and while forcing that edit, found its service-worker half had been
+  stale since #159 shipped the shell, so the bullet lost both halves with dates, which is what
+  DoD-lines are for.
+- **Gates for this change** (docs + one e2e *comment* only): typecheck · lint · unit claimed from
+  the runs recorded in the PR conversation — no suite input changed except a comment in
+  `sla.spec.ts`, and CI's full battery is the arbiter of that claim like every row above.

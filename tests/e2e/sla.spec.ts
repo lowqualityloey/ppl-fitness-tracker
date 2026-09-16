@@ -316,7 +316,10 @@ test.describe('M3 latency goals (production build)', () => {
  * G-M3-3 needs two independent sync engines on one user, so it runs its own contexts rather than
  * the single `page` fixture. Polling is 4 s visible (`POLL_INTERVAL_VISIBLE_MS`), so a single
  * propagation can approach the 5 s budget by design — that is what the goal is testing, and why the
- * distribution is printed: a pass at p95 = 4.6 s is a different future from one at 1.2 s.
+ * distribution is printed: a pass at p95 = 4.6 s is a different future from one at 1.2 s. That
+ * distribution is also the monitoring instrument ADR-0007 names (`docs/adrs/0007-realtime-declined-
+ * poll-floor-accepted.md`): the poll floor is the ratified cross-device posture, and p95 >= 4 800 ms
+ * on two consecutive main merges is that ADR's first revisit trigger. The budget is not here to move.
  */
 async function signedInContext(browser: Browser, session: TestSession): Promise<BrowserContext> {
   const context = await browser.newContext();

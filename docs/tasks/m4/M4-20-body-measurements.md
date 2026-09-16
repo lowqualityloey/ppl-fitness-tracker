@@ -3,10 +3,14 @@
 ## Intent
 As the owner, I want the `userStats` question answered with a plan: body measurements either get a modeled contract + storage + UI path, or the non-support becomes a written product decision — the current state is a screen apologizing for a hole nobody scheduled.
 
-## What the record says
-- Legacy `userStats` was **never written** by the legacy app (M2-05's inventory — the key exists in the five-key list because the parity scan proves the *old app owns the name*, and §8's 2026-09-08 row shows the dashboard invented everything else). Verified via audit entry 3's mechanism.
-- Import explicitly excludes it and says so (G-M3-7's settings disclosure).
-- Sequenced before M4-14's key deletion: whichever way this goes, it must not strand a key the deletion is about to retire. **Ordering note: if measurements survive, the import/retirement story of M4-14 must describe it — decide before deleting.**
+## What the record says — as executed (pk:grill + implementation, 2026-09-16)
+- **F-1 (the mandated kind-diff, executed):** legacy `userStats` was never *written* by anything. `ppl-workout-dashboard/app.js:148` reads the key and fabricates `{streak, totalWorkouts, hoursTrained, lastWorkout, nextWorkout}` at render when absent; a **whole-estate sweep** of all six legacy JS files (dashboard + three day folders + auth) finds exactly one occurrence — the read — and zero `setItem('userStats')`. Stranded fields: **none**. The settings prose "(weight, height)" was factually wrong and is retired with the card it sat on. (Disclosure: the first sweep was directory-limited; the grill widened it.)
+- **OC-1:** the model is the six ratified kinds (`body_weight`, `body_fat_pct`, `neck_cm`, `waist_cm`, `chest_cm`, `hip_cm`); no `height_cm` — height is profile, not a time series.
+- **OC-2 (in-PR scope addition, owner-ratified):** this card fills the `ExportV1Schema.measurements` slot #110 reserved; same version, no bump.
+- **OC-3 + G-1:** `GET` requires `from`/`to`, optional `kind`; `MEASUREMENT_RANGE_CAP = 2_500` derived (6 kinds × 366 worst honest year), breach is an explicit 400 naming the remedy; the pin refuses any kind set whose worst year exceeds the cap.
+- **PD-A:** the spec's `lib/measurements/` service layer was not built — routes are adapters (profile precedent).
+- **AC-2 amended by evidence:** the tenancy suite is repository-bound and cannot witness a policy-less table; the **drift suite** was the RED witness (`body_measurements: policy_count=0` captured), same file amended to four discrete policies, `supabase db reset` replayed the final form green — G-2's choreography, executed.
+- **M4-14 dependency satisfied:** the key-retirement story is now "nothing was ever in it" — this section is the description M4-14 must cite; the ordering note discharged.
 
 ## Scope
 - Decision: model (table + Zod contract + `POST`/`GET` route + a settings form) or decline (rewrite the settings text to a policy sentence; delete the *idea* from prose).
@@ -45,3 +49,6 @@ The word "not a plan" from §3.4 is false: one of the two outcomes landed with i
 
 ## Dependencies
 - Blocked by: M4-00 (authorship model, if schema). Ordering: precede or co-schedule M4-14's key retirement.
+
+## Implementation record (PR branch `feat/m4-20-body-measurements`, 2026-09-16)
+Six milestones, in-order commits: planning record + grill findings (G-1 cap derivation, G-2 RED-first choreography, G-3 server-echo posture, G-4 wave-gate evidence restated, G-5 prose traceability) → contracts + export-slot identity (import, not copy) → migration watched RED at drift then GREEN at full replay → repository + routes + 10-case API suite incl. 2,501-row honest-400 and raw app-role wall → settings panel replacing the apology card (e2e round-trip + axe; census stayed 16) → export fill both directions. Spec §8.1's ASSUMPTION-m4-001 gained its Resolution Evidence (design §2). Verification: `tsc` 0, `lint` 0, `test:mutation` green, `npm test` 618+/618+, `test:api` 81/81, `settings.spec.ts` 8/8, `next:build` clean.

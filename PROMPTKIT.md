@@ -5,20 +5,36 @@
 - **Installed**: 2026-09-14
 - **Last intake scan**: 2026-09-14 (`pk:onboard`, passive) — findings `O1`–`O12` indexed in
   `docs/tasks/2026-09-14-onboard-drift-index.md`; the doc patches it authorized are applied in §2/§3/§5/§6 below
-- **Engine**: .promptkit (submodule @ `ebfd67e` = **v1.7.0**, synced 2026-09-15 from `b3c5edf`, 10 commits;
-  `AGENTS.md`'s block re-verified byte-identical to `.promptkit/templates/agent-directive-template.md`
-  apart from the `$KIT_DIR_REL` substitution — 9,573 characters each side, measured on this sync)
+- **Engine**: .promptkit (submodule @ `2340251` = **v1.8.0-15**, synced 2026-09-16 from `ebfd67e`
+  (=v1.7.0), 33 commits; `AGENTS.md`'s block re-verified byte-identical to
+  `.promptkit/templates/agent-directive-template.md` apart from the `$KIT_DIR_REL` substitution and the
+  two leading newlines the host file already carried — 9,896 characters rendered / 9,898 in the file,
+  measured on this sync. `CLAUDE.md`, `.clinerules/promptkit.md`, `.opencode/rules.md` and
+  `.github/copilot-instructions.md` carry the identical 9,898-byte block, md5 `7dc523825c728e3b0d55d94f3512bbf5`)
 - **What v1.7.0 changes for anyone reading the triggers here**: `pk:profile` is **no longer a `pk:perf`
   alias** — it is the runtime Lite/Balanced/Turbo switcher (the engine's documented minor); the
   trigger→file exceptions (`pk:spike`→`research.md`, `pk:retro`→`reflect.md`, `pk:grill`→`tutor.md`,
   `pk:design`→`design-system.md`) are now written into the directive instead of living as folklore; ties
   in the ceremony-level test take the **higher** level and any downgrade must be announced with a reason;
   a status card may not carry a number that was not traced to a command or file read in the same turn.
+- **What v1.8.0 changes for anyone reading the triggers here**: four of the eight edited rules change
+  *behaviour*, not wording — a substantive turn opens with a **TL;DR** (1-3 bullets, ≤40 words) before
+  Details and Next; a **search circuit breaker** halts after ≤6 read/search calls (L0/L1) or ≤12
+  (L2/L3) with no edit or test and asks for paths instead of trawling; session endurance moved from ~12
+  turns to **~15 nudge / ~30 hard** (L2/L3 hard, L1 advisory); and telemetry provenance gained an
+  **oracle-integrity** clause — never modify, weaken, or delete a test, or write a vacuous assertion,
+  to force `exit 0`. Interactive handoffs now offer **3-4 priced choices** (action + outcome + time +
+  requirement + safe exit); the status-card format moved to `protocols/telemetry-cards.md` behind a
+  `status-cards:` line in this file (absent → on, and a halt always fires); `pk:onboard` covers
+  greenfield intake as well as brownfield scan; parenthesized aliases inherit in the trigger table;
+  and `protocols/discovery-intake.md` is the **sixth** protocol (workflows stay at 23).
 - **Upgrade**: Run `.promptkit/init.sh --balanced` for the full 23 workflows (`ls .promptkit/workflows |
-  wc -l` → 23 on this sync), or `--turbo --experimental` for parallel waves. `init.sh` re-injects
-  `AGENTS.md`'s block and the `profile:` line at the bottom of this file, and never overwrites an
-  existing `PROMPTKIT.md` — so §0 above is hand-maintained and goes stale on its own, which is why the
-  engine row names the SHA it describes. Profile stays **turbo**.
+  wc -l` → 23 on this sync), or `--turbo --experimental` for parallel waves. `init.sh` re-injects the
+  block into **five** host directives (`AGENTS.md`, `CLAUDE.md`, `.clinerules/promptkit.md`,
+  `.opencode/rules.md`, `.github/copilot-instructions.md`), rewrites the `profile:` and `tracking:`
+  lines at the bottom of this file, and never overwrites an existing `PROMPTKIT.md` — so §0 above is
+  hand-maintained and goes stale on its own, which is why the engine row names the SHA it describes.
+  Profile stays **turbo**; tracking is **github** (GitHub Issues + milestones, §5).
 
 
 > **Instructions for AI**: Read this file during every session. Adhere strictly to the project domain boundaries, commands, documentation targets, and non-negotiable architectural rules defined below.
@@ -339,3 +355,5 @@ Design source of truth is `DESIGN.md` (a TailAdmin profile). Its brand voice and
 - [ ] **A green typecheck and a green test suite do not prove a route compiles.** A relative import written `from './types.js'` that points at a `./types.ts` file satisfies `tsc` (extension substitution is allowed), and satisfies Vitest, but Next's Turbopack cannot resolve it — so *every request to a route that imports it returns 500 at module load* while the entire suite stays green. This has happened twice: once in the M1-15 contract graph (fixed during M1-16) and again on 2026-09-11 in `lib/domain/import/`, where it cost a full API-suite run before the cause was readable. The rule: source under `lib/` and `src/` that Next compiles uses **extensionless** relative imports; `.js` specifiers belong in test files, which run under Node. Prove a handler exists by sending it one request — the API suite, or `curl` — not by typechecking it.
 
 profile: turbo
+
+tracking: github

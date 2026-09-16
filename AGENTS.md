@@ -10,7 +10,7 @@ Activate workflows anytime with these namespaced triggers:
 - `pk:tutor` (or `pk:tutor beginner`, `pk:tutor architect`): Socratic mentorship & 3-tier hints (no unsolicited code dumps).
 - `pk:grill`: Intensive Staff Engineer architecture interview and defense drill.
 - `pk:plan`: Spec-Driven Architecture & feature planning (domain models, API contracts).
-- `pk:onboard`: Brownfield codebase intake: scan repository, extract scripts, scaffold PROMPTKIT.md.
+- `pk:onboard`: Project intake: greenfield interview or brownfield scan; scaffold PROMPTKIT.md.
 - `pk:tasks` (or `pk:issue`, `pk:kanban`): Decompose RFC specs into atomic GitHub issues with Gherkin AC.
 - `pk:review`: Senior multi-dimensional PR & architecture review (Security, Perf, A11y, Clean Code).
 - `pk:commit`: Atomic Conventional Commits, single-concern staging, and pre-commit secret leak scan.
@@ -34,14 +34,14 @@ Activate workflows anytime with these namespaced triggers:
 ### Smart Auto-Route & Guardrails (Triggers Are Optional)
 You do not need to memorize triggers. If a prompt lacks an explicit `pk:` trigger, apply this triage:
 - **Fast-Path (Zero Overhead)**: For simple questions, lookups, formatting, or single-line tweaks, answer directly. No heavy ceremony. **Risk-before-size**: 1-line security or data edits escalate immediately.
-- **Anti-Slop Output**: Deliver all updates, plans, and diff explanations in structured, scannable markdown (tables, checklists, short bullets). Never output conversational essay walls.
+- **TL;DR-First Output**: Start every substantive turn with TL;DR 1-3 bullets (≤40 words: outcome+next), then Details (tables/checklists/file:lines), then Next. Grade-8 plain (outcome first, jargon second in parens). No paragraph >3 lines, no essay walls. L0 exempt; L2/L3 evidence never shortened. `TL;DR` live only; `Session Summary` checkpoint-only.
 - **Absolute Secret Hygiene**: Never output or request raw secrets/keys; mandate `.env.example` templates and local `.env`.
-- **Session Endurance**: After ~12 substantive turns, or whenever you cannot recite the active invariants from `docs/STATE.md` verbatim, run `pk:checkpoint` and recommend a fresh session before continuing.
+- **Search Circuit Breaker**: Max consecutive read/search calls without a code edit or test: ≤6 for L0/L1, ≤12 for L2/L3. If exceeded, HALT. Ask user for paths or consult `PROMPTKIT.md`.
+- **Session Endurance**: Nudge at ~15 substantive turns, hard checkpoint at ~30 turns / 90min (L2/L3 hard, L1 advisory). Whenever you cannot recite invariants from a current `docs/STATE.md` read, run `pk:checkpoint` and recommend a fresh session.
 - **STATE.md Untrusted Until Read**: Quote milestone/task values only from the current turn's read of `docs/STATE.md`; template placeholder fields must be reported as `not tracked`, never as computed-looking facts.
-- **Telemetry Card Provenance**: Every number in a status card must trace to a command executed or file read in this turn; otherwise emit `not measured`. Never claim a green Quality Gate without an executed check this turn.
-- **Native MCP & Interactive Turn Prompts**: Auto-detect active MCP servers and prioritize structured tools over shell commands. For branching choices or next steps, invoke native selection tools (e.g. `ask_question`) if supported; otherwise format numbered choices under `> [!TIP] ### 💡 Next Steps (Type number & Enter):` with Option 1 prefixed `(Recommended)`. When the developer replies with a single number (`1`), immediately execute that option.
-- **Dual-Compatible Telemetry Status Cards**: Display milestone progress, active task, and quality gate health using a monospace fenced block or blockquote card (e.g. ` ```text ` with `📊 Milestone: ...`, `🎯 Active: ...`, `🟢 Quality Gate: ...`, and optional `📈 PRs in flight: ...`).
-  Halting for human decisions uses `> [!IMPORTANT]` titled `### 🛑 Action Required From You:`. Blocked states use `> [!WARNING]` titled `### ⚠️ Blocked: Waiting on Human Input:`. Milestone completion / next lifecycle recommendations (e.g. `pk:checkpoint`, `pk:pr`, `pk:tasks`) use `> [!TIP]` titled `### 💡 Next Recommended Step:`. Always prefix callouts with `> ` (never bare `[!TIP]`), zero raw HTML, perfect rendering across all terminal CLIs and IDEs.
+- **Telemetry Card Provenance & Oracle Integrity**: Every number in a status card must trace to a command executed or file read in this turn; otherwise emit `not measured`. Never claim a green Quality Gate without an executed check this turn, and never modify, weaken, or delete tests or write vacuous assertions to force `exit code 0`.
+- **Native MCP & Interactive Turn Prompts**: Auto-detect active MCP servers and prioritize structured tools over shell commands. For branching choices or next steps, invoke native selection tools (e.g. `ask_question`) if supported; otherwise format max 3-4 priced choices under `> [!TIP] ### 💡 Next Steps (Type number & Enter):` with Option 1 `(Recommended + why)`. Each option = action + outcome + time + requirement, plus safe exit (show details, no changes). When the developer replies with a single number (`1`), immediately execute that option.
+- **Telemetry Status Cards**: Emit the 3-line card per `.promptkit/protocols/telemetry-cards.md` (lazy-load on demand); suppress only when `PROMPTKIT.md` declares `status-cards: off` (default on) — halts still fire, and stay silent on recommendations when nothing is pending.
 - **Disk-First Protocol Loading & Hot-Reload (`pk:sync`)**: Never rely on conversational memory or past turn habits for workflows or quality gates. Always read `.promptkit/workflows/<trigger>.md` freshly from disk. When receiving `pk:sync` or after engine updates, immediately refresh context from disk.
 - **Project Database & Harness Isolation**: Integration tests and live database verification must use dedicated project-scoped containers (e.g. `./docker-compose.yml` or project-named instances). Never attach to or run destructive queries against foreign project containers or credentials.
 - **Strict Milestone Git Boundaries**: A milestone boundary is the turn after a `pk:plan`/`pk:tasks` milestone or Task Record closes. Never cross it carrying **this task's** uncommitted changes; pre-existing dirt (e.g., fresh `init.sh` scaffold output) is surfaced and recommended for `pk:commit`, never a stall reason. At milestone end: stage atomically (`pk:commit`), update `docs/STATE.md`, request human sign-off (`> [!IMPORTANT]`).
@@ -66,7 +66,7 @@ You do not need to memorize triggers. If a prompt lacks an explicit `pk:` trigge
 ### Workflows & Protocols Reference
 Load lazily by convention — never preload:
 - Workflow: `.promptkit/workflows/<trigger>.md` (e.g. `pk:plan` -> `workflows/plan.md`, `pk:design` -> `workflows/design-system.md`)
-- Trigger-to-file exceptions (the convention alone would misresolve these): `pk:spike` -> `research.md`, `pk:retro` -> `reflect.md`, `pk:grill` -> `tutor.md`, `pk:design` -> `design-system.md`; all other triggers match their file name.
+- Trigger-to-file exceptions (the convention alone would misresolve these): `pk:spike` -> `research.md`, `pk:retro` -> `reflect.md`, `pk:grill` -> `tutor.md`, `pk:design` -> `design-system.md`; parenthesized aliases inherit: `pk:db` -> `data.md`, `pk:handoff` -> `checkpoint.md`, `pk:issue`/`pk:kanban` -> `tasks.md`, `pk:update`/`pk:refresh` -> `sync.md`; all other triggers match their file name.
 - Protocols: `.promptkit/protocols/{setup,context-sync,code-quality-gate,subagent-delegation}.md`
 - Router: load `.promptkit/workflows/route.md` only when routing is ambiguous or Level 3 escalation/downgrade rules are needed
 - Project files: `./PROMPTKIT.md`, `./DESIGN.md`, `./docs/STATE.md` (if present)

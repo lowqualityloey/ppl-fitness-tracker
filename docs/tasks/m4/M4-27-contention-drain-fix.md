@@ -6,7 +6,7 @@
 > `refreshState()` full-session remap (1 790 ms) and the per-mutation `materializePersonalRecord`
 > (1 075 ms). **Revision note:** this card was filed as the whole fix (#167); the spike's sizing
 > law fired and `pk:tasks` re-decomposed it on 2026-09-16 into this slice + **M4-28 (#168)**,
-> which carries the budget pass and closes #164. Gate unchanged: **do not start before the owner
+> which carries the budget pass and the parent-issue close-out for #164. Gate unchanged: **do not start before the owner
 > ratifies workstream 1 and this split in a comment on #164.**
 
 ## Intent

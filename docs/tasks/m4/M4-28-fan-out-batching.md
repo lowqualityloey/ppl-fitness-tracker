@@ -1,4 +1,4 @@
-# M4-28 · Slice B of the priced fix — batch the reserve/version/tail fan-out and bring the contended drain under 5 s (closes #164)
+# M4-28 · Slice B of the priced fix — batch the reserve/version/tail fan-out and bring the contended drain under 5 s (parent: #164)
 
 > **M4-28** · Backend implementation · `#priority/p1` · Derived from: **#164** via the **#166
 > spike**; second seam of the 2026-09-16 `pk:tasks` split of #167. Slice **M4-27 (#167)** removes
@@ -65,7 +65,7 @@ bash scripts/perf/batch-contention-solo-control.sh
 git diff main --stat -- tests/e2e/sla.spec.ts   # empty
 ```
 
-Close-out: PR body first line plain `Closes #164`; append the post-fix section to
+Close-out: PR body first line carries the closing-keyword line for #164 (`Closes` + that number; note: the keyword must appear only in the PR body — in this card, in comments, or in any issue body it fires early, which is exactly how #164 was accidentally closed on 2026-09-16); append the post-fix section to
 `docs/perf/2026-09-16-m4-91-batch-contention.md` (all denominators); STATE §5's G-M3-4 sentence
 moves from "MISSES, filed as #164" to fixed-with-numbers; #166's prediction gets a confirm/correct
 line in the spike doc's tail.

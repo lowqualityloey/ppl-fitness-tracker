@@ -128,14 +128,43 @@ export class Outbox {
   }
 
   /**
+   * The tail of the append chain — the lock `StoredMutation.seq` was already claiming.
+   *
+   * `seq` is `lastSeq() + 1`: a read-modify-write spanning an `await`, so two calls that
+   * overlap both read the same `lastSeq` and both claim the same slot. Nothing upstream
+   * serializes the callers, either — the runner's handlers `await engine.mutate(...)`
+   * inside fire-and-forget `onClick`s, so a second press legitimately starts while the
+   * first append is still reading.
+   */
+  private appendTail: Promise<unknown> = Promise.resolve();
+
+  /**
    * Append one mutation and resolve only once storage holds it.
    *
    * This is §4.3's "durable before acknowledged": the caller may paint the set as
    * saved in anticipation, but the *promise it awaits* is this one. A quota failure
    * rejects loudly instead of being swallowed, because a tap that silently vanished
    * is the exact defect this module exists to prevent.
+   *
+   * Appends are serialized, so `seq` follows the order taps arrived rather than the
+   * order two overlapping IndexedDB reads happened to resolve in. Duplicate slots are
+   * not cosmetic: `IndexedDBOutboxStorage.list` reads the `bySessionSeq` index, and
+   * IndexedDB orders an index by (key, primary key) — so two rows sharing a `seq` come
+   * back in `mutationId` (random uuid) order, and the batch can carry a `phase.advance`
+   * ahead of the `task.complete` it depends on. The server refuses that pair, the refusal
+   * is final by design (`discardRefused`), and the session then sits one transition short
+   * of its next phase forever. Recorded from #169's red `a11y.spec.ts:107`.
    */
   async enqueue(payload: SyncMutation): Promise<StoredMutation> {
+    const append = this.appendTail.then(() => this.appendDurable(payload));
+    // The chain must survive a refusal: a quota rejection has to reach its caller without
+    // wedging every later tap behind a promise that will never resolve.
+    this.appendTail = append.catch(() => undefined);
+    return append;
+  }
+
+  /** One serialized append. Never called directly — `enqueue` owns the ordering. */
+  private async appendDurable(payload: SyncMutation): Promise<StoredMutation> {
     const seq = (await this.storage.lastSeq(this.sessionId)) + 1;
 
     const stored: StoredMutation = {

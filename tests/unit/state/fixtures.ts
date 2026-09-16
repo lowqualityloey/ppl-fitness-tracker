@@ -169,9 +169,22 @@ export class MemoryStorage implements OutboxStorage {
       .reduce((highest, row) => Math.max(highest, row.seq), -1);
   }
 
+  /**
+   * Ordered `[sessionId, seq]` first, **`mutationId` on a tie** — because the real store
+   * does exactly that.
+   *
+   * `IndexedDBOutboxStorage.list` reads the `bySessionSeq` index, and IndexedDB orders an
+   * index's records by (index key, primary key): for two rows sharing a `seq`, the primary
+   * key — the `mutationId`, a random UUID — decides which one comes back first. A plain
+   * `a.seq - b.seq` sort is *stable* in V8, so it preserved insertion order instead and the
+   * double silently disagreed with the store it stands in for: a duplicate-seq defect was
+   * invisible here and arbitrary in the browser. Found by #169's red `a11y.spec.ts:107`.
+   */
   async list(sessionId: string): Promise<StoredMutation[]> {
     this.listCalls += 1;
-    return this.rows.filter((row) => row.sessionId === sessionId).sort((a, b) => a.seq - b.seq);
+    return this.rows
+      .filter((row) => row.sessionId === sessionId)
+      .sort((a, b) => a.seq - b.seq || a.mutationId.localeCompare(b.mutationId));
   }
 
   async updateAttempt(mutationId: string, attempt: number): Promise<void> {

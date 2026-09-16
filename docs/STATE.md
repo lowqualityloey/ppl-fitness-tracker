@@ -2024,3 +2024,18 @@ Carried forward, still open:
     request-level groups, predicted contended p95 ≤ 3 500 ms; venue drift disclosed (hot box:
     clean solo p50 1 889.8). Owner ratifies on #164; the sizing law fires — pk:tasks splits
     #167 on the spike doc before it starts.
+
+42. **The #167 split landed before any code — 2026-09-16, `pk:tasks` on the spike doc, per the
+    sizing law in M4-27's own text** (direct docs commit; cards are the record).
+    - **#167 (M4-27) rewritten as slice A**: kill the per-mutation `refreshState()` remap and
+      move `materializePersonalRecord` to once-per-exercise at loop end (in-transaction, so
+      `ProgressionValidationError` still aborts all-or-nothing). AC is a paired same-day 25–40 %
+      drop with an in-memory-vs-fresh-read equivalence test — no budget claim; a miss is expected
+      and correct at this seam.
+    - **#168 (M4-28) filed as slice B**: bulk reserve (`ANY` + `ON CONFLICT DO NOTHING`), bulk
+      version reads, `serverSeq` range pre-allocation, bulk versions/changes/markApplied. Its AC
+      is the #166 prediction itself (contended p95 < 5 000, solo 400–900, blind-gauge control
+      re-run, budgets frozen) and its PR carries `Closes #164`. Hard order: after #167, after the
+      owner's ratification comment.
+    - Ratification wording now names two rulings, not one: workstream 1 **and** the A-then-B
+      order (comment posted on #164). New issues start at #169.

@@ -173,6 +173,14 @@ verification is the instruments #91 already merged. These two cards landed as a 
 commit on `main` — a recorded deviation from the #150 PR precedent (no runtime code in the tree; the
 CI runner is not the arbiter of markdown). **New issues start at #168.**
 
+**Same day, the sizing law fired before implementation even started**: #166's spike priced the
+wall (pool/lock/commit excluded; the seconds are ~900–1 000 sequential round-trips inflating ×4.2),
+so `pk:tasks` re-decomposed #167 by the spike's own seams — **M4-27 (#167) rewritten as slice A**
+(per-mutation remap + progression dedupe, ~38 % of the wall, no budget claim) and **M4-28 (#168)
+filed as slice B** (reserve/version/tail request-batching; its AC is the verdict: contended p95
+< 5 000, and it carries `Closes #164`). #168 must not start before #167 merges. **New issues start
+at #169.**
+
 > Re-typed above from the milestone API (2026-09-15): the title is `M4: Hardening, Telemetry &
 > Decommission` — a **comma**, not the colon this file's `--milestone` string carried, which would make
 > a copy-paste of that block fail on a title that no longer exists anywhere.

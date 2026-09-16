@@ -13,9 +13,11 @@ import { LegacyImportValidationError, type LegacyImportedCounts } from './types'
 /**
  * M2-05 (#40): the legacy localStorage importer.
  *
- * The legacy app is separate vanilla-JS modules, each persisting its own key in
+ * The legacy app was separate vanilla-JS modules, each persisting its own key in
  * its own shape, so parsing stays per-key: one hand-edited value must never
- * discard a valid sibling (spec §7 "Malformed legacy payload").
+ * discard a valid sibling (spec §7 "Malformed legacy payload"). The modules
+ * themselves were deleted by #103 (M4-14) — every `*-day-workout/…` citation
+ * below is provenance, resolvable in git history up to `bd22a75^`.
  *
  * Four facts drive this module, each easy to get wrong and each verified against
  * the legacy sources rather than assumed:

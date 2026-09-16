@@ -8,9 +8,11 @@ import { ImportReportSchema, type ImportReport } from '../../../lib/contracts/im
 /**
  * The legacy import (M3-09, #66, task 3).
  *
- * **This reads `localStorage` and deletes nothing.** Decommissioning the old app is M4's job, and a
- * user who imports and then returns to the dashboard must find it working: an importer that cleared
- * the source would make the one-way trip look like data loss the moment anyone hesitated.
+ * **This reads `localStorage` and deletes nothing.** The old app's sources were deleted by
+ * #103/M4-14, but the user's browser may still hold what it wrote back then — this panel is
+ * the retirement plan for those keys, and clearing them here would turn the one-way trip into
+ * exactly the data loss the rule forbade: a user who hesitates mid-import must still find
+ * their source slots intact.
  *
  * Only the three progress slots are read. `LEGACY_KEYS` in the importer also names `userStats`, and
  * if that slot exists it is reported below as **not imported** rather than skipped in silence — the

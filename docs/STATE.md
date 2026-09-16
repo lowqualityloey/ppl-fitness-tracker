@@ -221,7 +221,7 @@ progress, settings with the legacy-import report, and the Playwright/axe/Lightho
 legacy-parity gates that defend all of it in CI — merged as PRs #69–#87, with the measured
 residuals listed in §5 rather than smoothed.
 
-**What does not exist yet, stated plainly (2026-09-12, corrected 2026-09-16 after #158 and again after #159 — the earlier pass retired the analytics and export entries, this pass retires the service-worker entry, and the correction is the point of keeping the sentence dated, and a third time after #160 — this pass retires the body-measurements entry)**: production email delivery (issue #16, deferred since M1);— and note what replaced the deleted words: the 50 rps harness was *never* a true absence here — it shipped as M4-01/#90 on 2026-09-12, and the entry's long-standing "(M4-12 #101)" attribution was doubly wrong (#101 was the ZWSP name gate; §8's post-#156 row owns that half); structured logging and one correlation id shipped as #94, the CSP baseline as #142, and Sentry's error sink on both bundles as #95, so "no telemetry" now means "no *tracing*", which is DEFERRED-m4-005 and not an absence; and the service worker absence retired by #159 kept its own honesty trail — DECISION-m4-003's hand-written `public/sw.js` precaches, stores navigation documents verbatim, and never touches an `/api` exchange, so G-M3-1's "reopen with no network" is finally proven against the document being unfetchable (`context.setOffline(true)` reload, five e2e specs, controls watched red first) rather than against the *API* dead as handoff §3.4's difference used to require. Realtime (deferred by owner decision — §5's poll-margin note says what that costs) — and note that this pass's retirement is stronger than a ship: **body-measurement import never became a feature because there was nothing to import**, F-1's whole-estate sweep found zero `setItem('userStats')` writers, and the settings apology that motivated the entry was factually wrong about the key's contents What does exist now: the full UI — dashboard, runner, history, progress, settings — with its measured claims in `docs/releases/2026-09-12-m3-exit-report-and-m4-handoff.md` §1, a training week counted from completed-session rows (#108), the FMEA row's escape hatch — `GET /api/export/v1` ships the versioned archive (#110) — and a true offline shell whose cached documents are bounded by sign-out purge and keep-previous eviction (#111), and body measurements as a modeled feature — six ratified kinds in `lib/contracts/measurements.ts`, the `0008` table under four discrete RLS policies, a windowed API whose `MEASUREMENT_RANGE_CAP` is derived rather than round, a server-echo settings panel, and #110's reserved export slot filled in the same PR (#109, merged as PR #160). The legacy vanilla-JS app still runs unchanged alongside the target stack (M4's decommission, guarded meanwhile by `tests/e2e/legacy-parity.spec.ts`), and `npm run build` still emits zero JavaScript — re-verified 2026-09-11, not inherited from the old note.
+**What does not exist yet, stated plainly (2026-09-12, corrected 2026-09-16 after #158 and again after #159 — the earlier pass retired the analytics and export entries, this pass retires the service-worker entry, and the correction is the point of keeping the sentence dated, a third time after #160 — this pass retires the body-measurements entry — and a fourth time in this pass, #103, which retires the legacy-app sentence)**: production email delivery (issue #16, deferred since M1);— and note what replaced the deleted words: the 50 rps harness was *never* a true absence here — it shipped as M4-01/#90 on 2026-09-12, and the entry's long-standing "(M4-12 #101)" attribution was doubly wrong (#101 was the ZWSP name gate; §8's post-#156 row owns that half); structured logging and one correlation id shipped as #94, the CSP baseline as #142, and Sentry's error sink on both bundles as #95, so "no telemetry" now means "no *tracing*", which is DEFERRED-m4-005 and not an absence; and the service worker absence retired by #159 kept its own honesty trail — DECISION-m4-003's hand-written `public/sw.js` precaches, stores navigation documents verbatim, and never touches an `/api` exchange, so G-M3-1's "reopen with no network" is finally proven against the document being unfetchable (`context.setOffline(true)` reload, five e2e specs, controls watched red first) rather than against the *API* dead as handoff §3.4's difference used to require. Realtime (deferred by owner decision — §5's poll-margin note says what that costs) — and note that this pass's retirement is stronger than a ship: **body-measurement import never became a feature because there was nothing to import**, F-1's whole-estate sweep found zero `setItem('userStats')` writers, and the settings apology that motivated the entry was factually wrong about the key's contents What does exist now: the full UI — dashboard, runner, history, progress, settings — with its measured claims in `docs/releases/2026-09-12-m3-exit-report-and-m4-handoff.md` §1, a training week counted from completed-session rows (#108), the FMEA row's escape hatch — `GET /api/export/v1` ships the versioned archive (#110) — and a true offline shell whose cached documents are bounded by sign-out purge and keep-previous eviction (#111), and body measurements as a modeled feature — six ratified kinds in `lib/contracts/measurements.ts`, the `0008` table under four discrete RLS policies, a windowed API whose `MEASUREMENT_RANGE_CAP` is derived rather than round, a server-echo settings panel, and #110's reserved export slot filled in the same PR (#109, merged as PR #160). The legacy vanilla-JS app **no longer** runs beside the target stack: #103 (M4-14) deleted the estate on 2026-09-16 with F-1's zero-stranding evidence and #109's replacement shipped, `tests/e2e/legacy-parity.spec.ts` inverted from presence-guard to absence-guard, and the zero-JS `npm run build` sentence retired with its `vite.config.js` — the three legacy scripts now fail at startup, and their removal is M4-15's first act.
 
 ---
 
@@ -368,7 +368,7 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
   - `spikes/m0-drizzle-rls/tests/` — 5 files, 32 assertions
   - `spikes/m0-drizzle-rls/scripts/mutation-check.ts` — proves the suite can fail
   - `spikes/m0-drizzle-rls/scripts/bench.ts` — the ADR-0003 cost measurement
-- **Legacy files that M1 reads as input** (source of seed data, do not delete before M4):
+- **Legacy files that M1 read as input** — **deleted by #103 (M4-14) on 2026-09-16; historical pointers, resolvable only in git history before `bd22a75`**. The seed content they carried lives in `db/seed/` (M1-09/10), the parse rules in `lib/domain/import/legacy-importer.ts`, and the absence guard is inverted: `tests/e2e/legacy-parity.spec.ts` now fails if these paths reappear as tracked files.
   - `push-day-workout/index.html` — 6 exercises, 17 set checkboxes, 5 stretches, hardcoded
   - `legs-day-workout/index.html` — same shape
   - `pull-day-workout/app.js:47-223` — the only module with structured exercise/stretch data arrays
@@ -383,7 +383,7 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
   `lighthouse + csp + a11y` measured **15/15 in 1.3 min** on `test/m4-25-lighthouse-node-api`, still needing
   `LD_LIBRARY_PATH` (§1's machine facts) because that part is a browser defect, not a launcher one. The older
   SHAs below are the dates they were measured and stay, because they are evidence rather than decoration:
-  - Legacy dev: `npm run dev` (3000). Target dev: `npm run next:dev` (3001).
+  - Target dev: `npm run next:dev` (3001). The legacy Vite dev server on 3000 is gone with #103; the coexistence note is retired.
   - `npm run typecheck` → **exit 0, clean** (`next typegen && tsc --noEmit`; never run bare `tsc`).
   - `npm run lint` → **exit 0**, 0 errors / 0 warnings, re-verified on merged `main`. It was
     exit 1 (24 errors + 2 warnings) until D1; the step now runs **in CI directly after `npm ci`**
@@ -449,9 +449,12 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
   - Spike, from `spikes/m0-drizzle-rls/`: `npm run db:up` → `npm run db:setup` → `npm test`
     (32 pass) → `npm run mutate` → `npm run db:down`. Superseded by the real M1 suite, kept
     for reference.
-- **Known-broken**: `npm run build` (legacy Vite) — **re-verified 2026-09-11**: exits 0 and
-  writes **0 `.js` files**; `dist/index.html` still references the untouched classic script
-  paths. By design until M4. The route-handler suites under `tests/integration/api/` are
+- **Known-broken (retired by deletion)**: the legacy `npm run build` bullet in this section
+  used to record "exits 0, writes 0 `.js` files, by design until M4" (re-verified 2026-09-11).
+  #103 deleted the estate's entry points and `vite.config.js`, so `npm run dev`/`build`/`preview`
+  now fail at startup with nothing to build; the scripts' formal removal is M4-15 (#104),
+  sequenced immediately after. Nothing user-facing depends on them and no gate runs them.
+  The route-handler suites under `tests/integration/api/` are
   excluded from `npm test` **because they boot a real `next dev` server**, not because any
   handler is missing: every M1 route shipped its handler in `#42`, which retired
   `tests/integration/api/pending-handlers.ts` and its anti-rot guard, and **CI runs those 10
@@ -1716,5 +1719,44 @@ Carried forward, still open:
       design doc). Inversion-first stands: `tests/e2e/legacy-parity.spec.ts:95` flips with the
       deletion, watched red→green, CI enforces. Then the epistemic tail: **#112** (ADR-0007, slot
       race with #78 is first-merge-wins) and **#91** (concurrent re-measure — the venue is local
-      now per item 33, budgets untouched, contention class documented). **#16** stays the only
-      owner-blocked card.
+       now per item 33, budgets untouched, contention class documented). **#16** stays the only
+       owner-blocked card.
+
+35. **#103 (M4-14) implemented — 2026-09-16, the legacy estate is deleted and the parity
+    guard is inverted** (branch `feat/m4-14-legacy-decommission`; this item is written before
+    merge, so no PR number or CI claim lives here yet — CI is the arbiter, per every row above).
+    - **The stranding decision, recorded as the card's step 1 demands**: owner-ratified on
+      #103 (2026-09-12 comment: "follow #109, delete after it lands"). Discharge evidence:
+      F-1's whole-estate sweep (`docs/design/2026-09-16-m4-20-body-measurements.md` §2 —
+      `userStats` had **zero `setItem` writers**; the blob the settings prose once apologized
+      for never existed) + the replacement model shipped as #109. The three *real* progress
+      keys can strand only un-imported browser state; the posture is **import-first** —
+      `src/app/settings/import-panel.tsx` still reads them and deletes nothing, and is the
+      namespace's retirement plan. Residual accepted loss: a user who never imports and whose
+      browser clears `localStorage` loses legacy history that this repo can no longer regenerate
+      — the same single-user v1 risk the M2-05 archive-flow note (`#40`) already owned.
+      `SECURITY_IMPROVEMENTS.md`: **deleted** (the RFC's word), its fiction reclassified by
+      F-1's finding into the same evidence class as the phantom `userStats`; the earned-rule
+      entry in `PROMPTKIT.md` §6 keeps the exhibit with a git-history pointer.
+    - **What landed**: commit `40cf8cf` inverted `tests/e2e/legacy-parity.spec.ts` — the
+      untouched-diff test became a tracked-absence test (needs no base ref, so the shallow-clone
+      skip machinery retired with it), the key-ownership test became a writer + phantom-`/sw.js`
+      registration scan with `src/components/shell-registration.tsx` as the only allow-listed
+      registrar, and `git()` distinguishes `git grep`'s exit 1 from any other status so a broken
+      scan can never read as a pass. Commit `bd22a75` deleted `index.html`, `vite.config.js`,
+      `SECURITY_IMPROVEMENTS.md`, the three day folders (incl. both fictional READMEs), and
+      `ppl-workout-dashboard/` — 21 files, −14 914 lines — and emptied the legacy block from
+      `eslint.config.mjs`'s ignores. Prose followed reality in `README.md` (rewritten),
+      `PROMPTKIT.md` §0/§2/§3/§6, and this file's §1/§3/§5; the importer's legacy-path citations
+      stay as provenance with an explicit git-history pointer.
+    - **Watched-red evidence, in order**: RED before deletion (2 failed / 1 passed — the two
+      inverted tests naming four writers + `pull-day-workout/app.js`, the runtime test still
+      green), GREEN after (3/3), and the AC-1 resurrection control fired: restoring
+      `pull-day-workout/app.js` **as a tracked file** turned both guards red again. The control
+      caught a real distinction on the first attempt: an *untracked* restore passes both scans,
+      because they read the index — the guard protects the repository, not someone's worktree.
+      That boundary is written into the spec, not discovered per-session.
+    - **Not done here, sequenced deliberately**: `npm run dev`/`build`/`preview` removal and the
+      `vite` devDependency drop are **#104 (M4-15)** — the legacy scripts now fail at startup
+      with no inputs, which is recorded in §5 as the honest interim state rather than patched
+      around. `spikes/` deletion stays out of this card's law.

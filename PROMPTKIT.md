@@ -23,11 +23,12 @@
 
 > **Instructions for AI**: Read this file during every session. Adhere strictly to the project domain boundaries, commands, documentation targets, and non-negotiable architectural rules defined below.
 
-> **This project is mid-migration.** Two stacks coexist, and the split is no longer "built vs. unbuilt" on either side of the seam.
+> **This project was mid-migration and now is not.** Two stacks coexisted through M3; as of
+> **#103 (M4-14, 2026-09-16)** there is one honest codebase.
 >
 > - The *target* stack's **server side and its UI are both merged to `main`**: schema + migrations `0000`–`0007` (`0007_auth_user_cascade.sql`, the auth→profiles cascade FK, merged with #89), RLS on every table, magic-link auth, Zod contracts (including the session-state graph, as of #73), the sessions/profile/prefill/exercises/progress/sync/import APIs, `SessionEngine`, `ProgressionEngine`, and transactional conflict-aware sync (M1 complete bar deferred #16; M2-00 → M2-06 merged as PRs #43–#47, #51, #53; **M3-00 → M3-10 merged as PRs #69–#87 — the milestone is complete, open=0 / closed=19**).
-> - The target stack is now a **working app**: `/` (dashboard), `/sign-in`, `/session/[id]` (the runner), `/history` + a one-session report + per-exercise progress, and `/settings` with the legacy-import dialog. What it still is not: **deployable**. Production email delivery (#16), telemetry/Sentry, the 50 rps load test (currently unmet on this 4-core hardware — #90 best 43.6 rps, verdict `INCONCLUSIVE`; #92 re-documents the `/api/sync` SLA to the measured ~203–413 ms p95 band with an enforced 800 ms ceiling), a service worker, volume/streak analytics, body-measurement import and data export do not exist — M4's list, with its measured starting facts in `docs/releases/2026-09-12-m3-exit-report-and-m4-handoff.md`.
-> - The **legacy vanilla-JS app still runs unchanged** on port 3000 beside it and is still the thing `npm run build` builds (a build that emits zero JavaScript — see §2). M3 was required to run beside all of it and never wrote a legacy key; `tests/e2e/legacy-parity.spec.ts` measures that, and is built to fire when M4 deletes them.
+> - The target stack is now a **working app**: `/` (dashboard), `/sign-in`, `/session/[id]` (the runner), `/history` + a one-session report + per-exercise progress, and `/settings` with the legacy-import dialog, the body-measurements panel (#109), and the versioned JSON export (#110). Analytics (#108) and the offline shell's service worker (#111) shipped too. What it still is not: **deployable**. Production email delivery (#16), the 50 rps load test (currently unmet on this 4-core hardware — #90 best 43.6 rps, verdict `INCONCLUSIVE`; #92 re-documents the `/api/sync` SLA to the measured ~203–413 ms p95 band with an enforced 800 ms ceiling), and a production deployment do not exist — M4's remaining list, with its measured starting facts in `docs/releases/2026-09-12-m3-exit-report-and-m4-handoff.md`.
+> - The **legacy vanilla-JS app was deleted by #103**: root `index.html`, `ppl-workout-dashboard/`, the three day folders (with their two fictional READMEs), `SECURITY_IMPROVEMENTS.md`, and `vite.config.js` are gone from the tree. Nothing strands: the importer never read a field out of `userStats` because no code ever wrote it (F-1 sweep, `docs/design/2026-09-16-m4-20-body-measurements.md` §2), and the measurements model that would have received it shipped as #109. `tests/e2e/legacy-parity.spec.ts` **survived the deletion inverted** — it now fails when the estate *reappears*. The `npm run dev`/`build`/`preview` scripts in `package.json` outlived their inputs; #104/M4-15 retires them.
 >
 > Do not describe unbuilt target-stack components as if they exist, and do not describe the merged backend **or the merged M3 UI** as if either were still a plan. See `docs/STATE.md` for the live position.
 
@@ -45,18 +46,18 @@
 
 ## 2. Active Technology Stack
 
-### Legacy stack (currently running, being replaced)
+### Legacy stack (**deleted 2026-09-16 by #103 / M4-14** — historical description, kept for provenance)
 
 - Vanilla JavaScript (ES6+, no framework, no TypeScript), Vite 5 as dev server and static bundler
 - Four independent static pages: `index.html` (dashboard) + `push-day-workout/`, `pull-day-workout/`, `legs-day-workout/`
 - Persistence: `localStorage`, three divergent keys (`pushWorkoutProgress`, `pullDayProgress`, `legsWorkoutProgress`)
 - No tests, no backend, no auth
-- **Known broken**: `npm run build` exits 0 but emits **zero JavaScript**. All four `<script>` tags are classic scripts, so Vite neither transforms nor copies them and leaves the original `src` in the output HTML. Every page in `dist/` 404s on its script and is inert. Do not treat a successful `build` exit code as evidence of a working build.
+- **Was known broken**: `npm run build` exited 0 but emitted **zero JavaScript** — all four `<script>` tags were classic scripts, so Vite neither transformed nor copied them. The rule it taught survives the deletion: *a successful build exit code is not evidence of a working build.* `dist/` and every source file are gone; see `tests/e2e/legacy-parity.spec.ts` (inverted) for the live guard.
 
 ### Target stack (v1 — **M3 COMPLETE: 19/19 closed on milestone #3, open=0**. M3-00…M3-09 landed 2026-09-11 as PRs #69–#85; #67 (M3-10, the verification gate) merged as **PR #86 (`8704c19`, 2026-09-11T19:23Z)**; #73 (the session-state contract) merged as **PR #87 (`2d5edfb`, 2026-09-12T02:00Z)**. Everything below is re-verified on merged `main`, not on a feature branch, 2026-09-12.)
 
 - **Language & Runtime**: TypeScript `strict`, Node.js **≥ 20.9** (required by Next.js 16 — Node 18 is unsupported). nvm default is v24.20.0 LTS; see the shell footgun in §3.
-- **Framework**: Next.js 16 (App Router), React 19 — ADR-0001. Live screens: `/` (dashboard), `/sign-in`, `/session/[id]` (the runner), `/history` + one-session report + per-exercise progress, `/settings` (+ import dialog). Route handlers (**11** `route.ts` files): `src/app/api/{sessions,sessions/[id],sessions/prefill,sync,import/legacy,exercises,profile,progress/[exerciseSlug]}` plus `src/app/auth/{confirm,signin,signout}`; `src/middleware.ts` refreshes sessions. Runs on port 3001 alongside the legacy Vite server on 3000 (untouched until M4; `tests/e2e/legacy-parity.spec.ts` guards that no M3 code writes legacy keys).
+- **Framework**: Next.js 16 (App Router), React 19 — ADR-0001. Live screens: `/` (dashboard), `/sign-in`, `/session/[id]` (the runner), `/history` + one-session report + per-exercise progress, `/settings` (+ import dialog). Route handlers (**11** `route.ts` files): `src/app/api/{sessions,sessions/[id],sessions/prefill,sync,import/legacy,exercises,profile,progress/[exerciseSlug]}` plus `src/app/auth/{confirm,signin,signout}`; `src/middleware.ts` refreshes sessions. Runs on port 3001 — alone since #103 deleted the legacy estate; `tests/e2e/legacy-parity.spec.ts` now guards the *absence* of that estate and of any write to its five `localStorage` keys.
 - **Domain layer**: `lib/domain/{sessions,progression,sync,import,units}` (pure transition table, Epley e1RM, sync reducer, legacy planner, weight parse/ceiling), `lib/repositories/` (user-scoped, transactional), `lib/views/` (the read-side the screens render — no screen invents its own fetch shape), `lib/db/{client,with-user,auth-context}`, `lib/http/{route-error,request-log}.ts`, `lib/auth/`, `lib/supabase/server.ts`, and `lib/logger/` — the M4-05 (#94) logging seam (`index.ts` barrel = the intended import path, `context.ts` request scope + correlation id, `logger.ts` levels + JSON line + injectable sink, `redact.ts` the deny-list). **Merged: `lib/logger/` is on `main` via PR #145 (2026-09-14).** Import the barrel, never `logger.ts` directly — a caller that bypasses it gets a different default logger than the one an integration test's injected sink swaps, so the line it asserts was never the line that was written.
 - **Styling & Design System** (M3-02, PR #71): Tailwind CSS v4 + shadcn primitives **vendored** under `src/components/ui/` (the CLI is not in the loop — copy-in, then the contrast gate owns them). Token layer in `src/app/globals.css`: `:root` literals from `DESIGN.md`, the shadcn alias block, and the `@theme inline` mapping. `scripts/check-contrast.ts` + `tests/unit/design/contrast.test.ts` measure every matrix pair (35 as of M3-10), **following `var()` indirection to the leaf** and failing on anything unmeasurable — the alias hole closed in `96b5202`, see audit entries 2/14.
 - **State & Data Fetching**: client sync island under `src/app/state/` (M3-05, PR #75; wired through M3-06/07): IndexedDB-backed `outbox.ts`, `sync-engine.ts` (one in-flight batch, jittered backoff, visibility-aware polling at 4 s visible / 30 s hidden, reconnect drain — `notifyConnectivityRestored()` clears offline-grown windows, `9ca17cc`), `provider.tsx`, `reconcile.ts`, `timer-controller.ts` (absolute-deadline arithmetic), `unit-display.ts`, `device-identity.ts`, `audio-cue.ts`. Set-taps are optimistic with the server as sole truth; Server Actions remain unused (deliberate, spec §3.2).
@@ -70,13 +71,12 @@
 
 ## 3. Project Commands
 
-### Legacy (work today)
+### Legacy (**deleted — do not use**)
 
-- **Install**: `npm install`
-- **Dev Server**: `npm run dev` (Vite, port 3000)
-- **Build**: `npm run build` — runs, but see the known-broken note above
-- **Preview**: `npm run preview`
-- **Tests / Typecheck / Lint**: none exist
+- `npm run dev`, `npm run build`, `npm run preview` still exist in `package.json` but lost
+  their inputs on 2026-09-16: `vite.config.js` and every page it built are deleted, so each
+  now fails immediately. The scripts themselves are retired by **M4-15 (#104)**, sequenced
+  immediately after this card.
 
 > Package manager is **npm** (`package-lock.json` present, no `packageManager` field). Do not run `pnpm` or `yarn` commands against this repo.
 
@@ -105,16 +105,15 @@ Verify before trusting a result: `node --version` must report ≥ 20.9. v18 mean
 
 ### Target (M3 complete, nothing in flight; commands and counts re-verified 2026-09-12 on merged `main` with the stack up)
 
-Next.js 16 lives at the repo root alongside the legacy app (`PROMPTKIT.md` §4: no
-monorepo, single `package.json`). It runs on **port 3001**, not 3000 — the legacy
-Vite dev server keeps 3000, and both coexist until M4 decommissions the legacy
-pages. Verified: both `npm run dev` and `npm run next:dev` running simultaneously,
-each serving correctly, zero collision.
+Next.js 16 lives at the repo root (single `package.json` — §4: no monorepo). It runs on
+**port 3001**; port 3000 is simply free now that #103 has deleted the Vite estate. The
+historical rule — never quote a `next:dev` number measured on a shared port, and never
+trust a green `build` from the legacy scripts — is discharged by the deletion, not edited
+away.
 
-- **Dev Server**: `npm run next:dev` (port 3001; legacy `npm run dev` stays on 3000)
+- **Dev Server**: `npm run next:dev` (port 3001)
 - **Build**: `npm run next:build` — emits real JS chunks under `.next/`, unlike the
-  legacy `npm run build`, which is verified zero-JS (see the note above) and stays
-  that way until M4
+  legacy `npm run build` it replaced, which is verified to have emitted zero JavaScript
 - **Start (production)**: `npm run next:start`
 - **Test files that exist today** (re-counted 2026-09-14 at `18de6da`): **62 `.test.ts` files** —
   36 under `tests/unit/`, 15 DB-backed under `tests/integration/` (13 at its root, 2 in `repository/`),
@@ -209,8 +208,9 @@ each serving correctly, zero collision.
   `next typegen` has run once. `npm run typecheck` handles this; a bare `tsc`
   invocation will not.
 - **Lint**: `npm run lint` (`eslint --max-warnings=0 .`) — **exit 0, verified on merged `main`,
-  and enforced in CI** as the step immediately after `npm ci`. Legacy directories and `spikes/`
-  are explicitly ignored, not linted; `no-restricted-syntax` plus `scripts/check-set-config.sh`
+  and enforced in CI** as the step immediately after `npm ci`. `spikes/`
+  is explicitly ignored, not linted (the legacy directories' ignore entries retired with the
+  estate in #103); `no-restricted-syntax` plus `scripts/check-set-config.sh`
   ban direct `set_config` outside `withUser()`. This was red with 24 `no-explicit-any` errors in
   four `tests/integration/*.test.ts` files until D1 cleared them by **narrowing** through
   `tests/integration/pg-error.ts` (`unknown` → SQLSTATE/message, yielding `undefined`/`''` for
@@ -322,12 +322,12 @@ Design source of truth is `DESIGN.md` (a TailAdmin profile). Its brand voice and
 - [ ] **`set_config` is always transaction-local.** The third argument (`is_local`) must be `true`. A literal `false` or an omitted third argument leaks JWT claims onto the pooled connection and hands one user's identity to the next request. This is a Critical-severity FMEA row, not a style preference.
 - [ ] **Every new table gets RLS.** `ENABLE` + `FORCE ROW LEVEL SECURITY`, plus four separate policies (SELECT / INSERT / UPDATE / DELETE). Never `FOR ALL`. A `pg_tables` drift test enforces this in CI.
 - [ ] **Kilograms are canonical in storage.** Unit conversion happens at the display boundary only. Never write a converted display value back to `weight_kg`.
-- [ ] **Timers store an absolute deadline.** `endsAt` timestamps, with remaining time derived from `Date.now()`. Never a decrementing `setInterval` counter — browsers throttle background timers to roughly once per minute, which is a live defect in the legacy modules.
+- [ ] **Timers store an absolute deadline.** `endsAt` timestamps, with remaining time derived from `Date.now()`. Never a decrementing `setInterval` counter — browsers throttle background timers to roughly once per minute, which was a live defect in the legacy modules (the reason this rule was earned; the modules are gone, the rule is not).
 - [ ] **Security headers are server-sent.** Never `<meta http-equiv>` for CSP, `X-Frame-Options`, or `X-Content-Type-Options`; browsers ignore the latter two in meta form entirely. No `'unsafe-inline'`.
 
 ### Three rules earned from this repository's own history
 
-- [ ] **A security control does not exist until a test proves it runs.** `SECURITY_IMPROVEMENTS.md` in this repo documents an authorization system whose deny branch is unreachable, a second `AuthManager` that no page loads, and a `canAccessPhase()` that returns `true` unconditionally. Three documented layers, zero enforcement. Any authorization or isolation claim must ship with a merge-gating test that would fail if the control were removed.
+- [ ] **A security control does not exist until a test proves it runs.** `SECURITY_IMPROVEMENTS.md` — deleted by #103, kept in git history as the cautionary exhibit — documented an authorization system whose deny branch was unreachable, a second `AuthManager` that no page loaded, and a `canAccessPhase()` that returned `true` unconditionally. Three documented layers, zero enforcement. Any authorization or isolation claim must ship with a merge-gating test that would fail if the control were removed.
 - [ ] **Documentation describes what exists, not what is planned.** Two module READMEs in this repo advertise a React/Express/PostgreSQL/JWT/Cloudinary system that was never built. Aspirational docs are worse than absent ones. Mark unbuilt work as unbuilt, including in this file.
 - [ ] **A green typecheck and a green test suite do not prove a route compiles.** A relative import written `from './types.js'` that points at a `./types.ts` file satisfies `tsc` (extension substitution is allowed), and satisfies Vitest, but Next's Turbopack cannot resolve it — so *every request to a route that imports it returns 500 at module load* while the entire suite stays green. This has happened twice: once in the M1-15 contract graph (fixed during M1-16) and again on 2026-09-11 in `lib/domain/import/`, where it cost a full API-suite run before the cause was readable. The rule: source under `lib/` and `src/` that Next compiles uses **extensionless** relative imports; `.js` specifiers belong in test files, which run under Node. Prove a handler exists by sending it one request — the API suite, or `curl` — not by typechecking it.
 

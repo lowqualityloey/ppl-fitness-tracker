@@ -60,8 +60,8 @@ import { browserChime, type Chime } from '../../state/audio-cue';
 const PHASE_ORDER = ['pre_workout', 'exercise', 'rest', 'stretch', 'post_workout'] as const;
 /**
  * The rest default is inherited from the module this replaces, not invented:
- * `push-day-workout/app.js:245` starts its rest timer at `seconds: 90`, and the pull and legs
- * modules do the same. It is a *default the athlete can change* rather than a fact about them,
+ * `push-day-workout/app.js:245` started its rest timer at `seconds: 90`, and the pull and legs
+ * modules did the same (the estate was deleted by #103; the citations resolve in git history). It is a *default the athlete can change* rather than a fact about them,
  * because the data has no machine-readable rest duration at all — `exercises.rest_time` is a text
  * column seeded with strings like `'60-90s'` (`db/schema/index.ts:113`) — so the honest options
  * were a changeable number or no timer.

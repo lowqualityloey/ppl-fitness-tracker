@@ -1,5 +1,4 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 import { createTestSession } from '../integration/api/fixtures.js';
 import {
@@ -10,90 +9,102 @@ import {
 } from './runner-fixtures';
 
 /**
- * Legacy parity (M3-10, #67): M3 runs *beside* the old app, it does not replace it.
+ * Legacy parity (M3-10 #67; **inverted by M4-14 #103, 2026-09-16**).
  *
- * Two separate claims, because they fail differently:
+ * M3 ran *beside* the old vanilla-JS app, so the original file asserted the estate was
+ * untouched and its storage keys still owned by its own sources (audit entry 3; the
+ * complement check that made "we never wrote them" worth something). #103 deleted the
+ * estate — four legacy modules plus the root `index.html`, `vite.config.js`, the two
+ * fictional day-folder READMEs and `SECURITY_IMPROVEMENTS.md` — after #109 shipped the
+ * replacement model and the F-1 sweep proved nothing stranded (`userStats` had zero
+ * writers estate-wide: `docs/design/2026-09-16-m4-20-body-measurements.md` §2).
  *
- * 1. **The four legacy modules are untouched.** A static check on git — no test in the browser can
- *    prove a file nobody loaded hasn't been edited.
- * 2. **The new app never writes a legacy `localStorage` key.** Only observable by actually using the
- *    app and reading storage afterwards.
+ * The guard survives its purpose by inverting rather than being deleted, per the card:
  *
- * The reason both exist: M3-09 imports *from* this storage and deliberately deletes nothing, and M4
- * owns decommissioning. If the new app ever wrote `pushWorkoutProgress`, an athlete who imports and
- * then opens the old dashboard would find their legacy history overwritten by the app that promised
- * not to touch it — and the overwrite would be invisible, because the new UI never reads those keys
- * back.
+ * 1. **The estate stays gone.** A tracked file reappearing under a deleted path is red —
+ *    resurrection needs an owner decision, not a `git checkout`.
+ * 2. **Nothing writes the five keys, and no second service worker registers.** The estate
+ *    was the only writer; the `pull-day-workout/app.js` `/sw.js` registration was a phantom
+ *    (#111 found no `sw.js` ever existed beside the legacy server). The *real* `public/sw.js`
+ *    is registered from exactly one allow-listed file, so this scan cannot match it.
+ * 3. **The running app still writes none of the keys** — unchanged from M3, still the only
+ *    claim here that can be checked by watching the browser rather than the index.
+ *
+ * The key *names* deliberately survive in `lib/domain/import/` and `src/app/settings/`:
+ * the import seam reads whatever a user's browser still holds from the pre-deletion world
+ * and deletes nothing. That read is the retirement plan for the namespace, so excluding
+ * `tests/` (which fabricates legacy payloads on purpose) and scoping test 2 to writers —
+ * `setItem`, not `getItem` — is the whole of the "no live reference" claim.
  */
 
-const LEGACY_MODULES = [
+/** Every path M4-14 deleted. A tracked entry reappearing here is red by design. */
+const LEGACY_ESTATE_PATHS = [
+  'index.html',
+  'vite.config.js',
+  'SECURITY_IMPROVEMENTS.md',
   'push-day-workout',
   'pull-day-workout',
   'legs-day-workout',
   'ppl-workout-dashboard',
 ] as const;
 
-/**
- * The first ref that git can actually resolve, or null.
- *
- * `origin/main` is what a developer's clone has. CI's `actions/checkout@v4` defaults to a
- * **single-commit shallow clone**, where neither `origin/main` nor a merge base exists — and the
- * first version of this test called `git diff origin/main...HEAD` unconditionally, so it failed in
- * CI with `Command failed` while passing locally. That asymmetry is the reason for the resolver
- * rather than a bare call: a parity gate that only works on one machine is a gate that is quietly
- * not running.
- */
-function resolveBaseRef(): string | null {
-  for (const candidate of ['origin/main', 'main', process.env.GITHUB_BASE_REF ?? '']) {
-    if (!candidate) continue;
-    try {
-      execFileSync('git', ['rev-parse', '--verify', '--quiet', `${candidate}^{commit}`], {
-        stdio: 'ignore',
-      });
-      return candidate;
-    } catch {
-      // Not resolvable in this checkout; try the next candidate.
-    }
+/** The only file permitted to register a service worker (outside tests). */
+const SW_REGISTRATION_ALLOWLIST = ['src/components/shell-registration.tsx'] as const;
+
+function git(...args: string[]): string {
+  try {
+    return execFileSync('git', args, { encoding: 'utf8' }).trim();
+  } catch (error) {
+    // `git grep` exits 1 on a clean tree — no match is the pass condition here, not an error.
+    // Any *other* status (128 = invalid regex, bad repo) must never read as "clean", or a
+    // broken scan passes vacuously — the exact false-green shape this suite exists to refuse.
+    const status = (error as { status?: number }).status;
+    if (status === 1 && args[0] === 'grep') return '';
+    throw error;
   }
-  return null;
 }
 
-test('the four legacy modules are untouched on this branch', () => {
-  const base = resolveBaseRef();
-  /*
-   * Skipped loudly, never passed vacuously. An empty `git diff` from a repository with no history
-   * is not evidence that the legacy modules are untouched — reporting it as such would be the exact
-   * shape of a false green this milestone exists to refuse. The workflow fetches full history so
-   * this path is not normally taken; it stays as the honest fallback for a shallow checkout.
-   */
-  test.skip(
-    base === null,
-    'no base ref to compare against (shallow clone): the legacy-parity diff is NOT being checked',
-  );
-
-  const changed = execFileSync('git', ['diff', '--name-only', `${base}...HEAD`, '--', ...LEGACY_MODULES], {
-    encoding: 'utf8',
-  }).trim();
-  expect(changed, `M3 must not modify legacy sources:\n${changed}`).toBe('');
+test('the legacy estate is deleted — a reappearing file is red', () => {
+  const tracked = git('ls-files', '--', ...LEGACY_ESTATE_PATHS);
+  expect(
+    tracked,
+    `M4-14 deleted the legacy estate; these tracked files must not exist:\n${tracked}`,
+  ).toBe('');
 });
 
-test('the legacy modules still own their storage keys (we did not neuter them)', () => {
-  // The complement of the checks below: proving the new app writes nothing is worthless if the old
-  // app was also made to stop writing. Decommissioning is M4's decision to make, not a side effect.
-  // Enumerated from git rather than guessed by filename: the four modules do not share a layout
-  // (`ppl-workout-dashboard` is not structured like the three day apps), and a hardcoded list of
-  // names silently scans nothing in the directory it forgot — which reads as "the key is gone".
-  const sources = LEGACY_MODULES.flatMap((dir) =>
-    execFileSync('git', ['ls-files', '--', `${dir}/*.js`, `${dir}/*.html`], { encoding: 'utf8' })
-      .trim()
-      .split('\n')
-      .filter(Boolean),
+test('nothing writes the five legacy keys, and no legacy /sw.js registration survives', () => {
+  const writerPattern = `setItem\\(\\s*['"](${LEGACY_LOCALSTORAGE_KEYS.join('|')})['"]`;
+  const writers = git(
+    'grep',
+    '-l',
+    '-E',
+    writerPattern,
+    '--',
+    '.',
+    ':(exclude)tests/**',
+    ':(exclude)docs/**',
+  );
+  expect(
+    writers,
+    `the estate was the only writer of these keys; nothing outside tests may write them:\n${writers}`,
+  ).toBe('');
+
+  const registrations = git(
+    'grep',
+    '-l',
+    'navigator.serviceWorker',
+    '--',
+    '.',
+    ':(exclude)tests/**',
+    ':(exclude)docs/**',
   )
-    .map((file) => readFileSync(file, 'utf8'))
-    .join('\n');
-  for (const key of LEGACY_LOCALSTORAGE_KEYS) {
-    expect(sources, `${key} is no longer referenced by any legacy module`).toContain(key);
-  }
+    .split('\n')
+    .filter(Boolean);
+  const unexpected = registrations.filter((f) => !SW_REGISTRATION_ALLOWLIST.includes(f as never));
+  expect(
+    unexpected,
+    `only ${SW_REGISTRATION_ALLOWLIST.join(', ')} may register the shell service worker:\n${unexpected.join('\n')}`,
+  ).toEqual([]);
 });
 
 test('using the new app end to end writes none of the five legacy keys', async ({ page }) => {

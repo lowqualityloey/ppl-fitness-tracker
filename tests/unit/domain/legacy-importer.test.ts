@@ -147,7 +147,8 @@ describe('per-key isolation', () => {
 
 describe('pull day collapsed checkbox key', () => {
   it('accepts a real browser payload whose set boxes collapsed under the empty key', () => {
-    // pull-day-workout/app.js:717-721 renders set checkboxes with no id, so
+    // pull-day-workout/app.js:717-721 (deleted by #103; in git history) rendered set
+    // checkboxes with no id, so
     // :1393 keys all 17 of them under "". z.record(z.string().min(1), ...) would
     // otherwise reject the whole payload and real history would read as garbage.
     const plan = planOf({ pullDayProgress: pullPayload({ checkboxStates: { '': true, meal: false } }) });

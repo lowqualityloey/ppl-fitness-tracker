@@ -3,9 +3,9 @@
  *
  * ### Why this module exists
  *
- * The master RFC's justification is a defect that is still on disk, three times over: every timer
- * in the legacy day modules stores a countdown as a mutable counter and decrements it on a
- * one-second interval — `push-day-workout/app.js:311` is
+ * The master RFC's justification is a defect that was on disk until #103, three times over: every
+ * timer in the legacy day modules stored a countdown as a mutable counter and decremented it on a
+ * one-second interval — `push-day-workout/app.js:311` was
  * `timer.intervalId = setInterval(() => { timer.seconds--; … }, 1000)`, with the same shape in
  * `pull-day-workout/app.js` and `legs-day-workout/app.js`. Browsers throttle background timers to
  * roughly one tick per minute, so a 90-second rest started in a tab that gets backgrounded at

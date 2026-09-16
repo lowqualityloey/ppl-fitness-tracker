@@ -242,7 +242,7 @@
   **Milestone #4 open=12 / closed=21** (API, this turn); no open PR. Remote ref did **not**
   self-delete a second consecutive time — the `git ls-remote` measurement is now a rule, not a
   one-off. Next implementable: **#91**; #16 stays the only owner-blocked card.
-- **Last Updated**: 2026-09-16 (**post-#163 checkpoint — #112/M4-23 merged decision-only as `36f62a3`, CI `test` PASS 16m43s + Vercel PASS**: owner ratified the 4 s poll floor as the cross-device posture, Realtime declined for margin — ADR-0007 written with the RLS widening costed, four revisit triggers, and AC-2's tenancy rule surviving as a permanent precondition; M3 §8.3 + M4 spec + PROMPTKIT §2/§5 carry pointers; `G_M3_3_BUDGET_MS` untouched and the runner battery proved the comment-only change changed nothing; card said `0006-…`, real slot 0007 — #78 takes 0008 if ever; §5's prose-vs-reality list is now empty, both halves dated; milestone #4 open=12/closed=21; §1 bullet + §7 item 38 carry the sync). Earlier: **post-#162 checkpoint** — #104/M4-15 merged as `b7fb2e3` via PR #162, CI `test` pass 15m49s + Vercel pass — the first deploy green through the flipped `npm run build`, so the pin is runner-proven; `Closes #104` on the first line parsed; milestone #4 open=13/closed=20; **G-M4-3's decommission goal is complete** — the bare `dev`/`build`/`start` names are now the Next commands, the Vite scripts, `preview`, the `next:*` aliases and the `vite` devDependency are retired, the AC-2 guard shipped watched-RED, and the gates that carried the merge were unit 623 / api 81 / e2e 81 with the battery riding the renamed webServer; §1 bullet + §7 item 37 carry the sync). Earlier: **post-#161 checkpoint** — #103/M4-14 legacy decommission merged as `6660172` via PR #161, CI `test` pass 15m56s and the Vercel default-build-command fix landed in-PR as `3f0be8c` (`vercel.json`), the estate is gone from `main` with the parity guard inverted and green in CI, milestone #4 open=14/closed=19. Earlier: **post-#160 checkpoint** — #109/M4-20 body measurements merged as `0121e9e` via PR #160, CI `test` pass 14m51s, §1's measurements-absence entry retired, #103 unblocked, milestone #4 open=15/closed=18, #95 closed on the board. Earlier: **post-#159 checkpoint** — #111/M4-22 offline shell merged as `491fb1a`, wave 2 complete (milestone #4 open=16/closed=17), §1's service-worker entry retired, local-e2e venue unblocked, the battery is at this box's capacity (sla contention documented). Earlier: **post-#158 checkpoint** — #110/M4-21 export merged as `b74b6aa`, its CI-first-run e2e RED and fix recorded, §1's "does not exist" list loses its analytics+export entries, milestone #4 open=17/closed=16. Earlier: **post-#157 checkpoint** — #108/M4-19 merged as `3ef55ab`, #113
+- **Last Updated**: 2026-09-16 (**post-#91 checkpoint — M4-02's contended measurement merged as `077c112` via PR #165 (squash, 2026-09-16T06:40:35Z; plain `Closes #91` first-line, closedAt 06:40:36Z API-read; CI `test` PASS 15m53s: unit 65 files, api 13, **e2e 81 passed in 7.2m** + Vercel): the 5 s drain budget **HOLDS solo and MISSES under contention** (driver p95 6 124 ms, browser drain 11 676 ms at ~11 rps + two batch streams), no budget moved, the breach filed as **#164**; §5's G-M3-4 bullet now carries the answer instead of "what M4 still owns"; the M4 tail's last implementable card is done (milestone #4 open=11/closed=22), #16 still the only owner-blocked one; §1 bullet + §7 item 39 carry this sync. Earlier: **post-#163 checkpoint — #112/M4-23 merged decision-only as `36f62a3`, CI `test` PASS 16m43s + Vercel PASS**: owner ratified the 4 s poll floor as the cross-device posture, Realtime declined for margin — ADR-0007 written with the RLS widening costed, four revisit triggers, and AC-2's tenancy rule surviving as a permanent precondition; M3 §8.3 + M4 spec + PROMPTKIT §2/§5 carry pointers; `G_M3_3_BUDGET_MS` untouched and the runner battery proved the comment-only change changed nothing; card said `0006-…`, real slot 0007 — #78 takes 0008 if ever; §5's prose-vs-reality list is now empty, both halves dated; milestone #4 open=12/closed=21; §1 bullet + §7 item 38 carry the sync). Earlier: **post-#162 checkpoint** — #104/M4-15 merged as `b7fb2e3` via PR #162, CI `test` pass 15m49s + Vercel pass — the first deploy green through the flipped `npm run build`, so the pin is runner-proven; `Closes #104` on the first line parsed; milestone #4 open=13/closed=20; **G-M4-3's decommission goal is complete** — the bare `dev`/`build`/`start` names are now the Next commands, the Vite scripts, `preview`, the `next:*` aliases and the `vite` devDependency are retired, the AC-2 guard shipped watched-RED, and the gates that carried the merge were unit 623 / api 81 / e2e 81 with the battery riding the renamed webServer; §1 bullet + §7 item 37 carry the sync). Earlier: **post-#161 checkpoint** — #103/M4-14 legacy decommission merged as `6660172` via PR #161, CI `test` pass 15m56s and the Vercel default-build-command fix landed in-PR as `3f0be8c` (`vercel.json`), the estate is gone from `main` with the parity guard inverted and green in CI, milestone #4 open=14/closed=19. Earlier: **post-#160 checkpoint** — #109/M4-20 body measurements merged as `0121e9e` via PR #160, CI `test` pass 14m51s, §1's measurements-absence entry retired, #103 unblocked, milestone #4 open=15/closed=18, #95 closed on the board. Earlier: **post-#159 checkpoint** — #111/M4-22 offline shell merged as `491fb1a`, wave 2 complete (milestone #4 open=16/closed=17), §1's service-worker entry retired, local-e2e venue unblocked, the battery is at this box's capacity (sla contention documented). Earlier: **post-#158 checkpoint** — #110/M4-21 export merged as `b74b6aa`, its CI-first-run e2e RED and fix recorded, §1's "does not exist" list loses its analytics+export entries, milestone #4 open=17/closed=16. Earlier: **post-#157 checkpoint** — #108/M4-19 merged as `3ef55ab`, #113
   identified as already-merged planning PR, milestone #4 open=18/closed=15. Earlier: **post-#156 checkpoint** — #101/M4-12 merged as `a543188`, keyword
   closed the issue, local branch pruned, milestone #4 open=19/closed=14. Earlier: **post-#155 checkpoint** — #149/M4-25 merged as `5ac4c1c`, local branch pruned,
   milestone #4 open=20/closed=13. Earlier: **#149 / M4-25 implemented** — the Lighthouse gate runs on this box now, four
@@ -1961,3 +1961,40 @@ Carried forward, still open:
       prose. Board now **open=12 / closed=21**, no open PR; the remote head did not self-delete
       (second consecutive card) and was deleted by hand. **#91 is the last implementable card of
       the M4 tail**; #16 remains the only owner-blocked one.
+
+39. **#91 (M4-02) implemented, measured, and merged — 2026-09-16, the drain's solo number
+    met its contention condition and lost** (branch `test/m4-02-batch-contention`, PR #165,
+    merged as `077c112`; local venue per item 33, CI the arbiter — it went 15m53s green).
+    - **The measurement** (`docs/perf/2026-09-16-m4-91-batch-contention.md`, instruments
+      committed: `scripts/perf-sync-contention.ts` + `npm run perf:contention` + three
+      `scripts/perf/batch-contention-*.sh`): solo HOLDS (driver p50 1 649–1 737 / p95
+      ≤ 1 949 ms; browser drain 1 679–1 837 ms, inside M3's 1 643–1 838 band);
+      contention at ordinary intensity (~11 rps + two overlapping 60-mutation drains —
+      inside delivered capacity, the 50 rps condition itself remains unreachable on this
+      box per #90) **MISSES**: driver p95 6 124 ms, drain 11 676 ms, bystander syncs
+      paying 2–4×. applied=offered and all-200 on every judged leg; the miss does not
+      rest on one order statistic.
+    - **AC-2 came with its own finding**: the contended control's UNMODIFIED baseline
+      missed too (p50 8 218 ms) — an independent re-confirmation, and proof that
+      "revert-and-green" can only discriminate in the solo config. There: 1 649 →
+      injected 6 500 ms under `lockSession` → 8 206 (+6 556, ~1:1 client-side through
+      the lock) → revert → 1 543 HOLDS + spec PASSES. The injection was anchor-asserted,
+      reverted by script, never committed (`git status` printed by every control).
+    - **Guardrails kept to the letter**: no constant moved (`git diff main -- tests/e2e
+      /sla.spec.ts lib/ src/` = 0 lines on the branch); the breach filed as **#164**
+      (new issue, remediation scoped there — #92 stays closed, this is not its
+      re-opening). One named caveat for the follow-up: Playwright's 15 s hang ceiling
+      stays GREEN through a real 5 s breach — spec-green must never be read as
+      budget-green.
+    - **Honesty ledger, per house rule**: a driver clock bug (deadline ticked before
+      fixture-minting) shorted the first run's nominal legs ~4 s — under-offering load,
+      fixed mid-session, disclosed in the artifact; the control script's "must be green"
+      echo line was corrected post-run (comment-only) when reality invalidated it; the
+      card's verification block named stale paths (`scripts/load-sync.ts`,
+      `next:build`) — executed commands listed as-really-run.
+    - **Board, measured this turn: milestone #4 open=11 / closed=22; no open PR; remote
+      head again did not self-delete (third consecutive card) and was removed by hand.**
+      The 11 open cards are the P2/P3 tail + drift (#76–#84, #97–#99, #102, #106/#107);
+      #16 the owner-blocked one; **#164 sits outside the milestone awaiting
+      `pk:tasks`/owner triage** — it is the only card the #91 evidence justifies, and
+      promoting it is not this checkpoint's to decide.

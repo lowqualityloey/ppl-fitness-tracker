@@ -21,7 +21,7 @@ npm install
 cp .env.example .env.local        # fill in the values PROMPTKIT.md §3 documents
 npm run db:up                     # project-scoped Supabase stack (never a foreign one)
 npm run db:seed && npm run db:seed:stretches
-npm run next:dev                  # http://localhost:3001
+npm run dev                       # http://localhost:3001
 ```
 
 Sign-in is email magic-link; in local development the link is printed by GoTrue — see
@@ -31,7 +31,7 @@ Sign-in is email magic-link; in local development the link is printed by GoTrue 
 
 | Command | What it does |
 | :--- | :--- |
-| `npm run next:dev` / `next:build` / `next:start` | the app, port **3001** |
+| `npm run dev` / `build` / `start` | the app, port **3001** (`build` = `next build` + the sw-manifest stamp) |
 | `npm run typecheck` | `next typegen` + `tsc --noEmit` (never bare `tsc`) |
 | `npm run lint` | `eslint --max-warnings=0 .` — warnings fail |
 | `npm test` | unit + DB-backed integration (needs the stack up) |
@@ -40,9 +40,11 @@ Sign-in is email magic-link; in local development the link is printed by GoTrue 
 | `npm run test:mutation` | proves the RLS suite can fail (M0 discipline, still live) |
 | `npm run db:up` / `db:down` / `db:seed` | the local Supabase project |
 
-`npm run dev`, `build`, and `preview` are the retired legacy Vite scripts: they have no
-inputs anymore and fail immediately. #104 (M4-15) removes them; do not wire anything to
-them in the meantime.
+`dev`, `build`, and `start` used to belong to the legacy Vite app (`preview` with them).
+#104 (M4-15) retired those Vite scripts and the `vite` devDependency, so today the bare
+names **are** the real Next commands — the `next:*` aliases that existed only to dodge the
+collision are gone too. `tests/unit/infra/legacy-build-scripts.test.ts` fails CI if a
+`vite` command or direct dependency returns to `package.json`.
 
 ## If you are coming from the old app
 

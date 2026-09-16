@@ -205,7 +205,20 @@
   the pin is now greppable, which is the point. Then the epistemic tail: **#112** (ADR-0007,
   first-merge-wins slot race with #78) and **#91** (concurrent re-measure). #16 stays the only
   owner-blocked card. §1 bullet + §7 items 35–36 carry this sync.
-- **Last Updated**: 2026-09-16 (**post-#161 checkpoint** — #103/M4-14 legacy decommission merged as `6660172` via PR #161, CI `test` pass 15m56s and the Vercel default-build-command fix landed in-PR as `3f0be8c` (`vercel.json`), the estate is gone from `main` with the parity guard inverted and green in CI, milestone #4 open=14/closed=19. Earlier: **post-#160 checkpoint** — #109/M4-20 body measurements merged as `0121e9e` via PR #160, CI `test` pass 14m51s, §1's measurements-absence entry retired, #103 unblocked, milestone #4 open=15/closed=18, #95 closed on the board. Earlier: **post-#159 checkpoint** — #111/M4-22 offline shell merged as `491fb1a`, wave 2 complete (milestone #4 open=16/closed=17), §1's service-worker entry retired, local-e2e venue unblocked, the battery is at this box's capacity (sla contention documented). Earlier: **post-#158 checkpoint** — #110/M4-21 export merged as `b74b6aa`, its CI-first-run e2e RED and fix recorded, §1's "does not exist" list loses its analytics+export entries, milestone #4 open=17/closed=16. Earlier: **post-#157 checkpoint** — #108/M4-19 merged as `3ef55ab`, #113
+- **Current Working Branch — 2026-09-16, #104 (M4-15) implemented (supersedes every bullet above for
+  "where am I now")**: `feat/m4-15-retire-legacy-build`, cut from `main` at #161's checkpoint (read
+  `git log --oneline -1` at the cut, per §1's no-pinning rule). The rename commit: `dev`/`build`/`start`
+  **are** the Next commands now (port decision: stay on 3001, recorded on the card), the Vite
+  `dev`/`build`/`preview` and the transitional `next:*` aliases are gone with the `vite` devDependency,
+  and `vercel.json` + `playwright.config.ts`'s webServer flipped **in the same commit** — no commit in
+  this branch's history lets the deploy contract point at a dead name. The AC-2 guard is new and was
+  watched RED before the rewire (`tests/unit/infra/legacy-build-scripts.test.ts`: 3 failed / 1 passed →
+  4/4 green). Gates measured on this head: typecheck 0 · lint 0 · unit **623/623** (65 files) · api
+  **81/81** · full e2e battery **81/81 in 4.2 m**, booted through the renamed webServer command, so the
+  battery is itself AC-1 evidence; `npm ci` clean; `public/sw.js` re-stamps discarded before staging.
+  Written pre-merge — no PR number or CI claim lives here yet (CI is the arbiter; #103's item-35
+  precedent). Next after this: the epistemic tail **#112** + **#91**; **#16** stays owner-blocked.
+- **Last Updated**: 2026-09-16 (**#104/M4-15 implemented** — the bare `dev`/`build`/`start` names were reclaimed for the Next commands, the Vite scripts and `vite` devDependency retired, `preview` and the `next:*` aliases deleted, `vercel.json` flipped inside the rename commit, the no-vite guard written and watched RED→GREEN, local gates unit 623 / api 81 / e2e 81 with the battery riding the renamed webServer; CI not yet run at this writing; §1 bullet + §7 item 37 carry the sync). Earlier: **post-#161 checkpoint** — #103/M4-14 legacy decommission merged as `6660172` via PR #161, CI `test` pass 15m56s and the Vercel default-build-command fix landed in-PR as `3f0be8c` (`vercel.json`), the estate is gone from `main` with the parity guard inverted and green in CI, milestone #4 open=14/closed=19. Earlier: **post-#160 checkpoint** — #109/M4-20 body measurements merged as `0121e9e` via PR #160, CI `test` pass 14m51s, §1's measurements-absence entry retired, #103 unblocked, milestone #4 open=15/closed=18, #95 closed on the board. Earlier: **post-#159 checkpoint** — #111/M4-22 offline shell merged as `491fb1a`, wave 2 complete (milestone #4 open=16/closed=17), §1's service-worker entry retired, local-e2e venue unblocked, the battery is at this box's capacity (sla contention documented). Earlier: **post-#158 checkpoint** — #110/M4-21 export merged as `b74b6aa`, its CI-first-run e2e RED and fix recorded, §1's "does not exist" list loses its analytics+export entries, milestone #4 open=17/closed=16. Earlier: **post-#157 checkpoint** — #108/M4-19 merged as `3ef55ab`, #113
   identified as already-merged planning PR, milestone #4 open=18/closed=15. Earlier: **post-#156 checkpoint** — #101/M4-12 merged as `a543188`, keyword
   closed the issue, local branch pruned, milestone #4 open=19/closed=14. Earlier: **post-#155 checkpoint** — #149/M4-25 merged as `5ac4c1c`, local branch pruned,
   milestone #4 open=20/closed=13. Earlier: **#149 / M4-25 implemented** — the Lighthouse gate runs on this box now, four
@@ -476,11 +489,15 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
   - Spike, from `spikes/m0-drizzle-rls/`: `npm run db:up` → `npm run db:setup` → `npm test`
     (32 pass) → `npm run mutate` → `npm run db:down`. Superseded by the real M1 suite, kept
     for reference.
-- **Known-broken (retired by deletion)**: the legacy `npm run build` bullet in this section
-  used to record "exits 0, writes 0 `.js` files, by design until M4" (re-verified 2026-09-11).
-  #103 deleted the estate's entry points and `vite.config.js`, so `npm run dev`/`build`/`preview`
-  now fail at startup with nothing to build; the scripts' formal removal is M4-15 (#104),
-  sequenced immediately after. Nothing user-facing depends on them and no gate runs them.
+- **Known-broken (retired by deletion, and by #104's script removal — 2026-09-16)**: the legacy
+  `npm run build` bullet in this section used to record "exits 0, writes 0 `.js` files, by
+  design until M4" (re-verified 2026-09-11). #103 deleted the estate's entry points and
+  `vite.config.js`, so `npm run dev`/`build`/`preview` were left failing at startup with nothing
+  to build — the honest interim item 35 recorded. **#104 (M4-15) closed that interim**: the Vite
+  scripts and the `vite` devDependency are gone, `preview` went with them, and `dev`/`build`/`start`
+  are now the real Next commands on port 3001 (the card's port decision: stay — every e2e/CI/GoTrue
+  config already pinned 3001). `tests/unit/infra/legacy-build-scripts.test.ts` keeps vite off every
+  script path. Nothing user-facing ever depended on them and no gate ran them.
   The route-handler suites under `tests/integration/api/` are
   excluded from `npm test` **because they boot a real `next dev` server**, not because any
   handler is missing: every M1 route shipped its handler in `#42`, which retired
@@ -1811,6 +1828,40 @@ Carried forward, still open:
       drop `dev`/`build`/`preview` + the `vite` devDependency, and keep `npm run next:build`
       resolvable or amend `vercel.json` in the same commit (the deploy contract is repo-greppable
       now — leave it one-sided and the next Vercel run tells you). Then the epistemic tail:
-      **#112** (ADR-0007, first-merge-wins slot race with #78) and **#91** (concurrent
-      re-measure — venue local per item 33, budgets untouched). **#16** stays the only
-      owner-blocked card.
+       **#112** (ADR-0007, first-merge-wins slot race with #78) and **#91** (concurrent
+       re-measure — venue local per item 33, budgets untouched). **#16** stays the only
+       owner-blocked card.
+
+37. **#104 (M4-15) implemented — 2026-09-16, `npm run build` finally means the real build**
+    (branch `feat/m4-15-retire-legacy-build`; written pre-merge, so no PR number or CI claim
+    lives here yet — CI is the arbiter, per every row above).
+    - **The rewire-vs-drop resolution, which supersedes item 36's phrasing**: item 36 said
+      "drop `dev`/`build`/`preview`", but the card's AC-1 is *Given the rewired scripts* and
+      demands `npm run start` serve the app — an absence cannot satisfy a Given, so the card
+      (the filed authority) wins over the checkpoint summary (the derived one). What actually
+      landed: the bare names were **reclaimed** for the Next commands (`build` = `next build`
+      + the sw-manifest stamp chain #111 added), `preview` was **dropped** (vite-preview's
+      job is `start`'s), and the transitional `next:*` aliases — which existed only to dodge
+      the legacy collision — were retired with vite. The pin held: `vercel.json`'s
+      buildCommand flipped to `npm run build` **inside the rename commit**, so the deploy
+      contract is never one-sided at any point in history. `npm ls vite` now answers that
+      vite@7.3.6 exists *only* as vitest's own dependency — AC-2's "unaffected and says so".
+    - **Port decision recorded (card AC-3): stay on 3001.** 3000 stayed vacant on purpose —
+      moving it would churn `playwright.config.ts`, the CI env, GoTrue's `site_url`, and
+      `.env.example` for no benefit; the stale "legacy Vite app remains on 3000" comment in
+      `supabase/config.toml` was corrected in passing.
+    - **The absence claim got a CI guard, not a promise**:
+      `tests/unit/infra/legacy-build-scripts.test.ts` scans package.json's own declarations
+      (`\bvite\b` keeps `vitest` legal by construction), the dependency tables, and
+      `git ls-files` for `dist`/`vite.config.*` — and was **watched RED first**: 3 failed /
+      1 passed on the pre-rewire scripts, 4/4 after. `dist/` deleted, its `.gitignore` line
+      removed with it.
+    - **Gates measured on this head**: `npm ci` clean · typecheck 0 · lint 0 · unit **65
+      files / 623** · api **13 / 81** · e2e **81/81 in 4.2 m** — the battery booted through
+      the *renamed* webServer command, which makes it AC-1 evidence, not just a regression
+      run. Both local-build `public/sw.js` re-stamps discarded before staging.
+    - **Not undone from item 36's invariants**: the estate stays deleted, the parity guard is
+      untouched (still the index-reading absence claim), the SW allowlist is still exactly
+      `src/components/shell-registration.tsx` (a comment in it follows the rename, the
+      registration logic does not move), and the import seam still reads five keys and clears
+      none.

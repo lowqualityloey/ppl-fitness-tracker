@@ -50,7 +50,7 @@ const PROOF_RELEASE = process.env.SENTRY_RELEASE ?? process.env.NEXT_PUBLIC_SENT
 
 export default withSentryConfig(nextConfig, {
   tunnelRoute: '/monitoring',
-  // The SDK's own build chatter is noise in `npm run next:build`; failures still print.
+  // The SDK's own build chatter is noise in `npm run build`; failures still print.
   silent: !process.env.CI,
 
   /*

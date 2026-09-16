@@ -12,7 +12,7 @@ import { useEffect, useState } from 'react';
  * server never registers a worker — a stale SW over `next dev`'s hot-reloading chunks is a
  * support trap with no paying user on the other side, and the e2e venue is the production
  * build anyway. That is a *documented* posture, not a gap: the battery asserts offline
- * behavior against `next:build && next:start`, and the dev exemption is asserted nowhere it
+ * behavior against `npm run build && npm run start`, and the dev exemption is asserted nowhere it
  * could rot silently because there is nothing to rot — no worker, no cache, nothing to claim.
  *
  * Auth-agnostic: an anonymous visitor caching `/sign-in` is exactly what AC-3's offline

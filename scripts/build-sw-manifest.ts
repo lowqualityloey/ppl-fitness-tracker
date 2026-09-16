@@ -1,7 +1,7 @@
 /**
  * M4-22 (#111) — the offline shell's build-side half: pre-build knowledge for `public/sw.js`.
  *
- * Runs *after* `next build` (chained in the `next:build` script) because nothing else can
+ * Runs *after* `next build` (chained in the `build` script) because nothing else can
  * know this build's hashed chunk URLs or its build id: `next.config.ts` evaluates before
  * `.next/BUILD_ID` exists, and anything that inlines the id earlier either races it or fakes
  * it. Two outputs, both deterministic:

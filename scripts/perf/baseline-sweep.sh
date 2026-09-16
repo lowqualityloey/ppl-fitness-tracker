@@ -14,7 +14,7 @@ set -a; source .env.local; set +a
 
 echo "HOST  nproc=$(nproc) load_before=$(cat /proc/loadavg)"
 echo "=== build (unmodified tree) ==="
-npm run next:build > /tmp/ppl-perf-build.log 2>&1
+npm run build > /tmp/ppl-perf-build.log 2>&1
 echo "build_exit=$?"
 tail -2 /tmp/ppl-perf-build.log
 

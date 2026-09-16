@@ -63,7 +63,7 @@ open(p, 'w').write(s.replace(anchor, injection + anchor, 1))
 print("  injected")
 PY
 grep -n "CONTROL INJECTION" src/app/api/sync/route.ts | head -1
-npm run next:build > /tmp/ppl-perf-build1.log 2>&1; echo "  build_exit=$?"
+npm run build > /tmp/ppl-perf-build1.log 2>&1; echo "  build_exit=$?"
 start_server || exit 1
 echo "### CONTROL RUN (same config, +500 ms injected)"
 run injected
@@ -72,7 +72,7 @@ stop_server
 echo; echo "### REVERT + REBUILD + RE-MEASURE"
 git checkout -- src/app/api/sync/route.ts
 echo "  route.ts modified after revert: $(git status --porcelain src/app/api/sync/route.ts | wc -l) entries"
-npm run next:build > /tmp/ppl-perf-build2.log 2>&1; echo "  build_exit=$?"
+npm run build > /tmp/ppl-perf-build2.log 2>&1; echo "  build_exit=$?"
 start_server || exit 1
 echo "### CONTROL RESTORED (third number)"
 run restored

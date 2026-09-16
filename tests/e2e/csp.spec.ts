@@ -4,7 +4,7 @@ import { signInFreshUser } from './auth';
 /**
  * M4-24 (#142) — CSP baseline against the PRODUCTION server.
  *
- * The card is blunt about why this file talks to `next:start` and not a dev server:
+ * The card is blunt about why this file talks to `npm run start` and not a dev server:
  * a green build is not the signal under a nonce policy — Next builds fine and fails at
  * runtime instead, so every scenario here rides the same prod server (`playwright.config.ts`
  * webServer) the whole battery already uses.

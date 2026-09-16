@@ -81,3 +81,11 @@ BUILD_VERSION stamp is present wherever "the real build" runs, including the e2e
 booted through the renamed webServer command (`npm run build && npm run start`) — the battery is
 itself AC-1 evidence. `public/sw.js` BUILD_VERSION re-stamps from local builds were discarded before
 staging (harness discipline, #160/#161 convention).
+
+**Post-merge addendum (this card's caveat discharged):** PR **#162** merged the branch into `main`
+as `b7fb2e3` (squash, 2026-09-16T04:31:29Z; the plain `Closes #104` on the body's first line closed
+the issue at 04:31:30Z, API-read). **CI arbiter: `test` PASS 15m49s + Vercel PASS** — the Vercel
+green is the decisive one: it is the first deploy that built through the flipped `buildCommand`, so
+the "never one-sided" claim is proven on Vercel's own runner, not merely asserted in this file.
+All three ACs are green on `main`. Board after merge: milestone #4 open=13 / closed=20; G-M4-3's
+"#104 after #103" discharged — the legacy decommission is complete.

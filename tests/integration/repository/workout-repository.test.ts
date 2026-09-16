@@ -902,6 +902,72 @@ describe('WorkoutRepository', () => {
     expect(ledger.rows).toEqual([]);
   });
 
+  it('patches in-memory state through upserts so it equals a fresh session read', async () => {
+    await owner.query(
+      'DELETE FROM session_sets WHERE user_id = $1 AND exercise_id = $2',
+      [userId, exerciseId],
+    );
+    await owner.query(
+      'DELETE FROM personal_records WHERE user_id = $1 AND exercise_id = $2',
+      [userId, exerciseId],
+    );
+    const { id: sessionId, clientTs } = await beginExerciseSession('2028-05-01');
+
+    const patched = await repository.mutateSession(userId, sessionId, async (mutation) => {
+      await mutation.upsertSet({
+        exerciseId, setIndex: 1, isCompleted: true, weightKg: 55.5, reps: null, clientTs,
+      });
+      await mutation.upsertSet({
+        exerciseId, setIndex: 0, isCompleted: true, weightKg: 60, reps: 8, clientTs,
+      });
+      // Conflict path: same natural key, updated values.
+      await mutation.upsertSet({
+        exerciseId, setIndex: 0, isCompleted: true, weightKg: 62.25, reps: 10, clientTs,
+      });
+      await mutation.completeTask({ taskKey: 'main_workout', completedAt: clientTs, clientTs });
+    });
+
+    // #167 slice A: the in-memory patch must be indistinguishable from the remap it replaced.
+    expect(patched).toEqual(await repository.findSession(userId, sessionId));
+    expect(patched.sets.map(({ setIndex }) => setIndex)).toEqual([0, 1]);
+    // Enum label order (warm_up before main_workout), not alphabetical — a string-sorting
+    // comparator in patchTasks would flip this.
+    expect(patched.tasks.map(({ taskKey }) => taskKey)).toEqual(['warm_up', 'main_workout']);
+  });
+
+  it('rolls back the whole batch when the deferred materialization fails on the last mutation', async () => {
+    await owner.query(
+      'DELETE FROM session_sets WHERE user_id = $1 AND exercise_id = $2',
+      [userId, exerciseId],
+    );
+    await owner.query(
+      'DELETE FROM personal_records WHERE user_id = $1 AND exercise_id = $2',
+      [userId, exerciseId],
+    );
+    const { id: sessionId } = await beginExerciseSession('2028-05-02');
+    const good: SyncRequest['mutations'][number] = {
+      op: 'set.upsert', mutationId: randomUUID(), clientTs: '2028-05-02T12:00:00.000Z',
+      sessionId, exerciseId, setIndex: 0, isCompleted: true, weightKg: 60, reps: 8,
+    };
+    const poison: SyncRequest['mutations'][number] = {
+      ...good, mutationId: randomUUID(), setIndex: 1, weightKg: 1000, reps: 1000,
+    };
+
+    // The e1RM blowup now surfaces at the after-loop flush, not mid-mutation: the applied
+    // first mutation must still leave no trace anywhere.
+    await expect(repository.applySync(userId, {
+      deviceId: randomUUID(), sinceSeq: 0, mutations: [good, poison],
+    })).rejects.toBeInstanceOf(ProgressionValidationError);
+
+    expect((await repository.findSession(userId, sessionId))?.sets).toEqual([]);
+    expect(await repository.findPersonalRecord(userId, exerciseId)).toBeNull();
+    const ledger = await owner.query(
+      'SELECT 1 FROM sync_mutations WHERE mutation_id = ANY($1)',
+      [[good.mutationId, poison.mutationId]],
+    );
+    expect(ledger.rows).toEqual([]);
+  });
+
   it('serializes concurrent identical submissions into one domain write and sequence', async () => {
     const { id: sessionId } = await beginExerciseSession('2028-03-14');
     const mutation: SyncRequest['mutations'][number] = {

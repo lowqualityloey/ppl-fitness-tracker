@@ -122,6 +122,33 @@ describe('Outbox — RFC §4.3 invariants', () => {
     expect(queued.map((row) => row.seq)).toEqual([0, 1, 2]);
   });
 
+  it('serializes seq assignment, so two overlapping taps cannot share an order slot', async () => {
+    const storage = new MemoryStorage();
+    // The second tap gets the *lower* uuid. That is not decoration: it is the value the real
+    // store's tiebreak reads, so a shared `seq` surfaces here as a reordered queue rather
+    // than as a paragraph about one.
+    const ids = [id(20), id(10)];
+    const outbox = new Outbox(SESSION, {
+      storage,
+      now: () => 1_700_000_000_000,
+      newId: () => ids.shift()!,
+    });
+
+    // The tap path exactly as it calls this: the runner's handlers `await engine.mutate(...)`
+    // inside a fire-and-forget `onClick`, so a second press begins while the first
+    // `enqueue` is still awaiting `lastSeq()` — the read-modify-write `StoredMutation.seq`
+    // documents as "assigned under the enqueue lock".
+    await Promise.all([outbox.enqueue(setUpsert(outbox, 0)), outbox.enqueue(setUpsert(outbox, 1))]);
+
+    const queued = await outbox.peek();
+    // Distinct, and monotonic in tap order. A duplicate hands the pair's order to the
+    // mutationId tiebreak — which is how a `phase.advance` can reach the server before the
+    // `task.complete` it depends on, get refused, and never be retried (#169).
+    expect(queued.map((row) => row.seq)).toEqual([0, 1]);
+    expect(queued.map((row) => (row.payload.op === 'set.upsert' ? row.payload.setIndex : -1)))
+      .toEqual([0, 1]);
+  });
+
   it('assigns seq without reading the whole queue', async () => {
     // The 50 ms tap-latency gate in #63 spends its budget on this path, so the cost is
     // part of the contract rather than an implementation detail. `enqueue` used to call

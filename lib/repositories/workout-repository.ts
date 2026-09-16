@@ -43,8 +43,10 @@ import type {
   SessionMutationContext,
   SessionPage,
   SessionSetMutation,
+  SessionSetState,
   SessionState,
   SessionTaskMutation,
+  SessionTaskState,
 } from '../domain/sessions/types';
 import {
   InvalidSessionCursorError,
@@ -73,6 +75,45 @@ const SESSION_PHASE_ORDER: Record<string, number> = {
 };
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const LOCAL_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+// Mirrors the pgEnum label definition order for task_key, which is what
+// `asc(sessionTasks.taskKey)` sorts by — alphabetical order would differ.
+const TASK_KEY_ORDER: Record<string, number> = {
+  warm_up: 0,
+  main_workout: 1,
+  stretch: 2,
+};
+
+function compareSetStates(left: SessionSetState, right: SessionSetState): number {
+  if (left.exerciseId !== right.exerciseId) {
+    return left.exerciseId < right.exerciseId ? -1 : 1;
+  }
+  return left.setIndex - right.setIndex;
+}
+
+function compareTaskStates(left: SessionTaskState, right: SessionTaskState): number {
+  return TASK_KEY_ORDER[left.taskKey]! - TASK_KEY_ORDER[right.taskKey]!;
+}
+
+/**
+ * In-memory equivalent of the `mapSessionInTx` remap for a set/task upsert: splice in the row
+ * the database just returned (`.returning()`, so ids and timestamps are the DB's canonical
+ * values) and restore the exact ORDER BY the removed remap applied. M4-27 (#167).
+ */
+function patchSets(sets: readonly SessionSetState[], written: SessionSetState): SessionSetState[] {
+  return [
+    ...sets.filter((set) =>
+      !(set.exerciseId === written.exerciseId && set.setIndex === written.setIndex)),
+    written,
+  ].sort(compareSetStates);
+}
+
+function patchTasks(tasks: readonly SessionTaskState[], written: SessionTaskState): SessionTaskState[] {
+  return [
+    ...tasks.filter((task) => task.taskKey !== written.taskKey),
+    written,
+  ].sort(compareTaskStates);
+}
 
 type SessionCursor = {
   localDate: string;
@@ -575,7 +616,8 @@ export class WorkoutRepository {
         if (!updated) throw new SessionNotFoundError('Session disappeared during sync.');
         state.current = await this.mapSessionInTx(tx, updated);
       };
-      const context = this.createMutationContext(tx, session, state, refreshState);
+      const touchedExercises = new Set<string>();
+      const context = this.createMutationContext(tx, session, state, refreshState, touchedExercises);
       const receivedAt = new Date();
       const store = this.syncStore(
         tx,
@@ -585,7 +627,9 @@ export class WorkoutRepository {
         request.deviceId,
         receivedAt,
       );
-      return new SyncEngine(store).apply(request);
+      const result = await new SyncEngine(store).apply(request);
+      await this.flushPersonalRecords(tx, userId, touchedExercises);
+      return result;
     });
   }
 
@@ -609,8 +653,10 @@ export class WorkoutRepository {
         if (!updated) throw new SessionNotFoundError('Session disappeared during mutation.');
         state.current = await this.mapSessionInTx(tx, updated);
       };
+      const touchedExercises = new Set<string>();
 
-      await operation(this.createMutationContext(tx, session, state, refreshState));
+      await operation(this.createMutationContext(tx, session, state, refreshState, touchedExercises));
+      await this.flushPersonalRecords(tx, userId, touchedExercises);
       return state.current;
     });
   }
@@ -652,15 +698,15 @@ export class WorkoutRepository {
     session: typeof workoutSessions.$inferSelect,
     state: MutableState,
     refreshState: () => Promise<void>,
+    touchedExercises: Set<string>,
   ): SessionMutationContext {
-    const progression = new ProgressionEngine(this.progressionStore(tx, session.userId));
     return {
       get state(): SessionState {
         return state.current;
       },
       upsertSet: async (input: Omit<SessionSetMutation, 'sessionId'>): Promise<void> => {
         assertSetMutationAllowed(state.current, { ...input, sessionId: session.id });
-        await tx
+        const [written] = await tx
           .insert(sessionSets)
           .values({
             userId: session.userId,
@@ -682,13 +728,20 @@ export class WorkoutRepository {
               clientTs: input.clientTs,
               updatedAt: new Date(),
             },
-          });
-        await progression.materializePersonalRecord(input.exerciseId);
-        await refreshState();
+          })
+          .returning();
+        if (!written) throw new Error('Set upsert returned no row.');
+        // M4-27 (#167): the per-mutation `refreshState()` remapped the whole session graph to
+        // re-derive state this write already knows, and `materializePersonalRecord` ran per set
+        // instead of once per distinct exercise. The patch mirrors what the remap produced (the
+        // returned row is the DB's canonical copy); the sequence it leaves one step behind
+        // belongs to `currentServerSeq()`, same as before.
+        state.current = { ...state.current, sets: patchSets(state.current.sets, mapSessionSet(written)) };
+        touchedExercises.add(written.exerciseId);
       },
       completeTask: async (input: Omit<SessionTaskMutation, 'sessionId'>): Promise<void> => {
         assertTaskMutationAllowed(state.current, { ...input, sessionId: session.id });
-        await tx
+        const [written] = await tx
           .insert(sessionTasks)
           .values({
             sessionId: session.id,
@@ -704,8 +757,10 @@ export class WorkoutRepository {
               clientTs: input.clientTs,
               updatedAt: new Date(),
             },
-          });
-        await refreshState();
+          })
+          .returning();
+        if (!written) throw new Error('Task upsert returned no row.');
+        state.current = { ...state.current, tasks: patchTasks(state.current.tasks, mapSessionTask(written)) };
       },
       advancePhase: async (phase): Promise<void> => {
         assertPhaseAdvance(state.current, phase);
@@ -731,6 +786,24 @@ export class WorkoutRepository {
         await refreshState();
       },
     };
+  }
+
+  /**
+   * M4-27 (#167): one `materializePersonalRecord` per distinct touched exercise, after the
+   * mutation loop but inside the same transaction — a `ProgressionValidationError` still aborts
+   * the whole request and the all-or-nothing rollback shape is unchanged. Sorted order gives
+   * concurrent batches one deterministic `personal_records` lock sequence.
+   */
+  private async flushPersonalRecords(
+    tx: Tx,
+    userId: string,
+    touchedExercises: Set<string>,
+  ): Promise<void> {
+    if (touchedExercises.size === 0) return;
+    const progression = new ProgressionEngine(this.progressionStore(tx, userId));
+    for (const exerciseId of [...touchedExercises].sort()) {
+      await progression.materializePersonalRecord(exerciseId);
+    }
   }
 
   private syncStore(

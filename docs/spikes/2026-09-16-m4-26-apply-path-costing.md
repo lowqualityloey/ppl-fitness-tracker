@@ -93,3 +93,21 @@ prediction is wrong and M4-27 reopens the design, not the budget.
 one 1–4 h slice. Per the M4-27 card's own law, `pk:tasks` should split M4-27 on this
 document first; the natural seams above are independently verifiable (each re-runs
 the #91 instrument) and group 4+5 alone already removes ~45 % of the contended wall.
+
+## Post-fix reading (M4-28 / #168, measured 2026-09-21)
+
+The prediction above was falsifiable by the committed instruments on the same venue, and here is
+what they said — with the one clause that moved stated as a **correction**, not a pass.
+
+| Predicted | Measured (paired same-day legs, post-fix) | Disposition |
+| :-- | :-- | :-- |
+| contended driver p95 ≤ 3 500 ms (HOLDS) | **719.4 ms** (pre 2 543.4, n=268 batches) | **confirmed**, with margin |
+| solo p50 400–900 ms | **245.7 ms** (pre 1 015.9) | **corrected downward** — better than predicted |
+| bystander class unchanged or better | p50 527.0 → **434.5**, p95 650.8 → **576.9** (n=2 000) | **confirmed (better)** |
+
+Workstream 1's five groups arrived in two slices — groups 4+5 as M4-27 (#167), groups 1–3 as M4-28
+(#168) — so no group remains unshipped and the design does not reopen: nothing landed above the
+3 500 ms falsification line. Two caveats travel with the confirmation and are recorded in
+`docs/perf/2026-09-16-m4-91-batch-contention.md` §"M4-28 slice B": today's **pre**-leg also held the
+5 s budget (2 543.4 ms), so the 2026-09-16 breach (6 337.9 ms) was not reproduced on this box today;
+and the solo band is a correction rather than a hit.

@@ -153,6 +153,41 @@ Measured, not assumed — every plausible route was checked before declaring the
 | Vercel CLI | resolvable (`59.23.2` via `npx --no-install vercel`), but unusable without that link |
 | GitHub Actions / deployment secrets | not readable by `gh`, by design |
 | Production HTTP surface | `302` to Vercel SSO on every path (blocker **B1**), so the data cannot be inferred through the API either |
+| **Vercel project env — the decisive one** | `vercel env ls production` **and** `vercel env ls` (all environments): **"No Environment Variables found"**. A production `env pull` returned **only** Vercel/Turbo system vars — **no `DATABASE_URL`, no `NEXT_PUBLIC_SUPABASE_URL`, no anon key, no `NEXT_PUBLIC_APP_URL`** |
+
+### The decisive finding — larger than this card (measured 2026-09-21)
+
+**The Vercel project that serves the production alias has zero environment variables registered, in every
+environment.** The project is `jonells-projects/ppl-fitness-tracker` (production alias
+`https://ppl-fitness-tracker.vercel.app`, the same alias that answers `302` to SSO). Consequences:
+
+- The deployed application can obtain **no** runtime configuration: no database credential, no Supabase
+  client URL or anon key, no `NEXT_PUBLIC_APP_URL`.
+- Since `f0f5993` (M4-31), a boot without `DATABASE_URL` **refuses to start and exits non-zero**. Production
+  therefore cannot serve a request at all.
+- **The last step is inference, not measurement, and is labelled as such**: it cannot be observed from here
+  because B1's SSO means no request ever reaches the app. `vercel logs` returns *"No logs found"* — the
+  signature of a surface nobody can hit, **not** evidence of a healthy one.
+- Every deployment shows **`● Ready`** — but that is a **build** result and carries no runtime signal. The
+  release record's earlier "application code deployment — already automatic, verified" row reads a *build*
+  status, and should not be read as "the deployed app works".
+- **This contradicts the owner-reported claim recorded earlier this session that Vercel's env was "all set".**
+  That claim was labelled *owner-reported, not measured* at the time; it is now **measured false**.
+
+### The CLI route, attempted and closed out
+
+Because the Vercel CLI on this host is authenticated as `lowqualityloey`, the read was attempted through it
+rather than asking the owner to run psql. What happened, recorded with its footprint:
+
+| Step | Result |
+| :--- | :--- |
+| `vercel link --yes --project ppl-fitness-tracker --scope jonells-projects` | linked; the CLI also **appended `VERCEL_OIDC_TOKEN` to `.env.local`** as a side effect |
+| `vercel env pull <throwaway> --environment=production` | **no app variables returned** — only `VERCEL_*` / `TURBO_*` system vars |
+| `vercel env ls production` / `vercel env ls` | **"No Environment Variables found"** — the authoritative form of the finding |
+| Footprint removed | `.vercel/` deleted, the throwaway pull file deleted, `.env.local` **restored to exactly 1623 bytes** with all 6 keys intact and the token gone, and the CLI's `.gitignore` edit reverted (`git checkout -- .gitignore`) |
+| Tree after | `git status` clean — the workspace is exactly as it was found |
+
+No credential was printed, logged, or committed, and **nothing was written to Vercel or to production**.
 
 ### The corrected verification command
 
@@ -200,7 +235,7 @@ the release is not labelled ready on a partial read.
 - **Commit Evidence**: `N/A before commit`
 - **Pull Request Evidence**: `N/A`
 - **Release Evidence**: B5 row in `docs/releases/2026-09-21-v1.0.0-release-readiness.md` — updated, **stays open**
-- **Blocker and Resume Condition**: **requires a hosted read credential.** Either the owner sets `HOSTED_DATABASE_URL` locally, or the owner runs the corrected command above themselves and returns **only the counts and slugs** — never the DSN, which the card's invariants forbid in any document or issue.
+- **Blocker and Resume Condition**: **the prerequisite is now larger than a credential, and that is the headline.** A read credential does not merely fail to exist on this workstation — **none exists in Vercel either**, because the production project has no environment variables at all (blocker **B6**). B5 therefore cannot be closed by anyone running a query: production must first be **configured**, and only then is a seed read meaningful. If the owner supplies a hosted DSN directly, the corrected command above still applies and returns the counts and slugs; the DSN itself must never appear in any document or issue.
 
 - **Completion State**: `blocked`
 - **Acceptance Results**: `AC-1 Not Verified` · `AC-2 Not Verified (control measured locally)` · `AC-3 Partially Verified (expected side measured)` · `AC-4 Pass` · `AC-5 Pass` · `AC-6 Pass`

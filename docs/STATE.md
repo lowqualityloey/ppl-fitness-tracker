@@ -823,6 +823,11 @@ Added by the M0 spike (ADR-0003 Amendment A1):
   the same annotation verbatim. **The condition blocks every run-creation path, not just re-runs**, so while it
   holds *pushing delivers code with no arbitration attached*. **Seven commits now sit on `origin/main` with no
   runner-side result**, and **`main`'s last CI-verified-green revision remains `e11e75b`.**
+  **Fifth occurrence, 2026-09-21T05:06:15Z:** pushing the two free cost-control commits
+  (`89418d5..6203057`) produced run **`35563333673`** on `6203057` — again **`steps: 0`**, the identical
+  annotation, so the condition is unchanged and no push or re-run can arbitrate. The same run is also the
+  **only** evidence that GitHub accepts the new `.github/workflows/test.yml` (`state=active`, a normally
+  created `test` job, no `startup_failure`) — **syntax acceptance, not gate validation**, since no step ran.
   **Local evidence substituted, and labelled as such:** with no runner able to start, the workflow's full
   five-stage gate was executed **locally on `89418d5`** — lint 0 · typecheck 0 · set-config ban 0 ·
   preflight 4/4 · unit **66 files / 638 tests** · api **14 files / 84 tests** · e2e **81 passed** (0 skipped,

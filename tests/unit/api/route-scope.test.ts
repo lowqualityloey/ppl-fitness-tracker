@@ -35,6 +35,7 @@ const TRAIL_REGISTRY: Array<{ route: string; methods: string[] }> = [
   { route: 'src/app/api/import/legacy/route.ts', methods: ['POST'] },
   { route: 'src/app/api/export/v1/route.ts', methods: ['GET'] },
   { route: 'src/app/api/measurements/route.ts', methods: ['GET', 'POST'] },
+  { route: 'src/app/api/health/route.ts', methods: ['GET'] },
   { route: 'src/app/auth/confirm/route.ts', methods: ['GET'] },
   { route: 'src/app/auth/signin/route.ts', methods: ['POST'] },
   { route: 'src/app/auth/signout/route.ts', methods: ['POST'] },

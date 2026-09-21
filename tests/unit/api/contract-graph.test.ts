@@ -38,6 +38,9 @@ const GRAPH: GraphEntry[] = [
   { route: 'src/app/api/import/legacy/route.ts', contracts: ['import', 'envelope'], methods: ['POST'] },
   { route: 'src/app/api/export/v1/route.ts', contracts: ['export', 'envelope'], methods: ['GET'] },
   { route: 'src/app/api/measurements/route.ts', contracts: ['measurements', 'envelope'], methods: ['GET', 'POST'] },
+  // M4-30: the release probe. Declared here rather than left implicit because this
+  // list is what stops a new route from owning its own response shape.
+  { route: 'src/app/api/health/route.ts', contracts: ['health', 'envelope'], methods: ['GET'] },
 ];
 
 function readRoute(path: string): string {

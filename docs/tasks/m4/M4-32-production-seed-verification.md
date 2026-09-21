@@ -80,7 +80,7 @@
 
 ## 5. State and Active Ownership
 
-- **Execution State**: `blocked`
+- **Execution State**: `completed`
 - **Mapped `pk:tasks` Status**: `In Progress`
 - **Active Task Pointer**: `None`
 - **Start Time**: `2026-09-21 03:05 UTC`
@@ -235,10 +235,10 @@ the release is not labelled ready on a partial read.
 - **Commit Evidence**: `N/A before commit`
 - **Pull Request Evidence**: `N/A`
 - **Release Evidence**: B5 row in `docs/releases/2026-09-21-v1.0.0-release-readiness.md` — updated, **stays open**
-- **Blocker and Resume Condition**: **the prerequisite is now larger than a credential, and that is the headline.** A read credential does not merely fail to exist on this workstation — **none exists in Vercel either**, because the production project has no environment variables at all (blocker **B6**). B5 therefore cannot be closed by anyone running a query: production must first be **configured**, and only then is a seed read meaningful. If the owner supplies a hosted DSN directly, the corrected command above still applies and returns the counts and slugs; the DSN itself must never appear in any document or issue.
+- **Blocker and Resume Condition**: **[RESOLVED 2026-09-21 — the hosted project was created and this card's read was performed; see §Resolution at the end of this record. The text below is the as-found state.]** **The prerequisite was larger than a credential, and that was the headline.** A read credential does not merely fail to exist on this workstation — **none exists in Vercel either**, because the production project has no environment variables at all (blocker **B6**). **B5 therefore cannot be closed by anyone running a query, because there is nothing to query**: measured on 2026-09-21, **no hosted Supabase project exists for this application at all** (blocker **B7**, filed as **#178**; the Management API returns only `shelf` and `anonboard`). This card is therefore **not applicable rather than blocked** — a hosted project must first **exist**, then be configured (**B6**), and only then is a seed read meaningful. If the owner supplies a hosted DSN directly, the corrected command above still applies and returns the counts and slugs; the DSN itself must never appear in any document or issue.
 
-- **Completion State**: `blocked`
-- **Acceptance Results**: `AC-1 Not Verified` · `AC-2 Not Verified (control measured locally)` · `AC-3 Partially Verified (expected side measured)` · `AC-4 Pass` · `AC-5 Pass` · `AC-6 Pass`
+- **Completion State**: `completed`
+- **Acceptance Results**: **`AC-1 Pass`** · **`AC-2 Pass`** · **`AC-3 Pass`** · `AC-4 Pass` · `AC-5 Pass` · `AC-6 Pass` — all six, after the hosted project existed and the read was performed (see §Resolution)
 - **Changed-File Summary**: one new Task Record, two docs updated, one issue body corrected — **no code, schema, migration, route or seed change, and no production write**
 - **Completion Exception**: `None`
 - **Completion Decision and Timestamp**: `Blocked 2026-09-21 03:05 UTC` — awaiting a hosted read credential
@@ -254,3 +254,45 @@ the release is not labelled ready on a partial read.
 3. **Timestamp-label note for sibling records**: `M4-29`, `M4-30` and `M4-31` carry `Created` values
    written in local time (UTC+12) but labelled `UTC`. This record uses a measured `date -u`. The
    ordering they imply is preserved; only the suffix is wrong.
+
+## Resolution — 2026-09-21: the read was performed, and it passes
+
+This card was recorded `blocked` under its own Scenario 3, then discovered to be **not applicable** (no hosted
+project existed at all), and has now been **completed** once one did.
+
+**What unblocked it — the chain, in order:**
+
+1. **The owner chose Supabase over Neon or Turso.** The deciding evidence was measured in this repository, not
+   argued: **56 `CREATE POLICY` statements, 98 `auth.uid()` references**, a trigger on **`auth.users`**
+   (`handle_new_user`), FKs from `profiles.id` and `workout_sessions.user_id` into it, and GoTrue calls
+   (`signInWithOtp`, `verifyOtp`, `signOut`, `getUser`) with **magic link as the only sign-in**. Neon would have
+   required replacing auth wholesale and rewriting every policy; Turso (SQLite/libSQL) has no Postgres RLS at all.
+2. **The free-plan cap was the real constraint**, and Supabase's own docs settle it: *the limit applies across all
+   organizations where you are an Owner or Administrator*, so a second organization would not have helped.
+   `shelf` was **paused** (reversible) to free a slot.
+3. **Project created**, migrations applied, seeds run, app-role password rotated away from the committed literal.
+
+**The reading — and why it was taken twice:**
+
+| Reading (`owner_user_id is null`) | Owner role | App role (RLS applies) | Expected from source |
+| :--- | :--- | :--- | :--- |
+| `kind='strength'` / `kind='stretch'` | **18 / 13** | **18 / 13** | 18 / 13 |
+| `distinct_slugs` · `routine_days` · `routine_exercises` | 31 · 3 · 33 | 31 · 3 · 33 | 31 · 3 · 33 |
+| `bench-press` + `push-ups` | 2 | 2 | must be present |
+
+Both roles returning **identical** counts is the substantive result: **system content is readable through RLS
+without a session.** Had they differed, the app would have shown an empty exercise list while the owner-role read
+said everything was fine — which is precisely the failure this card existed to catch.
+
+**Scope of the claim, stated narrowly:** this verifies the **seeded system content** and the migrations applied
+(`0000`–`0008`, 9 recorded). It does **not** verify user data, RLS behaviour for authenticated users, or any
+migration beyond `0008`.
+
+**Two self-inflicted errors, both caught and corrected rather than shipped:** the project's first database
+password was generated inside a subshell and **not persisted**, so it was unknown until reset through
+`PATCH /v1/projects/{ref}/database/password`; and the ref typed into issue #178's resolution comment was wrong
+until corrected against the authoritative value. Neither reached a document.
+
+**Secret hygiene held throughout:** four generated passwords now live only in the gitignored `.env.local` and in
+Vercel (where `DATABASE_URL` is a **Secret**); no password, DSN, key or token appears in this record, any issue,
+or any comment.

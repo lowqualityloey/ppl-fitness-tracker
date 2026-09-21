@@ -1,10 +1,61 @@
 name: Test Suite
 
+# Cost control, added 2026-09-21 — **free: no plan change, no payment method, nothing subscribed**.
+# No card is filed for this change; the measurement it acts on is recorded in
+# `docs/releases/ci-triage/ci-cost-measurement.md`, and the failure it responds to in
+# `docs/releases/ci-triage/CI-github-35555062183.md`.
+#
+# Context: CI stopped starting altogether. Four runs across two revisions, every one of them
+# `steps: 0` in ~2 s, on GitHub's account-billing annotation (see
+# `docs/releases/ci-triage/CI-github-35555062183.md`). The account condition is why those runs
+# failed; this file is why the allowance ran out in the first place. Measured across all 227 runs
+# this repo has ever created (2026-09-07 → 2026-09-21, nothing excluded):
+#
+#   total runner wall-clock ....... 2,279 minutes
+#   docs-only pushes ..............   700 min / 64 runs   <- skipped below by `paths-ignore`
+#   superseded by a newer run .....   266 min / 28 runs   <- cancelled below by `concurrency`
+#     ...of which 96 min was ALSO docs-only, so the two fixes overlap and the honest
+#        combined saving is ~34%, not their sum (38%).
+#
+# Both buckets were pure waste: a commit that only touches markdown cannot change a test outcome
+# or a type, and a run superseded by a newer run on the same ref is grading a revision nobody
+# will ever ship.
+#
+# `paths-ignore` is safe to apply to BOTH events here because `main` carries no protection — the
+# API reports "Branch not protected" with an empty ruleset list — so a path-skipped workflow
+# cannot leave a pull request stuck waiting on a required check that will never report. **If a
+# ruleset is ever added to `main`, revisit this:** with `paths-ignore` on `pull_request`, a
+# docs-only PR then reports *no* checks at all, which reads as pending rather than as passing.
+#
+# No test or script reads anything under `docs/` at runtime (verified: every `docs/` reference in
+# `tests/` is a provenance comment), so nothing is silently unverified by the ignore list.
 on:
-  pull_request:
-    branches: [main]
   push:
     branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+
+# One run in flight per ref, so a newer push stops the older run instead of letting both finish.
+#
+# Cancelling does NOT refund minutes already spent — GitHub bills elapsed time per job — so the
+# saving is the *remainder*, which is where the 266-minute figure comes from rather than from a
+# naive count of whole runs.
+#
+# `cancel-in-progress` is deliberately **PR-only**. Cancelling on `main` would have reclaimed
+# another 110 min, but every one of those runs was a **code** revision, and cancelling it means
+# that revision ends `cancelled` instead of getting a verdict — which breaks the property that
+# every code revision on `main` has a CI result, and `docs/STATE.md` cites `main`'s last
+# CI-green revision by SHA. Reclaiming those 110 minutes is a one-line change
+# (`cancel-in-progress: true`) and a deliberate, reversible trade — not an oversight.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:

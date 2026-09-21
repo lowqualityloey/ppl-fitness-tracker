@@ -226,3 +226,76 @@ and after** (6 337.9 > 5 000) — exactly the card's claim that slice A moves th
 priced share and does not clear the budget; the tail/reserve/version groups in M4-28 (#168)
 carry that. The post-fix verdict sentence for #164 belongs to M4-28, not here.
 
+
+## M4-28 slice B (#168): paired pre/post legs, same day, same box
+
+Venue law honored (#166): paired same-day legs on one box, cross-day absolutes never compared.
+Pre = the committed tree with `lib/repositories/workout-repository.ts` stashed (BUILD_ID
+`G3LnxoFhJOL4hWGaSR1Bf`), post = commit `c24b3a9` on `perf/m4-28-fan-out-batching` (BUILD_ID
+`zj1N9FNwnqorLg2aTwGCi`); one production build each, `next start` on :3001, `.env.local` sourced,
+the **unmodified committed driver** run directly per the card's verification block, `--duration=200`
+on every leg. No spec, no budget and no wait constant was touched.
+
+Leg-start load: pre contended `load1min=9.02`, post contended `8.42`; pre solo `1.91`, post solo
+`0.68`. Disclosed, not smoothed: the pre solo leg ran on a colder box than the post solo leg, so
+its absolute is the weaker half of that pair.
+
+| Leg (n = batches) | p50 | p95 | max | applied/offered |
+| :-- | :-- | :-- | :-- | :-- |
+| PRE contended 2×batch60 + 8×bg (193) | 2 056.9 ms | 2 543.4 ms | 3 283.5 ms | 11 580/11 580, rejected=0 |
+| POST contended 2×batch60 + 8×bg (268) | 482.2 ms (**−76.6 %**) | 719.4 ms (**−71.7 %**) | 1 358.7 ms (−58.6 %) | 16 080/16 080, rejected=0 |
+| PRE solo 1×batch60 (134) | 1 015.9 ms | 1 214.9 ms | 1 452.6 ms | 8 040/8 040, rejected=0 |
+| POST solo 1×batch60 (134) | 245.7 ms (**−75.8 %**) | 275.0 ms (**−77.4 %**) | 291.7 ms | 8 040/8 040, rejected=0 |
+
+Bystander single-mutation syncs (n = 2 000 each) under the two contended legs: **527.0 / 650.8 ms**
+pre vs **434.5 / 576.9 ms** post — the batch class got cheaper without charging the queue, which is
+what the spike predicted and the AC-2 bystander clause asks for.
+
+Throughput, which closed-loop percentiles hide: the same 200 s carried **268 vs 193** contended
+batches (**+38.9 %**) at an identical offered cadence, i.e. each 60-mutation apply is now roughly a
+quarter of its former wall time. The solo legs are cadence-bound (134 = 134 at 0.67 rps offered), so
+its gain shows in latency only.
+
+### What is claimed, and what is not
+
+The verdict the card asks for is met: both post-fix legs **HOLD** the 5 s read-only budget copy
+(719.4 ms and 275.0 ms), applied=offered with zero rejects, every batch 200. Two things are
+deliberately **not** claimed.
+
+1. **Today's pre-leg also held** (2 543.4 ms < 5 000). The 2026-09-16 breach reading
+   (6 337.9 ms, and #91's 6 123.8 ms before it) **was not reproduced on this box today**, so the
+   honest finding is the paired −71.7 % on one box in one session — not "a breach was re-observed
+   and closed". The budget never moved; no one is entitled to read this as the contention ceiling
+   being gone.
+2. **The spike's solo band is corrected, not passed.** #166 predicted solo p50 **400–900 ms**;
+   the measured 245.7 ms is *below* that band. It is recorded as a downward correction.
+
+Slice B implements the spike's groups 1–3 (reserve 12 %, version 8 %, tail 35 %); slice A had
+already taken groups 4–5. No group remains unshipped, and nothing landed above the 3 500 ms
+falsification line the spike set.
+
+### Control: the instrument still sees a breach with the fix in place
+
+`scripts/perf/batch-contention-solo-control.sh`, unmodified (`git status` clean at the injection
+file before it ran), 2026-09-21:
+
+| Leg (solo, 25 s) | driver p95 | browser drain | expected |
+| :-- | :-- | :-- | :-- |
+| baseline (this commit) | 538.2 ms | 355 ms, `[G-M3-4] PASSES` | HOLDS |
+| injected (+6 500 ms in the apply transaction) | **7 023.1 ms** | **6 869 ms, `[G-M3-4] MISSES`** | MISSES |
+| restored (revert + rebuild) | 488.8 ms | 371 ms, `[G-M3-4] PASSES` | HOLDS |
+
+The gauge discriminates in both directions on the fixed build, the injection was reverted, and the
+budget was read from the spec constant, never moved.
+
+### Suite evidence for this slice
+
+`npm run typecheck` 0 · `npm run lint` 0 (`--max-warnings=0`) · `npm test` **65 files / 626 tests** ·
+`npm run test:api` **13 files / 81 tests** (preflight green) · `npm run test:e2e -- --workers=1`
+**81 passed (5.7 m)** with **zero spec edits**. One earlier full-battery run red
+`sla.spec.ts:336` (G-M3-3) at `p95 5289 ms` against its 5 000 ms goal; the documented solo re-run
+protocol returned **3 passed twice** (p95 4510 ms and 4431 ms, medians 4 349 / 4 342 ms — identical
+to the red run's median, so the outlier was one of five samples), and the next full battery was
+81/81. G-M3-4 itself passed in both batteries (417 ms and 316 ms). The red is recorded here rather
+than only its re-run.
+

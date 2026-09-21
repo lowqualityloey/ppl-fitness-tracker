@@ -7,7 +7,7 @@ import { shiftIsoDate } from '../domain/local-date';
 import type { TrainingDayBucket } from '../views/dashboard-view';
 import type { SyncMutation, SyncRequest } from '../contracts/sync';
 import type { PrefillData, SessionSummary } from '../contracts/sessions';
-import { SyncEngine, ZERO_UUID } from '../domain/sync/sync-engine';
+import { SyncEngine, ZERO_UUID, canonicalMutationHash, mutationEntity } from '../domain/sync/sync-engine';
 import type {
   SyncEntityType,
   SyncEntityVersion,
@@ -619,17 +619,25 @@ export class WorkoutRepository {
       const touchedExercises = new Set<string>();
       const context = this.createMutationContext(tx, session, state, refreshState, touchedExercises);
       const receivedAt = new Date();
-      const store = this.syncStore(
+      const sync = this.syncStore(
         tx,
         userId,
         session,
         context,
         request.deviceId,
         receivedAt,
+        request.mutations,
       );
-      const result = await new SyncEngine(store).apply(request);
+      const result = await new SyncEngine(sync.store).apply(request);
+      // M4-28 (#168): the batch's ledger tail — the sequence it claimed, the versions it wrote, its
+      // change rows and its `applied` stamps — is one round of statements for the whole request,
+      // settled here once the domain loop has decided which mutations actually applied. The answer's
+      // `serverSeq` is read back from the bumped session row, not recomputed, so the sequence the
+      // client stores is the one the database holds.
+      const endServerSeq = await sync.flushTail();
+      state.current = { ...state.current, serverSeq: endServerSeq };
       await this.flushPersonalRecords(tx, userId, touchedExercises);
-      return result;
+      return { ...result, serverSeq: endServerSeq };
     });
   }
 
@@ -806,6 +814,16 @@ export class WorkoutRepository {
     }
   }
 
+  /**
+   * The batch's sync seam: one store per request, built around the request's own mutation list.
+   *
+   * `SyncStore` is unchanged on purpose — `SyncEngine.apply` still asks once per mutation, in
+   * order, and still owns every decision (replay, foreign, STALE_CONFLICT, lifecycle rejection).
+   * What changed is *when the database is asked*: the reads the loop used to repeat per mutation
+   * are prefetched once, on first touch, from the session this transaction already holds
+   * `FOR UPDATE`; the writes it used to repeat per applied mutation are buffered and flushed once
+   * by `flushTail()`, which the caller must await before the transaction ends (M4-28 / #168).
+   */
   private syncStore(
     tx: Tx,
     userId: string,
@@ -813,8 +831,279 @@ export class WorkoutRepository {
     context: SessionMutationContext,
     deviceId: string,
     receivedAt: Date,
-  ): SyncStore {
-    return {
+    batch: readonly SyncMutation[],
+  ): { store: SyncStore; flushTail: () => Promise<number> } {
+    const versionKey = (entityType: SyncEntityType, entityKey: string): string => `${entityType}|${entityKey}`;
+
+    // ── prefetched reads ────────────────────────────────────────────────────────────────────────
+    const reservations = new Map<string, SyncReservation>();
+    let reservationsLoaded = false;
+    const versionCache = new Map<string, SyncEntityVersion | null>();
+    let versionsLoaded = false;
+
+    // ── buffered tail ───────────────────────────────────────────────────────────────────────────
+    const pendingVersions = new Map<string, typeof syncEntityVersions.$inferInsert>();
+    const pendingChanges: Array<typeof syncChanges.$inferInsert> = [];
+    const changeSeqByMutation = new Map<string, number>();
+    let allocated = 0;
+    let markedApplied = 0;
+    let flushed: number | null = null;
+
+    /**
+     * One reservation pass for the batch, in three statements instead of two-or-three per mutation.
+     *
+     * The classification the engine reads is assembled here, not decided here: rows this user can
+     * already see are replays, rows this statement claims are new, and a mutation id that neither
+     * the read nor the insert can account for belongs to somebody else. `ON CONFLICT DO NOTHING`
+     * also absorbs a duplicate id *inside* the batch, where the per-mutation form inserted the
+     * first occurrence and then refused the request on the second — the same refusal, one round trip.
+     */
+    const loadReservations = async (): Promise<void> => {
+      const known = new Map<string, SyncMutationRecord>();
+      const existing = await tx
+        .select()
+        .from(syncMutations)
+        .where(and(
+          eq(syncMutations.userId, userId),
+          inArray(syncMutations.mutationId, batch.map((mutation) => mutation.mutationId)),
+        ));
+      for (const row of existing) known.set(row.mutationId, asSyncMutationRecord(row));
+
+      const unseen = batch.filter((mutation) => !known.has(mutation.mutationId));
+      if (unseen.length > 0) {
+        const inserted = await tx
+          .insert(syncMutations)
+          .values(unseen.map((mutation) => ({
+            mutationId: mutation.mutationId,
+            userId,
+            sessionId: session.id,
+            deviceId,
+            operation: mutation.op,
+            payloadHash: canonicalMutationHash(mutation),
+            status: 'processing',
+            appliedAt: receivedAt,
+          })))
+          .onConflictDoNothing()
+          .returning({ mutationId: syncMutations.mutationId });
+        const claimed = new Set(inserted.map((row) => row.mutationId));
+
+        const contested = unseen.filter((mutation) => !claimed.has(mutation.mutationId));
+        if (contested.length > 0) {
+          const rows = await tx
+            .select()
+            .from(syncMutations)
+            .where(and(
+              eq(syncMutations.userId, userId),
+              inArray(syncMutations.mutationId, contested.map((mutation) => mutation.mutationId)),
+            ));
+          for (const row of rows) known.set(row.mutationId, asSyncMutationRecord(row));
+        }
+        for (const mutation of unseen) {
+          if (claimed.has(mutation.mutationId)) reservations.set(mutation.mutationId, { kind: 'new' });
+        }
+      }
+
+      for (const [mutationId, record] of known) reservations.set(mutationId, { kind: 'existing', record });
+      reservationsLoaded = true;
+    };
+
+    /**
+     * One read of the session's version partition plus the set/task fallbacks for keys it cannot
+     * describe, replacing one point read (and up to two fallbacks) per mutation.
+     *
+     * The read is the whole partition rather than an IN-list of composite keys because it is
+     * bounded by the session's own entity count and served by `sessionLookup` — cheaper than
+     * building, and trusting, a 60-pair predicate on the hot path.
+     */
+    const loadVersions = async (): Promise<void> => {
+      const wanted = new Map<string, { entityType: SyncEntityType; entityKey: string }>();
+      for (const mutation of batch) {
+        const entity = mutationEntity(mutation);
+        wanted.set(versionKey(entity.entityType, entity.entityKey), entity);
+      }
+
+      const rows = await tx
+        .select()
+        .from(syncEntityVersions)
+        .where(and(
+          eq(syncEntityVersions.userId, userId),
+          eq(syncEntityVersions.sessionId, session.id),
+        ));
+      for (const row of rows) {
+        versionCache.set(versionKey(row.entityType as SyncEntityType, row.entityKey), {
+          entityType: row.entityType as SyncEntityType,
+          entityKey: row.entityKey,
+          clientTs: row.clientTs,
+          effectiveTs: row.effectiveTs,
+          deviceId: row.deviceId,
+          mutationId: row.mutationId,
+          serverSeq: row.serverSeq,
+        });
+      }
+
+      const missingSets = new Map<string, { exerciseId: string; setIndex: number }>();
+      const missingTasks = new Set<string>();
+      for (const [key, entity] of wanted) {
+        if (versionCache.has(key)) continue;
+        if (entity.entityType === 'set') {
+          const parsed = parseSetEntityKey(entity.entityKey);
+          if (!parsed) versionCache.set(key, null);
+          else missingSets.set(`${parsed.exerciseId}:${parsed.setIndex}`, parsed);
+        } else if (entity.entityType === 'task') {
+          const taskKey = parseTaskEntityKey(entity.entityKey);
+          if (!taskKey) versionCache.set(key, null);
+          else missingTasks.add(taskKey);
+        }
+        // 'session' keys intentionally fall through to the zero-version default below.
+      }
+
+      if (missingSets.size > 0) {
+        const setRows = await tx
+          .select()
+          .from(sessionSets)
+          .where(and(
+            eq(sessionSets.userId, userId),
+            eq(sessionSets.sessionId, session.id),
+            inArray(sessionSets.exerciseId, [...new Set([...missingSets.values()].map((set) => set.exerciseId))]),
+          ));
+        const setsBySlot = new Map(setRows.map((row) => [`${row.exerciseId}:${row.setIndex}`, row]));
+        // Iterate the *wanted* keys, not `missingSets`: the slot string is only the lookup key into
+        // `setsBySlot`, and caching under it would leave every engine question a cache miss — the
+        // shape that silently turns a stale write into an applied one (caught by the legacy-backfill
+        // integration case). `missingSets` is a query parameter list, never a cache key.
+        for (const [key, entity] of wanted) {
+          if (versionCache.has(key) || entity.entityType !== 'set') continue;
+          const parsed = parseSetEntityKey(entity.entityKey);
+          if (!parsed) continue;
+          const current = setsBySlot.get(`${parsed.exerciseId}:${parsed.setIndex}`);
+          versionCache.set(key, current ? {
+            entityType: 'set',
+            entityKey: entity.entityKey,
+            clientTs: current.clientTs,
+            effectiveTs: current.clientTs,
+            deviceId: ZERO_UUID,
+            mutationId: ZERO_UUID,
+            serverSeq: 0,
+          } : null);
+        }
+      }
+
+      if (missingTasks.size > 0) {
+        const taskRows = await tx
+          .select()
+          .from(sessionTasks)
+          .where(and(
+            eq(sessionTasks.sessionId, session.id),
+            inArray(sessionTasks.taskKey, [...missingTasks] as Array<'warm_up' | 'main_workout' | 'stretch'>),
+          ));
+        const tasksByKey = new Map(taskRows.map((row) => [row.taskKey, row]));
+        for (const [key, entity] of wanted) {
+          if (versionCache.has(key) || entity.entityType !== 'task') continue;
+          const taskKey = parseTaskEntityKey(entity.entityKey);
+          if (!taskKey) continue;
+          const current = tasksByKey.get(taskKey as 'warm_up' | 'main_workout' | 'stretch');
+          versionCache.set(key, current ? {
+            entityType: 'task',
+            entityKey: entity.entityKey,
+            clientTs: current.clientTs,
+            effectiveTs: current.clientTs,
+            deviceId: ZERO_UUID,
+            mutationId: ZERO_UUID,
+            serverSeq: 0,
+          } : null);
+        }
+      }
+
+      // Anything still unseen is the session's own state entity: a zero version, not `null`, so the
+      // first write on it always wins — the fallback the per-mutation form ended on.
+      for (const [key, entity] of wanted) {
+        if (versionCache.has(key)) continue;
+        versionCache.set(key, {
+          entityType: entity.entityType,
+          entityKey: entity.entityKey,
+          clientTs: new Date(0),
+          effectiveTs: new Date(0),
+          deviceId: ZERO_UUID,
+          mutationId: ZERO_UUID,
+          serverSeq: 0,
+        });
+      }
+
+      versionsLoaded = true;
+    };
+
+    /**
+     * Settle the batch's tail in four statements: claim the sequence, write the versions, write the
+     * changes, stamp the mutations. Idempotent, and the only writer of `workout_sessions.server_seq`
+     * for this request.
+     */
+    const flushTail = async (): Promise<number> => {
+      if (flushed !== null) return flushed;
+      if (allocated !== pendingChanges.length || allocated !== markedApplied) {
+        // Unreachable unless the engine's per-mutation call order changes: an applied mutation
+        // allocates one sequence, records one change and is stamped once. Loud, never silent.
+        throw new Error('Sync tail flush saw an unbalanced mutation ledger.');
+      }
+      if (allocated === 0) {
+        flushed = session.serverSeq;
+        return flushed;
+      }
+
+      // One claim for the whole batch. `session.serverSeq` is the row this transaction holds
+      // `FOR UPDATE` and nothing below moves it, so the r-th applied mutation keeps exactly the
+      // sequence the per-mutation increments gave it: contiguous, in order, no wider than the batch.
+      const [bumped] = await tx
+        .update(workoutSessions)
+        .set({ serverSeq: sql`${workoutSessions.serverSeq} + ${allocated}`, updatedAt: new Date() })
+        .where(and(
+          eq(workoutSessions.id, session.id),
+          eq(workoutSessions.userId, userId),
+        ))
+        .returning({ serverSeq: workoutSessions.serverSeq });
+      if (!bumped) throw new SessionNotFoundError('Session disappeared during sync.');
+
+      // Versions: one statement, deduped by entity key keeping the last write — which is what the
+      // sequential upserts produced, and what Postgres demands: an `ON CONFLICT DO UPDATE` batch
+      // that touches one row twice is rejected outright (`cannot affect row a second time`).
+      if (pendingVersions.size > 0) {
+        await tx
+          .insert(syncEntityVersions)
+          .values([...pendingVersions.values()])
+          .onConflictDoUpdate({
+            target: [syncEntityVersions.sessionId, syncEntityVersions.entityType, syncEntityVersions.entityKey],
+            set: {
+              clientTs: sql`excluded.client_ts`,
+              effectiveTs: sql`excluded.effective_ts`,
+              deviceId: sql`excluded.device_id`,
+              mutationId: sql`excluded.mutation_id`,
+              serverSeq: sql`excluded.server_seq`,
+            },
+          });
+      }
+
+      // Changes and stamps: one row (and one update) per applied mutation, in application order,
+      // so a client replaying by sequence replays the order the batch was decided in.
+      await tx.insert(syncChanges).values(pendingChanges);
+
+      const seqPairs = sql.join(
+        pendingChanges.map((row) => sql`(${row.mutationId}::uuid, ${row.serverSeq}::integer)`),
+        sql`, `,
+      );
+      const stamped = await tx.execute(sql`
+        UPDATE sync_mutations AS target
+           SET status = 'applied', server_seq = pair.server_seq, rejection_reason = NULL
+          FROM (VALUES ${seqPairs}) AS pair(mutation_id, server_seq)
+         WHERE target.user_id = ${userId} AND target.mutation_id = pair.mutation_id
+      `);
+      if (stamped.rowCount !== allocated) {
+        throw new Error('Sync tail flush stamped a different number of mutations than it applied.');
+      }
+
+      flushed = bumped.serverSeq;
+      return flushed;
+    };
+
+    const store: SyncStore = {
       sessionId: session.id,
       deviceId,
       receivedAt,
@@ -824,131 +1113,18 @@ export class WorkoutRepository {
       // a row this transaction already holds `FOR UPDATE`. (#105 replaced a `getState()` here
       // that re-mapped every set, task, and placement to be thrown away an arm's length away.)
       currentServerSeq: async (): Promise<number> => {
-        const [updated] = await tx
-          .select({ serverSeq: workoutSessions.serverSeq })
-          .from(workoutSessions)
-          .where(and(
-            eq(workoutSessions.id, session.id),
-            eq(workoutSessions.userId, userId),
-          ))
-          .limit(1);
-        if (!updated) throw new SessionNotFoundError('Session disappeared during sync.');
-        return updated.serverSeq;
+        // Answerable without a read: this transaction holds the session row, nothing else in it
+        // moves `server_seq`, and the batch's claim is `allocated` wide — so the settled value is
+        // the base plus what this request applied, which is also what `flushTail` writes back.
+        return flushed ?? session.serverSeq + allocated;
       },
-      reserveMutation: async (mutation: SyncMutation, payloadHash: string): Promise<SyncReservation> => {
-        const [existing] = await tx
-          .select()
-          .from(syncMutations)
-          .where(and(
-            eq(syncMutations.mutationId, mutation.mutationId),
-            eq(syncMutations.userId, userId),
-          ))
-          .limit(1);
-        if (existing) return { kind: 'existing', record: asSyncMutationRecord(existing) };
-
-        const [inserted] = await tx
-          .insert(syncMutations)
-          .values({
-            mutationId: mutation.mutationId,
-            userId,
-            sessionId: session.id,
-            deviceId,
-            operation: mutation.op,
-            payloadHash,
-            status: 'processing',
-            appliedAt: receivedAt,
-          })
-          .onConflictDoNothing()
-          .returning({ mutationId: syncMutations.mutationId });
-        if (inserted) return { kind: 'new' };
-
-        const [afterConflict] = await tx
-          .select()
-          .from(syncMutations)
-          .where(and(
-            eq(syncMutations.mutationId, mutation.mutationId),
-            eq(syncMutations.userId, userId),
-          ))
-          .limit(1);
-        return afterConflict
-          ? { kind: 'existing', record: asSyncMutationRecord(afterConflict) }
-          : { kind: 'foreign' };
+      reserveMutation: async (mutation: SyncMutation): Promise<SyncReservation> => {
+        if (!reservationsLoaded) await loadReservations();
+        return reservations.get(mutation.mutationId) ?? { kind: 'foreign' };
       },
       findEntityVersion: async (entityType: SyncEntityType, entityKey: string): Promise<SyncEntityVersion | null> => {
-        const [version] = await tx
-          .select()
-          .from(syncEntityVersions)
-          .where(and(
-            eq(syncEntityVersions.userId, userId),
-            eq(syncEntityVersions.sessionId, session.id),
-            eq(syncEntityVersions.entityType, entityType),
-            eq(syncEntityVersions.entityKey, entityKey),
-          ))
-          .limit(1);
-        if (version) {
-          return {
-            entityType: version.entityType as SyncEntityType,
-            entityKey: version.entityKey,
-            clientTs: version.clientTs,
-            effectiveTs: version.effectiveTs,
-            deviceId: version.deviceId,
-            mutationId: version.mutationId,
-            serverSeq: version.serverSeq,
-          };
-        }
-
-        if (entityType === 'set') {
-          const parsed = parseSetEntityKey(entityKey);
-          if (!parsed) return null;
-          const [current] = await tx
-            .select()
-            .from(sessionSets)
-            .where(and(
-              eq(sessionSets.userId, userId),
-              eq(sessionSets.sessionId, session.id),
-              eq(sessionSets.exerciseId, parsed.exerciseId),
-              eq(sessionSets.setIndex, parsed.setIndex),
-            ))
-            .limit(1);
-          return current ? {
-            entityType,
-            entityKey,
-            clientTs: current.clientTs,
-            effectiveTs: current.clientTs,
-            deviceId: ZERO_UUID,
-            mutationId: ZERO_UUID,
-            serverSeq: 0,
-          } : null;
-        }
-
-        if (entityType === 'task') {
-          const taskKey = parseTaskEntityKey(entityKey);
-          if (!taskKey) return null;
-          const [current] = await tx
-            .select()
-            .from(sessionTasks)
-            .where(and(eq(sessionTasks.sessionId, session.id), eq(sessionTasks.taskKey, taskKey as 'warm_up' | 'main_workout' | 'stretch')))
-            .limit(1);
-          return current ? {
-            entityType,
-            entityKey,
-            clientTs: current.clientTs,
-            effectiveTs: current.clientTs,
-            deviceId: ZERO_UUID,
-            mutationId: ZERO_UUID,
-            serverSeq: 0,
-          } : null;
-        }
-
-        return {
-          entityType,
-          entityKey,
-          clientTs: new Date(0),
-          effectiveTs: new Date(0),
-          deviceId: ZERO_UUID,
-          mutationId: ZERO_UUID,
-          serverSeq: 0,
-        };
+        if (!versionsLoaded) await loadVersions();
+        return versionCache.get(versionKey(entityType, entityKey)) ?? null;
       },
       applyMutation: async (mutation: SyncMutation): Promise<void> => {
         switch (mutation.op) {
@@ -978,44 +1154,31 @@ export class WorkoutRepository {
         }
       },
       allocateSequence: async (): Promise<number> => {
-        const [updated] = await tx
-          .update(workoutSessions)
-          .set({ serverSeq: sql`${workoutSessions.serverSeq} + 1`, updatedAt: new Date() })
-          .where(and(
-            eq(workoutSessions.id, session.id),
-            eq(workoutSessions.userId, userId),
-          ))
-          .returning({ serverSeq: workoutSessions.serverSeq });
-        if (!updated) throw new SessionNotFoundError('Session disappeared during sync.');
-        return updated.serverSeq;
+        // Arithmetic, not a write: the batch claims its whole range once, in `flushTail`. The r-th
+        // applied mutation gets base + r either way, and the surrounding row lock is what makes
+        // promising the number here safe.
+        allocated += 1;
+        return session.serverSeq + allocated;
       },
       upsertEntityVersion: async (version: SyncEntityVersion): Promise<void> => {
-        await tx
-          .insert(syncEntityVersions)
-          .values({
-            userId,
-            sessionId: session.id,
-            entityType: version.entityType,
-            entityKey: version.entityKey,
-            clientTs: version.clientTs,
-            effectiveTs: version.effectiveTs,
-            deviceId: version.deviceId,
-            mutationId: version.mutationId,
-            serverSeq: version.serverSeq,
-          })
-          .onConflictDoUpdate({
-            target: [syncEntityVersions.sessionId, syncEntityVersions.entityType, syncEntityVersions.entityKey],
-            set: {
-              clientTs: version.clientTs,
-              effectiveTs: version.effectiveTs,
-              deviceId: version.deviceId,
-              mutationId: version.mutationId,
-              serverSeq: version.serverSeq,
-            },
-          });
+        // Write-through, so a later mutation in the same batch comparing against this entity sees
+        // this version — the guarantee the immediate write used to provide by landing first.
+        versionCache.set(versionKey(version.entityType, version.entityKey), { ...version });
+        pendingVersions.set(versionKey(version.entityType, version.entityKey), {
+          userId,
+          sessionId: session.id,
+          entityType: version.entityType,
+          entityKey: version.entityKey,
+          clientTs: version.clientTs,
+          effectiveTs: version.effectiveTs,
+          deviceId: version.deviceId,
+          mutationId: version.mutationId,
+          serverSeq: version.serverSeq,
+        });
       },
       appendChange: async (input): Promise<void> => {
-        await tx.insert(syncChanges).values({
+        changeSeqByMutation.set(input.mutationId, input.serverSeq);
+        pendingChanges.push({
           userId,
           sessionId: session.id,
           serverSeq: input.serverSeq,
@@ -1026,13 +1189,10 @@ export class WorkoutRepository {
         });
       },
       markApplied: async (mutationId: string, serverSeq: number): Promise<void> => {
-        await tx
-          .update(syncMutations)
-          .set({ status: 'applied', serverSeq, rejectionReason: null })
-          .where(and(
-            eq(syncMutations.mutationId, mutationId),
-            eq(syncMutations.userId, userId),
-          ));
+        if (changeSeqByMutation.get(mutationId) !== serverSeq) {
+          throw new Error('Sync tail flush saw a mutation stamped before its change was recorded.');
+        }
+        markedApplied += 1;
       },
       markRejected: async (mutationId: string, reason: string): Promise<void> => {
         await tx
@@ -1044,6 +1204,8 @@ export class WorkoutRepository {
           ));
       },
     };
+
+    return { store, flushTail };
   }
 
   private progressionStore(tx: Tx, userId: string): ProgressionStore {

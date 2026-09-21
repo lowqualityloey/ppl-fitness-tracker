@@ -780,7 +780,9 @@ Added by the M0 spike (ADR-0003 Amendment A1):
   `12068c4`, `c5e8ed8`, `b44ff6c`, `f0f5993` — have **no CI coverage at all**, so M4-30's health route and
   M4-31's env validation rest on **local gates alone**; **`main`'s last CI-verified-green revision is
   `e11e75b`**. Every run created before the billing fix fails identically in ~2 s — **do not bisect it**, and
-  do not read the red board as a `main` regression. Canonical record:
+  do not read the red board as a `main` regression. **Confirmed, not predicted:** a second run
+  (`35555468830` on `5a5a0a0`, `02:50:07Z`) reproduced it exactly — `steps=0`, 2-second job, the same
+  verbatim annotation. Canonical record:
   `docs/releases/ci-triage/CI-github-35555062183.md` (state `awaiting_confirmation`, one pending remote re-run
   action, no code remediation proposed). **Holder: Owner** — GitHub *Settings → Billing & plans*.
 - ~~**M3-00/M3-01 (#57/#58) are half-built and unverified.**~~ **Resolved 2026-09-11: the endpoints exist and every promise above is now a watched control.** The RED steps were observed RED first (profile spec failed 7/7 against the absent route; prefill spec failed the happy paths while the `[id]` route shadowed it, exactly as the trap note predicted). Measured green: lint 0 under `--max-warnings=0`, typecheck 0, `check-set-config.sh` 0, unit **25 files / 236 tests**, API **10 files / 60 tests** (twice — the first full run exposed a substring assertion in `prefill.test.ts` that flaked on random UUID hex containing "500"; it was replaced with a field-level assertion, and the pass cited here is the post-fix run). The traps: `/api/sessions/prefill` non-shadowing is load-borne on its 200 spec; `no-store` now covers the `[id]` route's 200s **and** 404s; the delta byte claim is measured (53 B vs 2 035 B). The last open risk — "a gate that only ran locally is not yet a gate" — is closed: PR #69's CI `test` job **passed (5m53s)** on the exact merged tree before the Owner merged it. No blocker remains in M3-00/M3-01 territory.

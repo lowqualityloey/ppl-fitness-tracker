@@ -40,7 +40,7 @@
  * second copy of this logic would grade a double.
  */
 
-const BUILD_VERSION = "bf513e310647";
+const BUILD_VERSION = "6087986a78cc";
 
 const MANIFEST_URL = "/sw-manifest.json";
 const SHELL_PREFIX = "shell-";

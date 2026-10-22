@@ -1,6 +1,6 @@
 # Spec: PromptKit OS Migration — v1.8.0-15 → v2.0.0-71
 
-- **Status**: Draft for human ratification
+- **Status**: Executed on `chore/promptkit-v2-sync` (C1–C4); C5 governance CI remains
 - **Date**: 2026-10-23
 - **Supersedes**: the execution plan in `docs/reviews/2026-10-21-promptkit-os-install-audit.md` §5
 - **Scope**: governance install only. No application code, schema, auth, release, or deployment action.
@@ -406,3 +406,22 @@ This plan authorizes no write. Implementation starts only after:
 1. O1 and O2 are ratified (the pin and the size class);
 2. a canonical Task Record exists at `docs/tasks/<task-id>.md` for the execution;
 3. the working tree is clean at C1's commit.
+
+---
+
+## 12. Execution record (2026-10-23)
+
+- **Branch**: `chore/promptkit-v2-sync`, based on `fix/drizzle-orm-cve` @ `81fdd3c`.
+- **Commits**: `9f7e5f2` baseline; `4b39636` engine pin; `427a049` host directives, profile
+  fields, and measured counts; `c80b5be` §8 repair and session-log compaction.
+- **Verification**: `check-doctor.sh` exit 0 (`version OK`; `docs-drift` and `provenance` `SKIP`);
+  `validate-references.sh` exit 0; `validate-execution-control.sh --root .` exit 0 with
+  `VALID|RECORDS=0`.
+- **State**: `docs/STATE.md` reduced from 2,677 lines / 520,159 bytes to 1,602 lines / 196,688
+  bytes; §8 replaced with four rows plus a `git log --follow` pointer.
+- **Not done**: `size:` (O2), the §1 branch-history collapse, and the C5 governance CI workflow.
+- **Gate note**: O2 remains open and no canonical v2 Task Record was created; the owner's "current
+  update" instruction was treated as O1 ratification. This record is the evidence, not a substitute
+  for the Task Record.
+- **Branch base**: the branch includes `81fdd3c` (the drizzle/vitest upgrade) because it was cut
+  from `fix/drizzle-orm-cve`. Merge that first or rebase if a migration-only PR is wanted.

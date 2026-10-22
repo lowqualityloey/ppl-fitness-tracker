@@ -191,7 +191,7 @@ The revised plan is not executed by this review. No installer, test suite, or CI
   commit/PR trailers. The plan originally proposed `medium`, but the v2 size table classifies this
   project as `large` (authentication + data + deployment).
 - **Remedy**: confirm `large` or leave `size:` unset; confirm `host-default` or `off` for attribution.
-- **Disposition**: open as O2/O3.
+- **Disposition**: O2 resolved (`large`, 2026-10-23); O3 open.
 
 ### 👏 [PRAISE] S6 — The installer and doctor have defensible safety properties
 
@@ -219,11 +219,12 @@ The revised plan is not executed by this review. No installer, test suite, or CI
 - **Diff Evidence**: audit §5.1 / decision 3; measured 6/76 `Task ID`, 5/76 `Record Type`; validator ID
   rules at upstream `scripts/validate-execution-control.sh:245-250`
 - **Behavior-Preservation Condition**: the legacy cards remain readable history; new L2/L3 work uses
-  the v2 template; `validate-execution-control --root .` still reports `VALID|RECORDS=0`.
+  the v2 template; `validate-execution-control --root .` exits 0 and the record count grows only by the
+  one migration Task Record.
 - **Risk**: future reviewers may read the legacy prose as if it were execution-control evidence. The
   plan mitigates this by stating the cards are historical and by requiring new records.
-- **Verification Action**: run the v2 validator after C5; confirm `RECORDS=0` and exit 0; confirm no
-  card was rewritten.
+- **Verification Action**: run the v2 validator after C5; confirm exit 0 and `RECORDS=1` (the migration
+  record only); confirm no legacy card was rewritten.
 - **Recommendation**: delete the bulk back-fill from this migration. It is not a prerequisite, it has
   no valid ID scheme without a separate profile decision, and it would add 76 evidence-degraded records
   to a PR that is already dominated by a submodule move.
@@ -252,7 +253,7 @@ suites, the new CI workflow on GitHub, the token cost of `turbo`, and any saving
 
 ## Recommendation
 
-Proceed only with the revised plan's C1–C4 in one PR, then C5 (CI) separately. Do not execute the
+Proceed only with the revised plan's C1–C5 in one PR, then C6 (CI) separately. Do not execute the
 2026-10-21 audit verbatim: its pin is stale, its validator evidence is from the old engine, its card
 conversion is invalid without a profile decision, and its CI proposal cannot run on the docs-only
 changes it is meant to protect.

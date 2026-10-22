@@ -339,6 +339,7 @@ profile: turbo
 status-cards: on
 card-style: framed
 ai-attribution: host-default
+size: large
 intake-status: legacy-partial
 
 tracking: github

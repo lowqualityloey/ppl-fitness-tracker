@@ -1,10 +1,12 @@
 # Spec: PromptKit OS Migration — v1.8.0-15 → v2.0.0-71
 
-- **Status**: Executed on `chore/promptkit-v2-sync` (C1–C4); C5 governance CI remains
+- **Status**: Executed on `chore/promptkit-v2-sync` (C1–C5); C6 governance CI remains. Task Record:
+  `docs/tasks/2026-10-23-promptkit-v2-migration.md`.
 - **Date**: 2026-10-23
 - **Supersedes**: the execution plan in `docs/reviews/2026-10-21-promptkit-os-install-audit.md` §5
 - **Scope**: governance install only. No application code, schema, auth, release, or deployment action.
-- **Ceremony**: Level 2 (Controlled). Execution requires a canonical Task Record before C1.
+- **Ceremony**: Level 2 (Controlled). The canonical Task Record was created on 2026-10-23 before this
+  record was finalized.
 - **Target pin**: `0cfa09390e4f6f0ffe090a6ba193db912b9a3c6d` = `v2.0.0-71-g0cfa093`, repository
   `lowqualityloey/promptkit-os` (`https://github.com/lowqualityloey/promptkit-os`).
 
@@ -41,7 +43,7 @@ installed host directives, add the v2 machine-readable profile fields, and leave
 | D2 | Delivery shape | Two PRs: engine/profile/state, then CI | The engine diff is a 500+ file submodule move plus a 520 KB state rewrite. Splitting review from automation keeps each diff attributable. |
 | D3 | Legacy task cards | Defer conversion | Only 6 of 76 cards carry a `Task ID` and 5 carry a `Record Type`; the validator's default ID rule is `TASK-YYYY-MM-DD-<slug>`, while the existing IDs are `TASK-m4-...`. The audit's `TASK-<slug>` mapping is only valid under `PromptKit Adaptation Profile: sdlc-overlay-v1`, which also demands adaptation fields the cards lack. |
 | D4 | Profile / tracking | Keep `turbo` / `github` | Existing ratified posture. Turbo's ~2× token cost is retained knowingly; re-evaluate after two normal sessions. |
-| D5 | State projection | No §3A yet | Without a canonical Task Record, a §3A filled with placeholders would make `docs-drift` compare fiction. `SKIP(no execution-control projection)` is the honest result until one exists. |
+| D5 | State projection | No §3A yet | The Task Record exists, but no §3A projection was added. Filling §3A with placeholders would make `docs-drift` compare fiction; `SKIP(no execution-control projection)` is the honest result until it is populated. |
 
 ---
 
@@ -189,14 +191,15 @@ profile: turbo
 status-cards: on
 card-style: framed
 ai-attribution: host-default
+size: large
 intake-status: legacy-partial
 
 tracking: github
 ```
 
-- `size:` is deliberately omitted pending O2. The v2 size table classifies this project as **large**
-  (authentication + data + deployment), not `medium`; a missing `size:` on an existing install resolves
-  to `legacy-partial` and does not trigger a re-interview. Do not write `medium`.
+- `size: large` is set by owner instruction on 2026-10-23. The v2 size table classifies this project as
+  **large** (authentication + data + deployment), not `medium`; `medium` would understate it. This field
+  drives `pk:plan` intake depth; it does not change the runtime or the install.
 - `intake-status: legacy-partial` is the honest status: there was no bounded v2 intake, and the
   codebase is the record. Do **not** add `intake-record:` without a real file.
 - `ai-attribution: host-default` preserves current behavior. Use `off` only if the owner wants
@@ -231,11 +234,11 @@ Acceptance:
 
 ```bash
 bash .promptkit/scripts/validate-execution-control.sh --root .
-# expected: VALID|RECORDS=0, exit 0
+# expected: VALID|RECORDS=1, exit 0
 ```
 
-`RECORDS=0` remains correct: there are no canonical v2 Task Records yet. `--strict` is not an
-acceptable gate for this tree; it would demand records that do not exist.
+`RECORDS=1` is correct: the migration's canonical Task Record is the only one. `--strict` would also
+validate the 76 legacy cards, which are not v2 records; it is not an acceptable gate for this tree.
 
 ### C6 — Add the governance CI workflow
 
@@ -319,14 +322,15 @@ bash .promptkit/scripts/validate-execution-control.sh --root .
 | # | Commit | Contents | PR |
 | :--- | :--- | :--- | :--- |
 | C1 | `docs(promptkit): record the pre-migration baseline` | `STATE.md`, checkpoint-03, audit, this plan, the review | A |
-| C2 | `chore(promptkit): pin engine v2.0.0-71 (0cfa093)` | gitlink, `.gitmodules`, 5 host blocks, installer stamps in `PROMPTKIT.md` / `STATE.md` | A |
-| C3 | `docs(profile): v2 machine lines and measured counts` | `PROMPTKIT.md` only | A |
-| C4 | `docs(state): compact and repair the tracker` | `docs/STATE.md` only | A |
-| C5 | `ci(promptkit): run the installed governance gates` | new workflow | B |
-| C6 | `docs(promptkit): post-migration sync` | sync notes, if any | B |
+| C2 | `chore(promptkit): pin engine v2.0.0-71 (0cfa093)` | gitlink, `.gitmodules` | A |
+| C3 | `chore(promptkit): re-inject v2 host directives` | 5 host blocks, installer stamps in `PROMPTKIT.md` / `STATE.md` | A |
+| C4 | `docs(profile): v2 machine lines and measured counts` | `PROMPTKIT.md` only | A |
+| C5 | `docs(state): compact and repair the tracker` | `docs/STATE.md` only | A |
+| C6 | `ci(promptkit): run the installed governance gates` | new workflow | B |
+| C7 | `docs(promptkit): post-migration sync` | sync notes, if any | B |
 
-Review order is C1 → C2 → C3 → C4, then C5 → C6. Do not mix C5/C4 into one commit; the state reflow is
-the only part a reviewer needs to inspect line by line.
+Review order is C1 → C5, then C6 → C7. Do not mix C6/C5 into one commit; the state reflow is the only
+part a reviewer needs to inspect line by line.
 
 ---
 
@@ -337,9 +341,9 @@ the only part a reviewer needs to inspect line by line.
 | AC-1 | `.promptkit` is at `0cfa093` and `.gitmodules` names `promptkit-os` | `git submodule status`, `git -C .promptkit describe`, `cat .gitmodules` |
 | AC-2 | All five host directives carry `Engine: v2.0.0-71-g0cfa093 (0cfa093)` | `rg` across the five files |
 | AC-3 | `AGENTS.md`'s `nextjs-agent-rules` block is byte-identical | `git diff -- AGENTS.md` shows only the PromptKit block |
-| AC-4 | `PROMPTKIT.md` has exactly one `Profile written: 2026-09-14`, no `Installed` line, and the four non-guessed v2 machine lines (`status-cards`, `card-style`, `ai-attribution`, `intake-status`); `size:` stays absent pending O2 | `rg` |
+| AC-4 | `PROMPTKIT.md` has exactly one `Profile written: 2026-09-14`, no `Installed` line, and the five v2 machine lines (`status-cards`, `card-style`, `ai-attribution`, `size: large`, `intake-status`) | `rg` |
 | AC-5 | `docs/STATE.md` has one `Last Updated`, one `Current Working Branch`, and the `Engine Version` row | `rg`, `wc -lc` |
-| AC-6 | v2 execution-control validator exits 0 with `VALID`, `RECORDS=0` | validator run |
+| AC-6 | v2 execution-control validator exits 0 with `VALID`, `RECORDS=1` | validator run |
 | AC-7 | `validate-references.sh` exits 0 | script run |
 | AC-8 | `check-doctor.sh` exits 0; `version OK` (or `STALE(+n)` only if upstream advanced after `0cfa093`); `docs-drift` and `provenance` `SKIP` with reasons | doctor run |
 | AC-9 | No application file changed | `git diff --stat` scope check |
@@ -356,8 +360,8 @@ the only part a reviewer needs to inspect line by line.
 | Tags missing, weak Engine stamp | `git -C .promptkit describe` returns only SHA | `fetch origin --tags` before install | Re-fetch and re-run; stamp is a line write |
 | Old URL survives in submodule config | `git -C .promptkit remote -v` | `git submodule sync -- .promptkit` after `set-url` | `git submodule set-url` back to the old URL |
 | STATE reflow loses current facts | Read §1/§3A/§7/§8 diff | Keep current milestone, blockers, invariants, 3 latest checkpoints; history stays in git | `git checkout HEAD~ -- docs/STATE.md` |
-| Validator stays red | `ERRORS>0` | Reflow §8 until `VALID`; do not suppress the check | Keep C4 unmerged; revert C4 |
-| CI workflow never runs | PR check list empty | New workflow has explicit `paths`, not `paths-ignore` | Revert C5; manual gates remain |
+| Validator stays red | `ERRORS>0` | Reflow §8 until `VALID`; do not suppress the check | Keep C5 unmerged; revert C5 |
+| CI workflow never runs | PR check list empty | New workflow has explicit `paths`, not `paths-ignore` | Revert C6; manual gates remain |
 | Turbo cost is not worth it | Two weeks of sessions | Re-evaluate `balanced` with measured token data | `--balanced` re-run changes one line |
 
 The whole change is reversible with one `git revert` per PR. Locally,
@@ -371,7 +375,7 @@ the old URL.
 | # | Decision | Recommendation | Consequence if changed |
 | :--- | :--- | :--- | :--- |
 | O1 | Pin HEAD `0cfa093` or released `v2.0.0` (`c5193857`) | **HEAD** | `v2.0.0` loses the profile-date, five-check doctor, and provenance fixes; HEAD is unreleased but SHA-pinned. |
-| O2 | `size:` | **Confirm `large` or leave unset** | The v2 size table defines `large` as authentication + data + deployment, which this project has; `medium` would understate it. It drives `pk:plan` intake depth only; never guessed. |
+| O2 | `size:` | **Resolved: `large` (owner, 2026-10-23)** | The v2 size table defines `large` as authentication + data + deployment, which this project has; `medium` would understate it. It drives `pk:plan` intake depth only; never guessed. |
 | O3 | `ai-attribution: host-default` or `off` | **host-default** | `off` strips AI trailers from future commits/PRs; it does not rewrite history. |
 | O4 | Keep `turbo` | **Keep for now; measure** | `balanced` is cheaper and less experimental; switching is a one-line re-run. |
 | O5 | Legacy card conversion | **Defer** | Converting all 76 requires a profile decision and 76 evidence-degraded records; not a migration prerequisite. |
@@ -401,28 +405,29 @@ from the proposed compaction.
 
 ## 11. Execution gate
 
-This plan authorizes no write. Implementation starts only after:
+This gate was satisfied before execution; it is retained as the record of the starting condition.
 
-1. O1 and O2 are ratified (the pin and the size class);
-2. a canonical Task Record exists at `docs/tasks/<task-id>.md` for the execution;
-3. the working tree is clean at C1's commit.
+1. O1 was ratified by the owner's migration instruction; O2 was ratified on 2026-10-23 (`large`).
+2. The canonical Task Record is `docs/tasks/2026-10-23-promptkit-v2-migration.md`.
+3. C1 (`9f7e5f2`) was committed before the installer ran.
 
 ---
 
 ## 12. Execution record (2026-10-23)
 
 - **Branch**: `chore/promptkit-v2-sync`, based on `fix/drizzle-orm-cve` @ `81fdd3c`.
-- **Commits**: `9f7e5f2` baseline; `4b39636` engine pin; `427a049` host directives, profile
-  fields, and measured counts; `c80b5be` §8 repair and session-log compaction.
+- **Commits through `8ac503d`**: `9f7e5f2` baseline; `4b39636` engine pin; `427a049` host directives,
+  profile fields, and measured counts; `c80b5be` §8 repair and session-log compaction; `6c63325`
+  execution record; `8ac503d` current branch.
 - **Verification**: `check-doctor.sh` exit 0 (`version OK`; `docs-drift` and `provenance` `SKIP`);
   `validate-references.sh` exit 0; `validate-execution-control.sh --root .` exit 0 with
-  `VALID|RECORDS=0`.
-- **State**: `docs/STATE.md` reduced from 2,677 lines / 520,159 bytes to 1,572 lines / 191,705
+  `VALID|RECORDS=1`.
+- **State**: `docs/STATE.md` reduced from 2,677 lines / 520,159 bytes to 1,572 lines / 191,934
   bytes; §8 replaced with four rows plus a `git log --follow` pointer; §1 now has one current branch
   field and 17 dated notes demoted to `Historical Branch Note`.
-- **Not done**: `size:` (O2) and the C5 governance CI workflow.
-- **Gate note**: O2 remains open and no canonical v2 Task Record was created; the owner's "current
-  update" instruction was treated as O1 ratification. This record is the evidence, not a substitute
-  for the Task Record.
+- **Not done**: the C6 governance CI workflow and the optional §3A projection.
+- **Task Record**: `docs/tasks/2026-10-23-promptkit-v2-migration.md` (created 2026-10-23; state
+  `awaiting_review`). `size: large` was set by owner instruction; O1 was ratified by the "current
+  update" instruction.
 - **Branch base**: the branch includes `81fdd3c` (the drizzle/vitest upgrade) because it was cut
   from `fix/drizzle-orm-cve`. Merge that first or rebase if a migration-only PR is wanted.

@@ -189,14 +189,14 @@ profile: turbo
 status-cards: on
 card-style: framed
 ai-attribution: host-default
-size: medium
 intake-status: legacy-partial
 
 tracking: github
 ```
 
-- `size: medium` is a proposal from the measured surface (one Next.js app, 14 routes, 96 test/spec
-  files, 76 task docs). It is a human-confirmed intake value, not a mechanical default.
+- `size:` is deliberately omitted pending O2. The v2 size table classifies this project as **large**
+  (authentication + data + deployment), not `medium`; a missing `size:` on an existing install resolves
+  to `legacy-partial` and does not trigger a re-interview. Do not write `medium`.
 - `intake-status: legacy-partial` is the honest status: there was no bounded v2 intake, and the
   codebase is the record. Do **not** add `intake-record:` without a real file.
 - `ai-attribution: host-default` preserves current behavior. Use `off` only if the owner wants
@@ -337,7 +337,7 @@ the only part a reviewer needs to inspect line by line.
 | AC-1 | `.promptkit` is at `0cfa093` and `.gitmodules` names `promptkit-os` | `git submodule status`, `git -C .promptkit describe`, `cat .gitmodules` |
 | AC-2 | All five host directives carry `Engine: v2.0.0-71-g0cfa093 (0cfa093)` | `rg` across the five files |
 | AC-3 | `AGENTS.md`'s `nextjs-agent-rules` block is byte-identical | `git diff -- AGENTS.md` shows only the PromptKit block |
-| AC-4 | `PROMPTKIT.md` has exactly one `Profile written: 2026-09-14`, no `Installed` line, and the five v2 machine lines | `rg` |
+| AC-4 | `PROMPTKIT.md` has exactly one `Profile written: 2026-09-14`, no `Installed` line, and the four non-guessed v2 machine lines (`status-cards`, `card-style`, `ai-attribution`, `intake-status`); `size:` stays absent pending O2 | `rg` |
 | AC-5 | `docs/STATE.md` has one `Last Updated`, one `Current Working Branch`, and the `Engine Version` row | `rg`, `wc -lc` |
 | AC-6 | v2 execution-control validator exits 0 with `VALID`, `RECORDS=0` | validator run |
 | AC-7 | `validate-references.sh` exits 0 | script run |
@@ -371,7 +371,7 @@ the old URL.
 | # | Decision | Recommendation | Consequence if changed |
 | :--- | :--- | :--- | :--- |
 | O1 | Pin HEAD `0cfa093` or released `v2.0.0` (`c5193857`) | **HEAD** | `v2.0.0` loses the profile-date, five-check doctor, and provenance fixes; HEAD is unreleased but SHA-pinned. |
-| O2 | `size: medium` | **Confirm medium** | Drives `pk:plan` intake depth only; never guessed. |
+| O2 | `size:` | **Confirm `large` or leave unset** | The v2 size table defines `large` as authentication + data + deployment, which this project has; `medium` would understate it. It drives `pk:plan` intake depth only; never guessed. |
 | O3 | `ai-attribution: host-default` or `off` | **host-default** | `off` strips AI trailers from future commits/PRs; it does not rewrite history. |
 | O4 | Keep `turbo` | **Keep for now; measure** | `balanced` is cheaper and less experimental; switching is a one-line re-run. |
 | O5 | Legacy card conversion | **Defer** | Converting all 76 requires a profile decision and 76 evidence-degraded records; not a migration prerequisite. |

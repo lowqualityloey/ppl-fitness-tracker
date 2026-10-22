@@ -185,12 +185,12 @@ The revised plan is not executed by this review. No installer, test suite, or CI
   rewrite the file in one unreviewable pass.
 - **Disposition**: incorporated as C5 and §8.
 
-### 💡 [SUGGEST] S5 — `size: medium` and `ai-attribution` are policy values, not mechanical edits
+### 💡 [SUGGEST] S5 — `size:` and `ai-attribution` are policy values, not mechanical edits
 
 - **Evidence**: `size:` is an intake field the template says never to guess; `ai-attribution:` changes
-  commit/PR trailers. The plan proposes `medium` and `host-default`.
-- **Remedy**: confirm both with the owner before writing them. `off` is a legitimate choice if the
-  repository wants no AI attribution.
+  commit/PR trailers. The plan originally proposed `medium`, but the v2 size table classifies this
+  project as `large` (authentication + data + deployment).
+- **Remedy**: confirm `large` or leave `size:` unset; confirm `host-default` or `off` for attribution.
 - **Disposition**: open as O2/O3.
 
 ### 👏 [PRAISE] S6 — The installer and doctor have defensible safety properties

@@ -223,8 +223,8 @@ The revised plan is not executed by this review. No installer, test suite, or CI
   one migration Task Record.
 - **Risk**: future reviewers may read the legacy prose as if it were execution-control evidence. The
   plan mitigates this by stating the cards are historical and by requiring new records.
-- **Verification Action**: run the v2 validator after C5; confirm exit 0 and `RECORDS=1` (the migration
-  record only); confirm no legacy card was rewritten.
+- **Verification Action**: run the v2 validator after C5; confirm exit 0 and `RECORDS=2` (the migration
+  record and its approved scope change); confirm no legacy card was rewritten.
 - **Recommendation**: delete the bulk back-fill from this migration. It is not a prerequisite, it has
   no valid ID scheme without a separate profile decision, and it would add 76 evidence-degraded records
   to a PR that is already dominated by a submodule move.

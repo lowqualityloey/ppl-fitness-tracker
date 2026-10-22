@@ -34,11 +34,12 @@
   - `docs/reviews/2026-10-21-promptkit-os-install-audit.md` - pre-migration audit
   - `docs/tasks/m4/M4-29-first-release.checkpoint-03.md` - baseline checkpoint
   - `docs/tasks/2026-10-23-promptkit-v2-migration.md` - this Task Record
+  - `docs/tasks/SCOPE-2026-10-23-promptkit-v2-migration-001.md` - approved §3A scope change
 - **Explicit Non-Goals**:
   - Application source, schema, auth, API, database, or runtime changes
-  - The C5 PromptKit Governance CI workflow
+  - The C6 PromptKit Governance CI workflow
   - Bulk conversion of the 76 legacy `docs/tasks/` cards
-  - A §3A execution-control projection or a completed intake record
+  - A completed intake record
   - Release, tag, deployment, or production action
 - **Dependencies**: `Upstream promptkit-os 0cfa093; owner instruction to migrate; no external service.`
 - **Risk**: `Low - governance/documentation only, reversible with git, no application code or data touched.`
@@ -57,10 +58,10 @@
   - **Evidence**: `rg '^(profile|status-cards|card-style|ai-attribution|size|intake-status|tracking):' PROMPTKIT.md` -> `size: large` present.
 - [x] **AC-4**: `docs/STATE.md` has the Engine row, one current branch field, and a valid §8 table.
   - **Result**: `PASS`
-  - **Evidence**: `validate-execution-control.sh --root .` -> `VALID|RECORDS=1`.
+  - **Evidence**: `validate-execution-control.sh --root .` -> `VALID|RECORDS=2`.
 - [x] **AC-5**: `pk:doctor` passes its configured checks.
   - **Result**: `PASS`
-  - **Evidence**: `check-doctor.sh` exit 0; `version OK`; `docs-drift` and `provenance` `SKIP` with reasons.
+  - **Evidence**: `check-doctor.sh` exit 0; `version OK`; `docs-drift` `OK`; `provenance` `SKIP(intake-status: legacy-partial)`.
 - [x] **AC-6**: Reference integrity passes.
   - **Result**: `PASS`
   - **Evidence**: `validate-references.sh` exit 0.
@@ -118,22 +119,23 @@
   - `docs/reviews/2026-10-21-promptkit-os-install-audit.md` - audit
   - `docs/tasks/m4/M4-29-first-release.checkpoint-03.md` - baseline checkpoint
   - `docs/tasks/2026-10-23-promptkit-v2-migration.md` - this record
-- **Scope Change Records**: `None`
+  - `docs/tasks/SCOPE-2026-10-23-promptkit-v2-migration-001.md` - approved §3A scope change
+- **Scope Change Records**: `SCOPE-2026-10-23-promptkit-v2-migration-001`
 - **Checkpoint Records**: `None`
 - **Handoff Records**: `None`
-- **Verification Evidence**: `check-doctor.sh exit 0 (version OK; docs-drift SKIP; provenance SKIP); validate-references.sh exit 0; validate-execution-control.sh --root . exit 0 with VALID|RECORDS=1; git diff --check exit 0.`
+- **Verification Evidence**: `check-doctor.sh exit 0 (version OK; docs-drift OK; provenance SKIP); validate-references.sh exit 0; validate-execution-control.sh --root . exit 0 with VALID|RECORDS=2; git diff --check exit 0.`
 - **Behavior IDs [Required when enabled]**: `N/A - exception work type`
 - **TDD Intent Register [Required when enabled]**: `N/A - exception work type`
 - **TDD Execution Evidence [Required when enabled]**: `N/A - exception work type`
 - **TDD Exception Verification [Required for Documentation, Configuration, or Research Work; Not applicable for Code Work]**: `N/A - no behavior seam; governance/documentation-only change`
 - **CI Evidence**: `N/A - no PR or CI run; local governance gates passed`
 - **Review Evidence**: `[REVIEW-2026-10-23-promptkit-v2-migration-plan](../reviews/2026-10-23-promptkit-v2-migration-plan-review.md#REVIEW-2026-10-23-promptkit-v2-migration-plan)`
-- **Commit Evidence**: `9f7e5f2 baseline; 4b39636 engine pin; 427a049 host/profile; c80b5be state repair; 6c63325 execution record; 8ac503d current branch`
+- **Commit Evidence**: `9f7e5f2 baseline; 4b39636 engine pin; 427a049 host/profile; c80b5be state repair; 6c63325 execution record; 8ac503d current branch; 70e8fba size/Task Record`
 - **Pull Request Evidence**: `N/A - not opened`
 - **Release Evidence**: `N/A - no release action`
 - **Blocker and Resume Condition**: `None`
 - **Completion State**: `awaiting_review`
 - **Acceptance Results**: `AC-1 PASS; AC-2 PASS; AC-3 PASS; AC-4 PASS; AC-5 PASS; AC-6 PASS; AC-7 PASS; AC-8 PASS`
-- **Changed-File Summary**: `Seven governance/docs commits; no application source, schema, auth, API, database, or runtime file changed.`
+- **Changed-File Summary**: `Eight governance/docs commits; no application source, schema, auth, API, database, or runtime file changed.`
 - **Completion Exception**: `None`
 - **Completion Decision and Timestamp**: `Awaiting human review - 2026-10-22 22:57 UTC`

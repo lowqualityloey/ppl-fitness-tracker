@@ -29,8 +29,8 @@ installed host directives, add the v2 machine-readable profile fields, and leave
 - No application source, database, auth, API, or production change.
 - No bulk rewrite of the 76 legacy `docs/tasks/` cards. v2's execution-control validator is adopted as
   the gate for *new* L2/L3 records only; the old cards remain the historical record.
-- No §3A projection and no invented intake record. Both checks are allowed to `SKIP` until there is a
-  canonical record to project.
+- No completed intake record. The optional §3A projection was added on 2026-10-23; it is a
+  synchronized projection, not a new authority.
 - No release, tag, deployment, or CI billing change.
 
 ---
@@ -43,7 +43,7 @@ installed host directives, add the v2 machine-readable profile fields, and leave
 | D2 | Delivery shape | Two PRs: engine/profile/state, then CI | The engine diff is a 500+ file submodule move plus a 520 KB state rewrite. Splitting review from automation keeps each diff attributable. |
 | D3 | Legacy task cards | Defer conversion | Only 6 of 76 cards carry a `Task ID` and 5 carry a `Record Type`; the validator's default ID rule is `TASK-YYYY-MM-DD-<slug>`, while the existing IDs are `TASK-m4-...`. The audit's `TASK-<slug>` mapping is only valid under `PromptKit Adaptation Profile: sdlc-overlay-v1`, which also demands adaptation fields the cards lack. |
 | D4 | Profile / tracking | Keep `turbo` / `github` | Existing ratified posture. Turbo's ~2× token cost is retained knowingly; re-evaluate after two normal sessions. |
-| D5 | State projection | No §3A yet | The Task Record exists, but no §3A projection was added. Filling §3A with placeholders would make `docs-drift` compare fiction; `SKIP(no execution-control projection)` is the honest result until it is populated. |
+| D5 | State projection | §3A populated | The projection is synchronized to the Task Record; `check-doctor.sh` reports `docs-drift OK`. |
 
 ---
 
@@ -228,17 +228,18 @@ This is the change that buys back context budget and turns the standing validato
    and no blank line or prose interrupts a table. The 86 `ORPHANED_TABLE_ROW` diagnostics are all in
    §8; the validator is the acceptance check.
 5. Keep the `Engine Version` row written by C3.
-6. Do **not** add §3A. Leave `docs-drift` at `SKIP(no execution-control projection)`.
+6. C5 left §3A absent. It was added afterward on owner request (2026-10-23) as a synchronized
+   projection; `docs-drift` now reports `OK`.
 
 Acceptance:
 
 ```bash
 bash .promptkit/scripts/validate-execution-control.sh --root .
-# expected: VALID|RECORDS=1, exit 0
+# expected: VALID|RECORDS=2, exit 0
 ```
 
-`RECORDS=1` is correct: the migration's canonical Task Record is the only one. `--strict` would also
-validate the 76 legacy cards, which are not v2 records; it is not an acceptable gate for this tree.
+`RECORDS=2` is correct: the Task Record plus its approved scope change. `--strict` would also validate
+the 76 legacy cards, which are not v2 records; it is not an acceptable gate for this tree.
 
 ### C6 — Add the governance CI workflow
 
@@ -298,7 +299,7 @@ jobs:
 Notes:
 
 - `check-doctor.sh` needs `origin/main` inside the submodule to compare the stamp; fetch it explicitly.
-- `check-doctor.sh` exits 0 with `docs-drift SKIP` and `provenance SKIP`. That is a pass, not a full
+- `check-doctor.sh` exits 0 with `docs-drift OK` and `provenance SKIP`. That is a pass, not a full
   green board; the workflow should not print a stronger claim.
 - Do **not** wire `scan-staged-secrets.sh` here. It reads the **staged index**, and CI checkouts have
   no staged diff. Keep it in `pk:commit`; a PR-diff wrapper is separate work.
@@ -343,9 +344,9 @@ part a reviewer needs to inspect line by line.
 | AC-3 | `AGENTS.md`'s `nextjs-agent-rules` block is byte-identical | `git diff -- AGENTS.md` shows only the PromptKit block |
 | AC-4 | `PROMPTKIT.md` has exactly one `Profile written: 2026-09-14`, no `Installed` line, and the five v2 machine lines (`status-cards`, `card-style`, `ai-attribution`, `size: large`, `intake-status`) | `rg` |
 | AC-5 | `docs/STATE.md` has one `Last Updated`, one `Current Working Branch`, and the `Engine Version` row | `rg`, `wc -lc` |
-| AC-6 | v2 execution-control validator exits 0 with `VALID`, `RECORDS=1` | validator run |
+| AC-6 | v2 execution-control validator exits 0 with `VALID`, `RECORDS=2` | validator run |
 | AC-7 | `validate-references.sh` exits 0 | script run |
-| AC-8 | `check-doctor.sh` exits 0; `version OK` (or `STALE(+n)` only if upstream advanced after `0cfa093`); `docs-drift` and `provenance` `SKIP` with reasons | doctor run |
+| AC-8 | `check-doctor.sh` exits 0; `version OK` (or `STALE(+n)` only if upstream advanced after `0cfa093`); `docs-drift` `OK`; `provenance` `SKIP` with a reason | doctor run |
 | AC-9 | No application file changed | `git diff --stat` scope check |
 | AC-10 | A docs-only PR touching `PROMPTKIT.md` or `docs/STATE.md` produces a PromptKit Governance run | PR check list |
 
@@ -416,18 +417,18 @@ This gate was satisfied before execution; it is retained as the record of the st
 ## 12. Execution record (2026-10-23)
 
 - **Branch**: `chore/promptkit-v2-sync`, based on `fix/drizzle-orm-cve` @ `81fdd3c`.
-- **Commits through `8ac503d`**: `9f7e5f2` baseline; `4b39636` engine pin; `427a049` host directives,
+- **Commits through `70e8fba`**: `9f7e5f2` baseline; `4b39636` engine pin; `427a049` host directives,
   profile fields, and measured counts; `c80b5be` §8 repair and session-log compaction; `6c63325`
-  execution record; `8ac503d` current branch.
-- **Verification**: `check-doctor.sh` exit 0 (`version OK`; `docs-drift` and `provenance` `SKIP`);
+  execution record; `8ac503d` current branch; `70e8fba` size and Task Record.
+- **Verification**: `check-doctor.sh` exit 0 (`version OK`; `docs-drift` `OK`; `provenance` `SKIP`);
   `validate-references.sh` exit 0; `validate-execution-control.sh --root .` exit 0 with
-  `VALID|RECORDS=1`.
-- **State**: `docs/STATE.md` reduced from 2,677 lines / 520,159 bytes to 1,572 lines / 191,934
+  `VALID|RECORDS=2`.
+- **State**: `docs/STATE.md` reduced from 2,677 lines / 520,159 bytes to 1,600 lines / 194,002
   bytes; §8 replaced with four rows plus a `git log --follow` pointer; §1 now has one current branch
   field and 17 dated notes demoted to `Historical Branch Note`.
-- **Not done**: the C6 governance CI workflow and the optional §3A projection.
+- **Not done**: the C6 governance CI workflow.
 - **Task Record**: `docs/tasks/2026-10-23-promptkit-v2-migration.md` (created 2026-10-23; state
   `awaiting_review`). `size: large` was set by owner instruction; O1 was ratified by the "current
-  update" instruction.
+  update" instruction. §3A was added through `SCOPE-2026-10-23-promptkit-v2-migration-001`.
 - **Branch base**: the branch includes `81fdd3c` (the drizzle/vitest upgrade) because it was cut
   from `fix/drizzle-orm-cve`. Merge that first or rebase if a migration-only PR is wanted.

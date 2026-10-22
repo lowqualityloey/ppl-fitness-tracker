@@ -260,7 +260,7 @@
   rather than dropped. **One environment correction from this pass**: the first `git checkout main`
   **refused** because that same block is durable working-tree dirt — a dirty tree blocks the post-merge
   switch, not just the commit — and the block's own text names the remedy (commit it).
-- **Last Updated**: 2026-10-23 (**PromptKit OS v2.0.0-71 migration — engine pinned at `0cfa093`, five host directives re-injected, profile machine lines plus `size: large` set, and the §8 table repair is green (`VALID|RECORDS=1`). The Task Record is `docs/tasks/2026-10-23-promptkit-v2-migration.md`; the remaining follow-ups are the C6 governance CI and an optional §3A projection; the release tag stays held.**). Earlier: 2026-09-21 (`pk:checkpoint` 03 at `532c1c9`; the drizzle upgrade landed afterward at `81fdd3c`).
+- **Last Updated**: 2026-10-23 (**PromptKit OS v2.0.0-71 migration — engine pinned at `0cfa093`, five host directives re-injected, profile machine lines plus `size: large` set, and the §8 table repair is green (`VALID|RECORDS=2`). The Task Record is `docs/tasks/2026-10-23-promptkit-v2-migration.md`; §3A is populated and `docs-drift` is OK; the only remaining follow-up is the C6 governance CI; the release tag stays held.**). Earlier: 2026-09-21 (`pk:checkpoint` 03 at `532c1c9`; the drizzle upgrade landed afterward at `81fdd3c`).
 - **Engine Version**: v2.0.0-71-g0cfa093 @ 0cfa093
   identified as already-merged planning PR, milestone #4 open=18/closed=15. Earlier: **post-#156 checkpoint** — #101/M4-12 merged as `a543188`, keyword
   closed the issue, local branch pruned, milestone #4 open=19/closed=14. Earlier: **post-#155 checkpoint** — #149/M4-25 merged as `5ac4c1c`, local branch pruned,
@@ -698,6 +698,34 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
   Same change, same species of fiction: that mock's `reason: 'ILLEGAL_TRANSITION'` was also a
   string no server path emits, and now carries `CONFLICT`, which is what `rejectionReason` returns
   for a lifecycle refusal.
+
+---
+
+## 3A. Execution-Control Projection (Optional)
+
+> This section is a synchronized projection for checkpoint continuity when the host project uses Controlled Work. The canonical authority remains `docs/tasks/2026-10-23-promptkit-v2-migration.md`; disagreement with that record is a validation failure and leaves execution blocked or `checkpoint_due` until reconciled.
+
+- **Local Task Source**: `docs/tasks/2026-10-23-promptkit-v2-migration.md`
+- **Task ID**: `TASK-2026-10-23-promptkit-v2-migration`
+- **Task Record**: `docs/tasks/2026-10-23-promptkit-v2-migration.md`
+- **Ceremony Level**: `Level 2 (Controlled Work)`
+- **Specification**: `docs/specs/2026-10-23-spec-promptkit-v2-migration.md`
+- **Execution Scope**: `ppl-fitness-tracker, branch chore/promptkit-v2-sync`
+- **Execution State**: `awaiting_review`
+- **Mapped `pk:tasks` Status**: `In Review`
+- **Active Task Pointer**: `None`
+- **Owner / Current Actor**: `Agent (Codebuff/Buffy)`
+- **Start Time**: `2026-10-22 22:57 UTC`
+- **Current Branch**: `chore/promptkit-v2-sync`
+- **Current Revision**: `70e8fba`
+- **Checkpoint Policy**: `N/A - single session; host timer cannot mechanically enforce checkpoints or terminate the session.`
+- **Blockers and Resume Condition**: `None`
+- **Verification Status**: `2026-10-22 23:19 UTC: check-doctor.sh exit 0 with docs-drift OK and provenance SKIP(intake-status: legacy-partial); validate-execution-control.sh VALID, RECORDS=2; validate-references.sh exit 0.`
+- **CI Evidence**: `N/A - no PR or CI run; local governance gates passed`
+- **Changed-File Summary**: `PROMPTKIT.md; docs/STATE.md; docs/specs/2026-10-23-spec-promptkit-v2-migration.md; docs/reviews/2026-10-23-promptkit-v2-migration-plan-review.md; docs/tasks/2026-10-23-promptkit-v2-migration.md; docs/tasks/SCOPE-2026-10-23-promptkit-v2-migration-001.md`
+- **Latest Checkpoint**: `None`
+- **Latest Handoff**: `None`
+- **Next Action**: `Owner confirms merge order, then authorizes opening the PR; the C6 governance CI remains out of scope.`
 
 ---
 
@@ -1547,7 +1575,7 @@ Carried forward, still open:
 
 | Date | Engineer / Agent | Milestone / Focus | Key Changes & Artifacts |
 | :--- | :--- | :--- | :--- |
-| 2026-10-23 | Agent (Codebuff/Buffy) | PromptKit OS v2 migration | Engine pinned to `v2.0.0-71` (`0cfa093`), five host directives re-injected, profile machine lines plus `size: large` set; plan `docs/specs/2026-10-23-spec-promptkit-v2-migration.md`; Task Record `docs/tasks/2026-10-23-promptkit-v2-migration.md` (`awaiting_review`; validator `VALID`, `RECORDS=1`). |
+| 2026-10-23 | Agent (Codebuff/Buffy) | PromptKit OS v2 migration | Engine pinned to `v2.0.0-71` (`0cfa093`), five host directives re-injected, profile machine lines plus `size: large` set; plan `docs/specs/2026-10-23-spec-promptkit-v2-migration.md`; Task Record `docs/tasks/2026-10-23-promptkit-v2-migration.md` (`awaiting_review`); §3A projection added; validator `VALID`, `RECORDS=2`; doctor `docs-drift OK`. |
 | 2026-09-21 | Agent (Freebuff/Buffy) | `pk:checkpoint` 03 | `docs/tasks/m4/M4-29-first-release.checkpoint-03.md`; release provisioned, CI blocked on account billing, tag held. |
 | 2026-09-21 | Agent (Freebuff/Buffy) | Hosted provisioning / local gate | B5 PASS (18/13), B6 configured, B7 resolved; local gate on `89418d5` green. |
 | 2026-09-21 | Agent (Freebuff/Buffy) | CI cost fix | `paths-ignore` + PR-only concurrency; measured ~33% saving; a docs-only push produced zero runs. |

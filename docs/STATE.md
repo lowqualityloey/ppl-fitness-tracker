@@ -6,38 +6,8 @@
 - **Current Milestone / Epic**: **M4: Hardening, Telemetry & Decommission — IN PROGRESS** (§7 item 22 is its start line). M3 is closed and stays described below. **(previously the live field named M3; it had not been moved since 2026-09-12T02:00Z)** Milestone #3 reads **open=0 / closed=19** (`gh api repos/lowqualityloey/ppl-fitness-tracker/milestones/3`, read 2026-09-12). M2 remains as it was: M2-00 → M2-06 merged (PRs #43–#47, #51, #53). All of M3's build slices merged 2026-09-11 — #57/#58 (PR #69), #59 (PR #71), #60 (PR #72), #61 (PR #74), #62 (PR #75), #63 (PR #79), #64 (PR #81), #65 (PR #83), #66 (PR #85). **#67 (M3-10, the verification gate) is MERGED as PR #86 (`8704c19`, 2026-09-11T19:23Z)**, and the milestone's last open issue, **#73 (`SessionStateSchema`), is MERGED as PR #87 (`2d5edfb`, 2026-09-12T02:00Z)**. M3's exit report and M4 handoff are `docs/releases/2026-09-12-m3-exit-report-and-m4-handoff.md`; the break-each-gate evidence is `docs/tests/2026-09-11-m3-verification-audit.md` (entries 9–19). **M4 is the next milestone** — §7 item 22 is its start line. **Wave 0 is under way:** #89 (M4-00) is merged — ADR-0006 records hand-authored migration authority, `0007` ships the auth→profiles cascade — and **#105 (M4-16) is merged as PR #116**, and **#105 (M4-16) is merged as PR #116**, the first of the seven ratified spec decisions to be executed rather than carried as a comment on an issue. Milestone #4 reads **open=28 / closed=3** (`gh api repos/lowqualityloey/ppl-fitness-tracker/milestones/4`, read 2026-09-12). Nothing is in flight; no PR is open.
 - **Overall Status**: ACTIVE <!-- Options: ACTIVE | PAUSED | STABILIZING | RELEASE_CANDIDATE -->
 - **Target Release**: v1.0.0, no date committed
-- **Current Working Branch**: `docs/onboard-drift-patch` (cut at the 2026-09-15 closeout from `origin/main`, carrying the `pk:onboard` doc patch plus its reconstructed findings index; sibling `chore/pin-package-manager` carries the npm pin). Its predecessor `feat/m4-05-structured-logging` is **retired — content fully upstream via PR #145**; it carried the PLAN-m4 docs commits and this file's engine-sync row; `fix/test-cleanup-deadlock` sits one commit behind it (its last docs commit), and `docs/m4-spec-plan` is a stale branch at an older `main` tip, not competing work — `git merge-base --is-ancestor e9925b5 main` → true. The working tree was **clean at `18de6da`** when the 2026-09-14 `pk:onboard` pass recorded it; the drift patch that pass authored is what the closeout commits carry. The two concerns this paragraph used to describe landed there — M4-05 (#94) as `40ec0c9` + `e850a4f`, and the GoTrue teardown `pk:fix` as #144 (`9f17dfc`) — and **both are fully upstream**: PR #145 squash-merged the branch tree onto `main` with CI `test` success on the merge commit, and at the 2026-09-15 closeout `git diff origin/main..HEAD` → **empty**. The ahead/behind counters this field used to carry were pre-squash artifacts: after a squash-merge, commit-count arithmetic across branches measures topology, not content — re-measure with `git diff` before planning a rebase or a residual docs PR. Read §8's final rows before staging anything, and follow `e0a3f92`/`24e99e5`'s `git commit --only` precedent rather than `git add -A`; `main` itself is where three merges landed on 2026-09-13 (PR #137 closed #96, PR #138 committed the last `pk:checkpoint`, PR #139 synced PromptKit OS to `c7199c3` and added PR/issue templates). **M4 in progress** — milestone #4 reads **open=23 / closed=9** (`gh api repos/lowqualityloey/ppl-fitness-tracker/milestones/4`, re-read 2026-09-14; the +1 open since `#96`'s merge is `#142`, the CSP card the spec §7 sign-off pass created and filed). **The retroactive M4 spec exists, is grilled, AND signed off: `docs/specs/2026-09-14-spec-m4-hardening-telemetry-decommission.md` (PLAN-m4, status `grilled + signed-off 2026-09-14` — see item 24).**
-  (`gh api repos/lowqualityloey/ppl-fitness-tracker/milestones/4`, re-read 2026-09-13 after #90's merge;
-  it read 26 open / 5 closed an hour earlier, 28/3 until #80 and #100 merged as PRs #119 and #120, and
-  **25 open / 6 closed now that PR #126 landed #90**). **Name the source on this number,
-  because two GitHub APIs disagree on it by design**: REST's `closed_issues` counts milestone-tagged *pull
-  requests* (5), GraphQL's `issues(states: CLOSED)` counts only issues (4), which is also why M3 reads
-  19 on one and 12 on the other. A third path fails silently — `gh issue list --milestone "M4"` matches on
-  **title**, and a mismatched string returns an empty list that looks exactly like a clean board; that is
-  how "open M4 cards: 0" appeared once in this project's session log and it was wrong by 26. All 7 deferred
-  spec decisions are OWNER-RATIFIED (see §7 item 23), and one of them is now *executed* rather than
-  decided: #105 shipped in PR #116. **Nothing is in flight** — no open PR, no active branch (last merge PR #137 closed #96, 2026-09-13) — so the
-  next card starts by cutting its own branch from `main`, per this repo's one-active-branch rule. **Nothing is
-  in flight** as of this `pk:checkpoint`: no open PR, and #80 / #100 / #90 are all closed.
-  **That sentence is no longer true as of 2026-09-14, and is kept only because §1's own rule forbids
-  rewriting the state a past pass recorded:** PR **#143** has **merged** into `main` as `aefd0c5`
-  (squash, 2026-09-14), so the engine sync is closed out and `main`'s `.promptkit` is `b3c5edf`;
-  **#142** (M4-24 CSP baseline) is filed on milestone 4, and active work still sits on
-  `feat/m4-05-structured-logging` — which is **unpushed**, so `gh pr list` alone will report a
-  quiet repo while two product concerns are in fact in flight here (B: the GoTrue teardown fix,
-  C: M4-05 structured logging). Check `git log --oneline origin/main..HEAD` and
-  `git status --short` before concluding anything from a remote-only view. #80 / #100 / #90 remain closed.
-  **Superseded on 2026-09-14 by the pass that closed concern B:** B is no longer in flight — it is
-  `5667ea0` on this branch, which is rebased onto `origin/main` at 9 commits and pushed. Concern C,
-  `lib/logger/` for #94, is the only uncommitted product work left here, and there is still no PR, so
-  `gh pr list` reports a quiet repo for that reason alone.
-  The SHA this field used to name is three merges behind the tree it described, which is the failure
-  the rule immediately below it exists to prevent; read `git log --oneline -1` when the hash matters.
-  Both M3 exit PRs remain merged (#86 → `8704c19`, #87 → `2d5edfb`) and there is no M3 work left to
-  continue.
-
-> **Do not pin the current `main` SHA in this field.** It was tried three times and went stale three times, because the merge commit that lands the correction advances `main` past the value being recorded. Describe the state, not the hash. Run `git log --oneline -1` if you need the exact commit.
-- **Current Working Branch — 2026-09-15 (M4-24 / #142), supersedes the field above for "where am I now"**:
+- **Current Working Branch**: `chore/promptkit-v2-sync` (cut from `fix/drizzle-orm-cve` @ `81fdd3c`; that branch is one commit ahead of `main`). The dated notes below are historical, not competing current values.
+- **Historical Branch Note — 2026-09-15 (M4-24 / #142), supersedes the field above for "where am I now"**:
   `feat/m4-24-csp-baseline`, cut from `origin/main` at PR #147's squash (`2ecb3eb`, read this turn), carrying the CSP
   baseline in three commits: the CI env fix, the policy with its two specs and this card's record, and this row.
   **Milestone #4 reads open=22 / closed=10** (`gh api repos/lowqualityloey/ppl-fitness-tracker/milestones/4`, read
@@ -50,7 +20,7 @@
   product failure when it is an unusable browser — and `lighthouse.spec.ts` cannot run here at all, because
   `chrome-launcher`'s WSL branch overwrites `TEMP` with a Windows profile path this user may not write (`EACCES`
   before any page loads). See §8's final row.
-- **Current Working Branch — 2026-09-15, post-#148 `pk:checkpoint` (supersedes the bullet above for
+- **Historical Branch Note — 2026-09-15, post-#148 `pk:checkpoint` (supersedes the bullet above for
   "where am I now")**: no product branch is active. `origin/main` is `0fac817` — above `471c056`
   (M4-24/#142, PR **#148**, CI `test` **pass 13m48s**) and `0fac817` (M4-25/#149's card, PR **#150**, CI
   **pass 13m15s**); both issues closed, milestone #4 **open=21 / closed=12** (`gh api …/milestones/4`,
@@ -64,7 +34,7 @@
   carries both ingest shapes, so #95 merges without editing one directive here, and narrows to the
   configured DSN origin *in its own PR*. It needs a Sentry project/DSN (or the same-origin tunnel
   decision) from the owner.
-- **Current Working Branch — 2026-09-15, after #95's implementation (supersedes the two bullets above for
+- **Historical Branch Note — 2026-09-15, after #95's implementation (supersedes the two bullets above for
   "where am I now")**: `feat/m4-06-sentry-error-sink`, cut from `origin/main` at `0fac817` and **rebased onto
   `e872f75`** when #151 (engine v1.7.0) and #152 (the post-#148 checkpoint) landed — the rebase conflicted in
   exactly the three anchors this file predicts (§1's branch bullet, §7's next item, §8's tail), and the
@@ -77,7 +47,7 @@
   **Next implementable after #153: #101** (M4-12's remaining slice per the board's wave-1 tail) **or #149**
   (the Lighthouse bootstrap, small and self-contained) — #95's DSN question resolved as the same-origin tunnel
   the owner picked, so no Sentry credential is required by anything on the board.
-- **Current Working Branch — 2026-09-15, post-#153 `pk:checkpoint` (supersedes the three bullets above for
+- **Historical Branch Note — 2026-09-15, post-#153 `pk:checkpoint` (supersedes the three bullets above for
   "where am I now")**: no product branch is active. `origin/main` is **`01a9816`** — M4-06/#95, merged 03:27:26Z
   after CI `test` **passed in 13m54s** (0 failing steps). **#151** (engine v1.7.0) and **#152** (post-#148
   checkpoint) landed mid-pass, so this branch is rebased-free and `AGENTS.md`'s v1.7.0 block is what every new
@@ -90,7 +60,7 @@
   **Next implementable, no credential needed:** **#149** (make the Lighthouse gate runnable locally — small,
   self-contained, and it is the reason two sessions have now worked around the same wall) or **#101** (M4-12's
   remaining slice). **#16** stays the only owner-blocked card in the milestone.
-- **Current Working Branch — 2026-09-15, #149 (M4-25) implemented (supersedes the four bullets above for
+- **Historical Branch Note — 2026-09-15, #149 (M4-25) implemented (supersedes the four bullets above for
   "where am I now")**: `test/m4-25-lighthouse-node-api`, cut from `origin/main` at **`2b7a77b`** (#154's
   checkpoint, which merged at 04:03:39Z). `tests/e2e/lighthouse.spec.ts` drives **Lighthouse's Node API over CDP
   against a Chromium the spec launches itself**, so the one gate this box could not run now runs:
@@ -109,7 +79,7 @@
   `LD_LIBRARY_PATH=/tmp/pw-libs/extracted/usr/lib/x86_64-linux-gnu`, and `PROMPTKIT.md` §3 named a path that does
   not exist (`/tmp/pwlibs/ext/…`) — corrected in this PR, since a documented workaround that points at nothing is
   how a machine fact gets rediscovered every session.
-- **Current Working Branch — 2026-09-15, post-#155 `pk:checkpoint` (supersedes the bullet above for
+- **Historical Branch Note — 2026-09-15, post-#155 `pk:checkpoint` (supersedes the bullet above for
   "where am I now")**: no product branch is active. `origin/main` is **`5ac4c1c`** — M4-25/#149, merged 05:18:13Z
   via PR **#155**. Branch content verified empty (`git diff HEAD origin/main --stat` → empty) before pruning, so
   the local `test/m4-25-lighthouse-node-api` branch was deleted after the fast-forward; two remote tracking refs
@@ -117,7 +87,7 @@
   prune ruling. **Milestone #4 reads open=20 / closed=13** (`gh api …/milestones/4`, read this turn) and
   `gh pr list --state open` is empty. `.promptkit` is `ebfd67e` (v1.7.0, via #151) with a clean worktree.
   **Next implementable: #101** (M4-12's remaining 50 rps slice); **#16** stays the only owner-blocked card.
-- **Current Working Branch — 2026-09-15, post-#156 `pk:checkpoint` (supersedes the bullet above for
+- **Historical Branch Note — 2026-09-15, post-#156 `pk:checkpoint` (supersedes the bullet above for
   "where am I now")**: no product branch is active. `origin/main` is **`a543188`** — M4-12/#101, merged 10:24:19Z
   via PR **#156** (squash). Branch content verified empty (`git diff HEAD origin/main --stat` → empty) before
   pruning, so the local `test/m4-12-zwsp-name-gate` branch was deleted after the fast-forward.
@@ -126,7 +96,7 @@
   open=19 / closed=14** (`gh api …/milestones/4`, read this turn). `gh pr list --state open` is empty.
   `.promptkit` is `ebfd67e` (v1.7.0) with a clean worktree. **Next implementable: wave 2's #108 / #110 /
   #111 / #113 cluster**; **#16** stays the only owner-blocked card.
-- **Current Working Branch — 2026-09-15, post-#157 `pk:checkpoint` (supersedes the bullet above for
+- **Historical Branch Note — 2026-09-15, post-#157 `pk:checkpoint` (supersedes the bullet above for
   "where am I now")**: no product branch is active. `origin/main` is **`3ef55ab`** — M4-19/#108, merged 11:14:42Z
   via PR **#157** (squash). Branch content verified empty before pruning, so the local
   `feat/m4-19-session-analytics` branch was deleted after the fast-forward. **#108 is CLOSED by the
@@ -134,7 +104,7 @@
   (`gh api …/milestones/4`, read this turn); `gh pr list --state open` is empty. **#113 needs no work —
   it is the merged M4-kickoff planning PR, not an implementable card**, so wave 2's remaining work is
   **#110** (M4-21 export) and **#111** (M4-22 offline shell). **#16** stays the only owner-blocked card.
-- **Current Working Branch — 2026-09-16, post-#158 `pk:checkpoint` (supersedes the bullet above for
+- **Historical Branch Note — 2026-09-16, post-#158 `pk:checkpoint` (supersedes the bullet above for
   "where am I now")**: no product branch is active. `origin/main` is **`b74b6aa`** — M4-21/#110, the
   versioned JSON export, merged 2026-09-15T13:42Z via PR **#158** (squash). Local `main` fast-forwarded,
   local branch deleted, remote ref already gone (`git ls-remote --heads` → 0). **#110 is CLOSED by the
@@ -145,7 +115,7 @@
   fixed in `51951e7` by asserting through the envelope, and run `34975082132` came back **exit 0 —
    e2e 76/76, unit 594/594, api 72/72**. Wave 2's remainder is **#111** alone; **#16** stays the only
    owner-blocked card.
-- **Current Working Branch — 2026-09-16, post-#159 `pk:checkpoint` (supersedes the bullet above for
+- **Historical Branch Note — 2026-09-16, post-#159 `pk:checkpoint` (supersedes the bullet above for
   "where am I now")**: no product branch is active. `origin/main` is **`491fb1a`** — M4-22/#111, the
   hand-written service-worker offline shell, merged 2026-09-15T23:22:44Z via PR **#159** (squash).
   Local `main` fast-forwarded, branch pruned both ends (`git ls-remote --heads` → 0), tree clean.
@@ -159,7 +129,7 @@
   the browser with `LD_LIBRARY_PATH=/tmp/pw-libs/extracted/usr/lib/x86_64-linux-gnu` and env sourced
   from `.env.local` (playwright's script passes no env file); item 32's "CI is this box's e2e venue"
   is history, kept only because it is dated.
-- **Current Working Branch — 2026-09-16, post-#160 `pk:checkpoint` (supersedes the bullet above for
+- **Historical Branch Note — 2026-09-16, post-#160 `pk:checkpoint` (supersedes the bullet above for
   "where am I now")**: no product branch is active. `origin/main` is **`0121e9e`** — M4-20/#109, body
   measurements, merged 2026-09-16T01:14:30Z via PR **#160** (squash; `Closes #109`, issue closedAt
   01:14:31Z, API-read). Local `main` fast-forwarded, branch pruned both ends
@@ -178,7 +148,7 @@
   `public/sw.js` BUILD_VERSION stamp** — after any local build, `git checkout -- public/sw.js`
    before staging (done this pass; the change was discarded, not committed). §1 bullet + §7 item 34
    carry this sync. #16 stays the only owner-blocked card.
-- **Current Working Branch — 2026-09-16, post-#161 `pk:checkpoint` (supersedes the bullet above for
+- **Historical Branch Note — 2026-09-16, post-#161 `pk:checkpoint` (supersedes the bullet above for
   "where am I now")**: no product branch is active. `origin/main` is **`6660172`** — M4-14/#103,
   the legacy decommission, merged 2026-09-16T03:26:59Z via PR **#161** (squash; the plain
   `Closes #103` line closed the issue, closedAt 03:27:00Z — API-read). Local branch pruned
@@ -205,7 +175,7 @@
   the pin is now greppable, which is the point. Then the epistemic tail: **#112** (ADR-0007,
   first-merge-wins slot race with #78) and **#91** (concurrent re-measure). #16 stays the only
   owner-blocked card. §1 bullet + §7 items 35–36 carry this sync.
-- **Current Working Branch — 2026-09-16, #104 (M4-15) implemented (supersedes every bullet above for
+- **Historical Branch Note — 2026-09-16, #104 (M4-15) implemented (supersedes every bullet above for
   "where am I now")**: `feat/m4-15-retire-legacy-build`, cut from `main` at #161's checkpoint (read
   `git log --oneline -1` at the cut, per §1's no-pinning rule). The rename commit: `dev`/`build`/`start`
   **are** the Next commands now (port decision: stay on 3001, recorded on the card), the Vite
@@ -223,7 +193,7 @@
   the decommission goal is complete. Branches pruned — remote ref self-deleted on #161 but **not** here,
   deleted by hand, so the lesson stands: measure with `git ls-remote`, never assume the setting.
   Next after this: the epistemic tail **#112** + **#91**; **#16** stays owner-blocked.
-- **Current Working Branch — 2026-09-16, #112 (M4-23) implemented, decision-only close (supersedes
+- **Historical Branch Note — 2026-09-16, #112 (M4-23) implemented, decision-only close (supersedes
   every bullet above for "where am I now")**: `feat/m4-23-realtime-decision`, cut from `main` after
   the #162 checkpoint (read `git log --oneline -1`, per the no-pinning rule). The owner's ruling —
   taken **before** any writing, as befits a privilege decision — is **accept the 4 s poll floor and
@@ -242,8 +212,8 @@
   **Milestone #4 open=12 / closed=21** (API, this turn); no open PR. Remote ref did **not**
   self-delete a second consecutive time — the `git ls-remote` measurement is now a rule, not a
   one-off. Next implementable: **#91**; #16 stays the only owner-blocked card.
-- **Current Working Branch — 2026-09-17, post-slice-A `pk:checkpoint` (supersedes every bullet above for "where am I now")**: **M4-27 slice A is implemented, measured AND MERGED** — PR **#169** (head `a3ffb0c`) squash-merged into `main` as **`de68db5`** at 2026-09-16T10:40:45Z, checks `test` **SUCCESS** · Vercel **SUCCESS**, 6 files +256/−12. The earlier reading this session inherited ("3 commits ahead of `origin/main`, no PR") was a **stale remote-tracking ref**: after `git fetch`, `origin/main` is `de68db5` and `git rev-list --left-right --count origin/main...HEAD` reads **1 behind / 5 ahead** — three of those five are content duplicates of the squash (`f181221`, `cb592d3`, `a3ffb0c`), which is the squash-arithmetic rule this file states twice (measure content with `git diff`, never with counts). The **2 genuinely unique commits are the PromptKit v1.8.0 sync**, and they are on this branch, not `main`: `7a30ed2` (engine gitlink `ebfd67e` → `2340251`, directive block rewritten in `AGENTS.md` and the four new host copies) and `65f5151` (`PROMPTKIT.md` §0 engine row + `tracking: github`). They owe the v1.7.0 precedent's own `chore(promptkit)` PR (#151) — **and that branch must be re-cut from `origin/main` first**, or the PR carries duplicate slice-A history. Working tree clean at `65f5151`; `npm run lint` exit 0 was measured on the earlier of the two commits and nothing executable changed since. **Board, measured this turn: milestone #4 open=13 / closed=23**; `gh pr list --state open` empty; **#164 open (`state_reason=reopened`)**, **#167 open**, **#168 open**. **Slide A merged without closing its card: PR #169's `closingIssuesReferences` is `[]`**, so **#167 is open although its slice shipped** — the #95 / item-27 shape (a closing keyword the parser never saw; the card is not at fault, the PR body wording was). It needs a human close quoting `de68db5`, exactly as #95 received at 04:03:24Z. **Next implementable: slice B (#168 / M4-28)** — its hard order ("after #167, after the owner's ratification comment on #164") is satisfied, and its PR is the one that carries the closing keyword for #164.
-- **Current Working Branch — 2026-09-21, `pk:auto --until pr` run (supersedes every bullet above for
+- **Historical Branch Note — 2026-09-17, post-slice-A `pk:checkpoint` (supersedes every bullet above for "where am I now")**: **M4-27 slice A is implemented, measured AND MERGED** — PR **#169** (head `a3ffb0c`) squash-merged into `main` as **`de68db5`** at 2026-09-16T10:40:45Z, checks `test` **SUCCESS** · Vercel **SUCCESS**, 6 files +256/−12. The earlier reading this session inherited ("3 commits ahead of `origin/main`, no PR") was a **stale remote-tracking ref**: after `git fetch`, `origin/main` is `de68db5` and `git rev-list --left-right --count origin/main...HEAD` reads **1 behind / 5 ahead** — three of those five are content duplicates of the squash (`f181221`, `cb592d3`, `a3ffb0c`), which is the squash-arithmetic rule this file states twice (measure content with `git diff`, never with counts). The **2 genuinely unique commits are the PromptKit v1.8.0 sync**, and they are on this branch, not `main`: `7a30ed2` (engine gitlink `ebfd67e` → `2340251`, directive block rewritten in `AGENTS.md` and the four new host copies) and `65f5151` (`PROMPTKIT.md` §0 engine row + `tracking: github`). They owe the v1.7.0 precedent's own `chore(promptkit)` PR (#151) — **and that branch must be re-cut from `origin/main` first**, or the PR carries duplicate slice-A history. Working tree clean at `65f5151`; `npm run lint` exit 0 was measured on the earlier of the two commits and nothing executable changed since. **Board, measured this turn: milestone #4 open=13 / closed=23**; `gh pr list --state open` empty; **#164 open (`state_reason=reopened`)**, **#167 open**, **#168 open**. **Slide A merged without closing its card: PR #169's `closingIssuesReferences` is `[]`**, so **#167 is open although its slice shipped** — the #95 / item-27 shape (a closing keyword the parser never saw; the card is not at fault, the PR body wording was). It needs a human close quoting `de68db5`, exactly as #95 received at 04:03:24Z. **Next implementable: slice B (#168 / M4-28)** — its hard order ("after #167, after the owner's ratification comment on #164") is satisfied, and its PR is the one that carries the closing keyword for #164.
+- **Historical Branch Note — 2026-09-21, `pk:auto --until pr` run (supersedes every bullet above for
   "where am I now")**: **M4-28 slice B (#168) is implemented, measured and committed** as
   **`c24b3a9`** on `perf/m4-28-fan-out-batching`, cut from `origin/main` at **`72fa17f`**
   (`git switch -c … origin/main`; #170 had already landed the v1.8.0 engine sync and #171 the
@@ -277,7 +247,7 @@
   and every *navigating* test times out at 35 s while file-scanning tests pass — run the battery
   synchronously, and never read that signature as a product failure. **Not done here:** no §7 checklist
   item was added (the PR body carries the detail), and no 50 rps attempt (#90's unreachable ceiling).
-- **Current Working Branch — 2026-09-21, post-#172 `pk:checkpoint` (supersedes every bullet above for
+- **Historical Branch Note — 2026-09-21, post-#172 `pk:checkpoint` (supersedes every bullet above for
   "where am I now")**: **M4-28 slice B (#168) is MERGED** — PR **#172** (head `ee8fbd7`) squash-merged into
   `main` as **`8ae6f8c`** at 2026-09-21T01:13:16Z, and the merge did what the two previous cards could not:
   **`Closes #164, closes #168` on the body's first line actually parsed**, so **#164 and #168 both read
@@ -290,7 +260,7 @@
   rather than dropped. **One environment correction from this pass**: the first `git checkout main`
   **refused** because that same block is durable working-tree dirt — a dirty tree blocks the post-merge
   switch, not just the commit — and the block's own text names the remedy (commit it).
-- **Last Updated**: 2026-10-23 (**PromptKit OS v2.0.0-71 migration — engine pinned at `0cfa093`, five host directives re-injected, profile machine lines added, and the §8 table repair is green (`VALID|RECORDS=0`). The remaining follow-up is the governance CI; the release tag stays held.**). Earlier: 2026-09-21 (`pk:checkpoint` 03 at `532c1c9`; the drizzle upgrade landed afterward at `81fdd3c`).
+- **Last Updated**: 2026-10-23 (**PromptKit OS v2.0.0-71 migration — engine pinned at `0cfa093`, five host directives re-injected, profile machine lines added, and the §8 table repair is green (`VALID|RECORDS=0`). The remaining follow-ups are the `size:` decision and the governance CI; the release tag stays held.**). Earlier: 2026-09-21 (`pk:checkpoint` 03 at `532c1c9`; the drizzle upgrade landed afterward at `81fdd3c`).
 - **Engine Version**: v2.0.0-71-g0cfa093 @ 0cfa093
   identified as already-merged planning PR, milestone #4 open=18/closed=15. Earlier: **post-#156 checkpoint** — #101/M4-12 merged as `a543188`, keyword
   closed the issue, local branch pruned, milestone #4 open=19/closed=14. Earlier: **post-#155 checkpoint** — #149/M4-25 merged as `5ac4c1c`, local branch pruned,

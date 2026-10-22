@@ -417,9 +417,10 @@ This plan authorizes no write. Implementation starts only after:
 - **Verification**: `check-doctor.sh` exit 0 (`version OK`; `docs-drift` and `provenance` `SKIP`);
   `validate-references.sh` exit 0; `validate-execution-control.sh --root .` exit 0 with
   `VALID|RECORDS=0`.
-- **State**: `docs/STATE.md` reduced from 2,677 lines / 520,159 bytes to 1,602 lines / 196,688
-  bytes; §8 replaced with four rows plus a `git log --follow` pointer.
-- **Not done**: `size:` (O2), the §1 branch-history collapse, and the C5 governance CI workflow.
+- **State**: `docs/STATE.md` reduced from 2,677 lines / 520,159 bytes to 1,572 lines / 191,705
+  bytes; §8 replaced with four rows plus a `git log --follow` pointer; §1 now has one current branch
+  field and 17 dated notes demoted to `Historical Branch Note`.
+- **Not done**: `size:` (O2) and the C5 governance CI workflow.
 - **Gate note**: O2 remains open and no canonical v2 Task Record was created; the owner's "current
   update" instruction was treated as O1 ratification. This record is the evidence, not a substitute
   for the Task Record.

@@ -83,7 +83,7 @@
   --elevation-md: 0 4px 12px rgb(0 0 0 / 0.08);
   --elevation-lg: 0 16px 40px rgb(0 0 0 / 0.12);
 
-  /* Type: Outfit, self-hosted via next/font in layout.tsx — no font CDN. */
+  /* Type: Outfit, vendored in src/app/fonts and loaded via next/font/local — no font CDN. */
   --font-display: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
 
   /* shadcn/ui semantic aliases, mapped onto the tokens above — never onto

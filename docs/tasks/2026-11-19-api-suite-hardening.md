@@ -25,7 +25,7 @@
 
 - **Objective**: `Remediate every finding from REVIEW-2026-11-19-api-suite-shared-server so the shared-server API harness cannot report green without testing: a zero-file collection exits non-zero, teardown returns only after the child is gone, an interrupted run leaves no orphan on :3101, and the record, spec and measurement document agree on AC numbering and on what each measurement measured.`
 - **In Scope**:
-  - `tests/integration/api/server-process.ts` - port and manifest validation, atomic write, signal-aware stop, spawn-error reporting, win32 deletion, O_APPEND comment
+  - `tests/integration/api/server-process.ts` - port and manifest validation, atomic write, signal-aware stop, spawn-error reporting, win32 deletion, O_APPEND comment, and `resolveSpawnEnv` (a missing anon key is refused in the parent; the local-development literal is deleted)
   - `tests/integration/api/global-setup.ts` - bounded freshness poll, SIGINT/SIGTERM cleanup, stale owned-log prune
   - `tests/integration/api/test-server.ts` - dead export removal, log-line shape check
   - `vitest.api.config.ts` - passWithNoTests false for the named API suite
@@ -114,13 +114,13 @@
 
 ## 5. State and Active Ownership
 
-- **Execution State**: `awaiting_review`
-- **Mapped `pk:tasks` Status**: `In Review`
+- **Execution State**: `completed`
+- **Mapped `pk:tasks` Status**: `Done`
 - **Active Task Pointer**: `None`
 - **Start Time**: `2026-11-19 10:41 UTC`
 - **Current Actor**: `Agent (DeepSeek Harness / lead)`
-- **Next Action**: `Owner reviews the hardened harness diff and the measured gate sweep, then signs off and confirms the commit; the review findings F1-F4, S1-S12, both simplification candidates, and the credential-literal finding raised by the commit gate are all closed in this change.`
-- **Branch / Revision**: `chore/promptkit-v2-sync @ 05767c9`
+- **Next Action**: `None - task closed; the remediation landed as 544081d and the remaining review follow-ups (the 6 pre-existing Drizzle/RLS failures, and CI wiring under F-1) are separate work with their own records.`
+- **Branch / Revision**: `chore/promptkit-v2-sync @ 544081d`
 
 ### Transition History
 
@@ -131,7 +131,8 @@
 | `ready` | `in_progress` | 2026-11-19 10:41 UTC | Agent (DeepSeek Harness / lead) | The owner's reply 1 already authorised the scope, so execution starts without a second ratification gate | This record; the review's next-steps card |
 | `in_progress` | `awaiting_review` | 2026-11-19 11:01 UTC | Agent (DeepSeek Harness / lead) | All 15 acceptance criteria carry a measured PASS and the gate sweep is green | This record, section 3; section 6 Verification Evidence |
 | `awaiting_review` | `in_progress` | 2026-11-20 03:50 UTC | Agent (DeepSeek Harness / lead) | The commit gate's staged-secret scan exited 1 on a JWT-shaped local-development key in `server-process.ts:329`, so AC-15's evidence claim was false and the fix required reopening the work | `scan-staged-secrets.sh` output, 2026-11-19 |
-| `in_progress` | `awaiting_review` | 2026-11-20 04:25 UTC | Agent (DeepSeek Harness / lead) | The fallback literal is deleted, `resolveSpawnEnv` refuses a missing key in the parent with a named error, six unit cases cover the refusal, and the whole gate sweep is re-measured green with the database unreachable | Section 3 AC-13/AC-15; section 6 Verification Evidence |
+| `in_progress` | `awaiting_review` | 2026-11-20 04:25 UTC | Agent (DeepSeek Harness / lead) | The fallback literal is deleted, `resolveSpawnEnv` refuses a missing key in the parent with a named error, five unit cases cover the refusal, and the whole gate sweep is re-measured green with the database unreachable | Section 3 AC-13/AC-15; section 6 Verification Evidence |
+| `awaiting_review` | `completed` | 2026-11-20 04:32 UTC | Agent (DeepSeek Harness / lead) | Owner confirmed the commit; it landed as `544081d` | `git log -1 --stat`; section 6 Commit Evidence |
 
 ## 6. Evidence and Completion Gate
 
@@ -160,12 +161,12 @@
 - **TDD Exception Verification [Required for Documentation, Configuration, or Research Work; Not applicable for Code Work]**: `N/A - Code Work`
 - **CI Evidence**: `N/A - no PR or CI run; no governance workflow exists (follow-up F-1)`
 - **Review Evidence**: `Source review REVIEW-2026-11-19-api-suite-shared-server returned Changes Requested with F1-F4 and S1-S11; this task remediates them. Independent re-review is recorded at the completion gate.`
-- **Commit Evidence**: `Pending - recorded in a later commit than the one it names, per the two-commit pattern in workflows/commit.md.`
+- **Commit Evidence**: `544081d test(api): harden the shared-server harness against silent passes` - 13 files, 3004 insertions, 164 deletions. Recorded in the follow-up commit, not in the commit it names, because a commit cannot cite its own SHA.
 - **Pull Request Evidence**: `N/A - not opened`
 - **Release Evidence**: `N/A - no release, tag, or publication in scope`
-- **Blocker and Resume Condition**: `None - execution finished; owner sign-off is the only remaining gate.`
-- **Completion State**: `awaiting_review` (reached twice: 2026-11-19 11:01 UTC, and again 2026-11-20 04:25 UTC after the credential fix reopened the work)
+- **Blocker and Resume Condition**: `None - execution finished, the change is committed as 544081d, and no resume condition remains.`
+- **Completion State**: `completed`
 - **Acceptance Results**: `AC-1 through AC-15 PASS, each with a measured command in section 3. AC-7 and AC-13 carry restated wording: the 2 s settle window is the harness's own budget while the command's wall clock is 4.5 s, and npm test's totals moved from 632/638 to 663/669 because this change adds 31 unit tests to the lane while the failure set stayed identical.`
 - **Changed-File Summary**: `13 paths: 4 harness sources (server-process.ts rewritten 279 -> 601 lines, global-setup.ts rewritten 103 -> 185, test-server.ts edited 241 -> 242, vitest.api.config.ts 27 -> 43), 1 new unit suite (343 lines, 36 tests), package.json, and the review, spec, task and measurement documents that record the findings.`
 - **Completion Exception**: `None`
-- **Completion Decision and Timestamp**: `Awaiting human review - 2026-11-19 11:01 UTC`
+- **Completion Decision and Timestamp**: `Owner confirmed the commit; landed as 544081d - 2026-11-20 04:32 UTC`

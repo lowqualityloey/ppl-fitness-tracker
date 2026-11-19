@@ -711,21 +711,21 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
 - **Ceremony Level**: `Level 2 (Controlled Work)`
 - **Specification**: `docs/specs/2026-11-19-spec-api-suite-hardening.md`
 - **Execution Scope**: `ppl-fitness-tracker, branch chore/promptkit-v2-sync, one worktree`
-- **Execution State**: `awaiting_review`
-- **Mapped `pk:tasks` Status**: `In Review`
+- **Execution State**: `completed`
+- **Mapped `pk:tasks` Status**: `Done`
 - **Active Task Pointer**: `None`
 - **Owner / Current Actor**: `Agent (DeepSeek Harness / lead)`
 - **Start Time**: `2026-11-19 10:41 UTC`
 - **Current Branch**: `chore/promptkit-v2-sync`
-- **Current Revision**: `05767c9`
+- **Current Revision**: `544081d`
 - **Checkpoint Policy**: `N/A - single session; host timer cannot mechanically enforce checkpoints or terminate the session.`
-- **Blockers and Resume Condition**: `None - execution finished; owner sign-off is the only remaining gate.`
+- **Blockers and Resume Condition**: `None - execution finished, the change is committed as 544081d, and no resume condition remains.`
 - **Verification Status**: `Green - npm run typecheck exit 0; eslint exit 0; tests/unit/infra/api-harness.test.ts 36 passed; validate-references --strict exit 0; validate-execution-control VALID|RECORDS=6; scan-staged-secrets exit 0; npm test keeps exactly the 6 pre-existing Drizzle/RLS failures (130 database-backed files skip because the local Supabase stack cannot publish ports on this host). npm run test:api was last measured green (14 files / 84 tests, one boot) on 2026-11-19 while the database was reachable and cannot be re-measured today.`
 - **CI Evidence**: `N/A - no PR or CI run; local gates only`
 - **Changed-File Summary**: `13 paths: 4 harness sources plus one new unit suite, package.json, and the review/spec/task/measurement documents that record the findings.`
 - **Latest Checkpoint**: `None`
 - **Latest Handoff**: `None`
-- **Next Action**: `Owner reviews the hardened harness diff and the measured gate sweep, then signs off and confirms the commit; the review findings F1-F4, S1-S12, both simplification candidates, and the credential-literal finding raised by the commit gate are all closed in this change.`
+- **Next Action**: `None - task closed; the remediation landed as 544081d and the remaining review follow-ups (the 6 pre-existing Drizzle/RLS failures, and CI wiring under F-1) are separate work with their own records.`
 
 ---
 

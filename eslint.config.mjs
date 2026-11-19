@@ -91,6 +91,10 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Throwaway M0 spike sandbox, has its own tooling (spikes/m0-drizzle-rls/package.json).
     "spikes/**",
+    // Vendored PromptKit OS engine (git submodule). Its scripts are the kit's own, shipped
+    // with the engine, and are not this project's source: linting them reports the kit's
+    // style, not ours, and the engine upgrade would flip the result on every bump.
+    ".promptkit/**",
   ]),
 ]);
 

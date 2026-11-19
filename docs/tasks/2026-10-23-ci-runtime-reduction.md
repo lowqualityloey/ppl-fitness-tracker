@@ -9,9 +9,9 @@
 - **Ceremony Level**: `Level 2 (Controlled Work)`
 - **PromptKit Adaptation Profile**: `sdlc-overlay-v1`
 - **Work Type**: `Configuration Work`
-- **Planning Record Link**: [`PLAN-ci-runtime-reduction`](../specs/2026-10-23-spec-ci-runtime-reduction.md#PLAN-ci-runtime-reduction)
+- **Planning Record Link**: [PLAN-ci-runtime-reduction](../specs/2026-10-23-spec-ci-runtime-reduction.md#PLAN-ci-runtime-reduction)
 - **Planning Depth Reference**: `Full`
-- **Assumption Record Links**: [`ASSUMPTION-ci-runtime-reduction-001`](../specs/2026-10-23-spec-ci-runtime-reduction.md#ASSUMPTION-ci-runtime-reduction-001), [`ASSUMPTION-ci-runtime-reduction-002`](../specs/2026-10-23-spec-ci-runtime-reduction.md#ASSUMPTION-ci-runtime-reduction-002)
+- **Assumption Record Links**: [ASSUMPTION-ci-runtime-reduction-001](../specs/2026-10-23-spec-ci-runtime-reduction.md#ASSUMPTION-ci-runtime-reduction-001), [ASSUMPTION-ci-runtime-reduction-002](../specs/2026-10-23-spec-ci-runtime-reduction.md#ASSUMPTION-ci-runtime-reduction-002)
 - **Specification**: `docs/specs/2026-10-23-spec-ci-runtime-reduction.md`
 - **External Reference**: `N/A - local Markdown tracking`
 - **Owner / Actor**: Repository owner (heyLoey)
@@ -30,6 +30,8 @@
   - `.github/workflows/test.yml`: add the version probe + `actions/cache@v4` restore steps; change
     `supabase start` to use the six exclusions; remove `Stop Supabase`.
   - `docs/tasks/2026-10-23-ci-runtime-reduction.md` (this record).
+  - `docs/specs/2026-10-23-spec-ci-runtime-reduction.md` — the planning record this Task Record
+    consumes; it carries the PLAN and ASSUMPTION anchors linked above.
 - **Explicit Non-Goals**:
   - No parallel jobs, no E2E sharding, no worker-count change (raises billed minutes or `#80` flake).
   - No test, assertion, budget, or threshold change.

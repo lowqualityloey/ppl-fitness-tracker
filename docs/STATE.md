@@ -260,8 +260,8 @@
   rather than dropped. **One environment correction from this pass**: the first `git checkout main`
   **refused** because that same block is durable working-tree dirt — a dirty tree blocks the post-merge
   switch, not just the commit — and the block's own text names the remedy (commit it).
-- **Last Updated**: 2026-10-23 (**PromptKit OS v2.0.0-71 migration — engine pinned at `0cfa093`, five host directives re-injected, profile machine lines plus `size: large` set, and the §8 table repair is green (`VALID|RECORDS=2`). The Task Record is `docs/tasks/2026-10-23-promptkit-v2-migration.md`; §3A is populated and `docs-drift` is OK; the only remaining follow-up is the C6 governance CI; the release tag stays held.**). Earlier: 2026-09-21 (`pk:checkpoint` 03 at `532c1c9`; the drizzle upgrade landed afterward at `81fdd3c`).
-- **Engine Version**: v2.0.0-71-g0cfa093 @ 0cfa093
+- **Last Updated**: 2026-11-19 (**PromptKit OS v2.3.0 upgrade — engine pinned at `52adbe1` (tag `v2.3.0`), the five host directives re-injected with the new 2.3.0 untrusted-content boundary, and `PROMPTKIT.md`'s engine prose and directive md5 re-stated. The Task Record is `docs/tasks/2026-11-19-promptkit-v2-3-upgrade.md`; §3A is repointed at it and `docs-drift` is OK.**). Earlier: 2026-10-23 (**PromptKit OS v2.0.0-71 migration — engine pinned at `0cfa093`, five host directives re-injected, profile machine lines plus `size: large` set, and the §8 table repair is green (`VALID|RECORDS=2`). The Task Record is `docs/tasks/2026-10-23-promptkit-v2-migration.md`; §3A is populated and `docs-drift` is OK; the only remaining follow-up is the C6 governance CI; the release tag stays held.**). Earlier: 2026-09-21 (`pk:checkpoint` 03 at `532c1c9`; the drizzle upgrade landed afterward at `81fdd3c`).
+- **Engine Version**: v2.3.0 @ 52adbe1
   identified as already-merged planning PR, milestone #4 open=18/closed=15. Earlier: **post-#156 checkpoint** — #101/M4-12 merged as `a543188`, keyword
   closed the issue, local branch pruned, milestone #4 open=19/closed=14. Earlier: **post-#155 checkpoint** — #149/M4-25 merged as `5ac4c1c`, local branch pruned,
   milestone #4 open=20/closed=13. Earlier: **#149 / M4-25 implemented** — the Lighthouse gate runs on this box now, four
@@ -1575,6 +1575,7 @@ Carried forward, still open:
 
 | Date | Engineer / Agent | Milestone / Focus | Key Changes & Artifacts |
 | :--- | :--- | :--- | :--- |
+| 2026-11-19 | Agent (DeepSeek Harness / lead) | PromptKit OS v2.3.0 upgrade | Engine pinned to `v2.3.0` (`52adbe1`), five host directives re-injected with the 2.3.0 untrusted-content boundary, `PROMPTKIT.md` engine prose plus directive md5 re-stated; plan `docs/specs/2026-11-19-spec-promptkit-v2-3-upgrade.md`; Task Record `docs/tasks/2026-11-19-promptkit-v2-3-upgrade.md`; §3A repointed; validator `VALID`; doctor `docs-drift OK`. |
 | 2026-10-23 | Agent (Codebuff/Buffy) | PromptKit OS v2 migration | Engine pinned to `v2.0.0-71` (`0cfa093`), five host directives re-injected, profile machine lines plus `size: large` set; plan `docs/specs/2026-10-23-spec-promptkit-v2-migration.md`; Task Record `docs/tasks/2026-10-23-promptkit-v2-migration.md` (`awaiting_review`); §3A projection added; validator `VALID`, `RECORDS=2`; doctor `docs-drift OK`. |
 | 2026-09-21 | Agent (Freebuff/Buffy) | `pk:checkpoint` 03 | `docs/tasks/m4/M4-29-first-release.checkpoint-03.md`; release provisioned, CI blocked on account billing, tag held. |
 | 2026-09-21 | Agent (Freebuff/Buffy) | Hosted provisioning / local gate | B5 PASS (18/13), B6 configured, B7 resolved; local gate on `89418d5` green. |

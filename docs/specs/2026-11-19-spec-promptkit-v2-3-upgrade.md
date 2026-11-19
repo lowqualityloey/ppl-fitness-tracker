@@ -2,11 +2,11 @@
 
 <a id="PLAN-promptkit-v2-3-upgrade"></a>
 
-- **Status**: Executed 2026-11-19. S0-S8 ran under owner ratification (reply `1` to the `pk:route`
-  option list). Commits: `a5e7769` (engine move), `2ab2288` (§3A repoint), and a third
-  reconciliation commit closing the Task Record at `awaiting_review`. This document stays the
-  planning input; `docs/tasks/2026-11-19-promptkit-v2-3-upgrade.md` remains the authority for
-  execution state.
+- **Status**: Executed and closed 2026-11-19. S0-S8 ran under owner ratification (reply `1` to the `pk:route`
+  option list); S9 ran in the next session. Commits: `a5e7769` (engine move), `2ab2288` (§3A repoint),
+  `d0530f0` (record to `awaiting_review`), and a fourth docs-only closure commit
+  (record to `completed` after owner sign-off; a commit cannot cite its own SHA). This document stays the planning input;
+  `docs/tasks/2026-11-19-promptkit-v2-3-upgrade.md` remains the authority for execution state.
 - **Date**: 2026-11-19
 - **Ceremony**: Level 2 (Controlled), Configuration Work. The canonical Task Record is
   `docs/tasks/2026-11-19-promptkit-v2-3-upgrade.md` (created by `pk:tasks`); this document

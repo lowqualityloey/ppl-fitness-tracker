@@ -711,21 +711,21 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
 - **Ceremony Level**: `Level 2 (Controlled Work)`
 - **Specification**: `docs/specs/2026-11-19-spec-promptkit-v2-3-upgrade.md`
 - **Execution Scope**: `ppl-fitness-tracker, branch chore/promptkit-v2-sync, one worktree`
-- **Execution State**: `awaiting_review`
-- **Mapped `pk:tasks` Status**: `In Review`
+- **Execution State**: `completed`
+- **Mapped `pk:tasks` Status**: `Done`
 - **Active Task Pointer**: `None`
 - **Owner / Current Actor**: `Agent (DeepSeek Harness / lead)`
 - **Start Time**: `2026-11-19 09:14 UTC`
 - **Current Branch**: `chore/promptkit-v2-sync`
-- **Current Revision**: `2ab2288`
+- **Current Revision**: `d0530f0`
 - **Checkpoint Policy**: `N/A - single session; host timer cannot mechanically enforce checkpoints or terminate the session.`
-- **Blockers and Resume Condition**: `None`
-- **Verification Status**: `2026-11-19: validate-execution-control.sh VALID, RECORDS=5; validate-references.sh exit 0; check-setup-assert.sh submodule OK after the gitlink commit; check-doctor.sh docs-drift OK with version STALE(+5) recorded as a definitional artifact of pinning the tag rather than origin/main.`
+- **Blockers and Resume Condition**: `None - task closed by owner sign-off on 2026-11-19 10:03 UTC.`
+- **Verification Status**: `2026-11-19, re-run after S9 pk:sync: validate-execution-control.sh VALID, RECORDS=5; validate-references.sh --strict exit 0; check-setup-assert.sh submodule OK; check-doctor.sh docs-drift OK and submodule OK, with version STALE(+5) recorded as a definitional artifact of pinning the tag rather than origin/main; npm run typecheck exit 0; eslint --max-warnings=0 exit 0.`
 - **CI Evidence**: `N/A - no PR or CI run; local governance gates passed`
-- **Changed-File Summary**: `12 paths across two commits: .promptkit (gitlink); AGENTS.md; CLAUDE.md; .opencode/rules.md; .clinerules/promptkit.md; .github/copilot-instructions.md; PROMPTKIT.md; docs/STATE.md; eslint.config.mjs; docs/tasks/2026-10-23-ci-runtime-reduction.md; docs/specs/2026-11-19-spec-promptkit-v2-3-upgrade.md; docs/tasks/2026-11-19-promptkit-v2-3-upgrade.md`
+- **Changed-File Summary**: `12 distinct paths across four commits (a5e7769, 2ab2288, d0530f0, and the closure commit): .promptkit (gitlink); AGENTS.md; CLAUDE.md; .opencode/rules.md; .clinerules/promptkit.md; .github/copilot-instructions.md; PROMPTKIT.md; docs/STATE.md; eslint.config.mjs; docs/tasks/2026-10-23-ci-runtime-reduction.md; docs/specs/2026-11-19-spec-promptkit-v2-3-upgrade.md; docs/tasks/2026-11-19-promptkit-v2-3-upgrade.md`
 - **Latest Checkpoint**: `None`
 - **Latest Handoff**: `None`
-- **Next Action**: `Owner reviews the two commits and the green gate sweep, then signs off; S9 pk:sync runs in the next session so the 2.3.0 boundary is loaded from disk.`
+- **Next Action**: `None - this task is closed. The queued API-suite review findings (Planning Record F-2) are the next unit of work and need their own Task Record.`
 
 ---
 

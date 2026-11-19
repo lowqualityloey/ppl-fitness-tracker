@@ -114,13 +114,13 @@
 
 ## 5. State and Active Ownership
 
-- **Execution State**: `awaiting_review`
-- **Mapped `pk:tasks` Status**: `In Review`
+- **Execution State**: `completed`
+- **Mapped `pk:tasks` Status**: `Done`
 - **Active Task Pointer**: `None`
 - **Start Time**: `2026-11-19 09:14 UTC`
 - **Current Actor**: `Agent (DeepSeek Harness / lead)`
-- **Next Action**: `Owner reviews the two commits and the green gate sweep, then signs off; S9 pk:sync runs in the next session so the 2.3.0 boundary is loaded from disk.`
-- **Branch / Revision**: `chore/promptkit-v2-sync @ 2ab2288`
+- **Next Action**: `None - this task is closed. The queued API-suite review findings (Planning Record F-2) are the next unit of work and need their own Task Record.`
+- **Branch / Revision**: `chore/promptkit-v2-sync @ d0530f0`
 
 ### Transition History
 
@@ -130,6 +130,7 @@
 | `planned` | `ready` | 2026-11-19 08:50 UTC | Agent (DeepSeek Harness / lead) | Every readiness field is populated; execution awaits owner ratification | This record |
 | `ready` | `in_progress` | 2026-11-19 09:14 UTC | Agent (DeepSeek Harness / lead) | Owner ratified with reply 1; S0 captured the baseline and S1 pinned the engine | This record; S0/S1 command output |
 | `in_progress` | `awaiting_review` | 2026-11-19 09:29 UTC | Agent (DeepSeek Harness / lead) | S0-S8 complete, all 15 ACs PASS, gates green; owner sign-off remains | Commits a5e7769 and 2ab2288; S8 gate sweep |
+| `awaiting_review` | `completed` | 2026-11-19 10:03 UTC | Agent (DeepSeek Harness / lead) | Owner signed off with reply 1; S9 pk:sync reloaded the 2.3.0 rules from disk and the gate sweep stayed green | Commit d0530f0; S9 drift audit and post-S9 gate sweep |
 
 ## 6. Evidence and Completion Gate
 
@@ -157,13 +158,13 @@
 - **TDD Execution Evidence [Required when enabled]**: `N/A - exception work type`
 - **TDD Exception Verification [Required for Documentation, Configuration, or Research Work; Not applicable for Code Work]**: `Configuration Work has no behavior seam to drive Red-Green-Refactor. Verification is the governance gate sweep in section 3 and the S4 diff-scope gate in the Planning Record.`
 - **CI Evidence**: `N/A - no PR or CI run; no governance workflow exists (follow-up F-1)`
-- **Review Evidence**: `N/A - the Planning Record is the design artifact; pk:review follows execution`
-- **Commit Evidence**: `a5e7769 chore(promptkit): upgrade engine to v2.3.0 (52adbe1) — 11 files, the gitlink with the five directives; 2ab2288 docs(promptkit): project the v2.3.0 upgrade task in 3A — docs/STATE.md plus this record. Recorded in the commit AFTER the ones they name.`
+- **Review Evidence**: `Owner review at the S8 boundary: the two commits, the 15 measured AC results and the gate sweep were presented and signed off with reply 1; S9 pk:sync then reloaded the 2.3.0 rules and the sweep was re-run green. No independent reviewer was engaged - this is a governance install with no application code, and the review was the owner's.`
+- **Commit Evidence**: `a5e7769 chore(promptkit): upgrade engine to v2.3.0 (52adbe1) — 11 files, the gitlink with the five directives; 2ab2288 docs(promptkit): project the v2.3.0 upgrade task in 3A — docs/STATE.md plus this record; d0530f0 docs(promptkit): close the v2.3.0 upgrade task at awaiting_review — the post-execution state change. Each entry is recorded in a later commit than the one it names, per the two-commit pattern in workflows/commit.md.`
 - **Pull Request Evidence**: `N/A - not opened`
 - **Release Evidence**: `N/A - consumes an existing upstream tag; creates no release`
 - **Blocker and Resume Condition**: `None - execution is complete and the gates are green; resume when the owner reviews a5e7769 and 2ab2288 and signs off, or requests a rollback per the Planning Record section 7.`
-- **Completion State**: `awaiting_review`
+- **Completion State**: `completed`
 - **Acceptance Results**: `AC-1 through AC-15 PASS`
-- **Changed-File Summary**: `12 paths across two commits: .promptkit (gitlink to 52adbe1); AGENTS.md, CLAUDE.md, .opencode/rules.md, .clinerules/promptkit.md, .github/copilot-instructions.md (directive block re-injected, md5 edb5dc6d -> b28a1cd8); PROMPTKIT.md (engine prose, md5, 2.3.0 bullet); docs/STATE.md (Engine Version, Last Updated, session row, section 3A); eslint.config.mjs (.promptkit/** ignore); docs/tasks/2026-10-23-ci-runtime-reduction.md (link labels and In Scope); docs/specs/2026-11-19-spec-promptkit-v2-3-upgrade.md (Planning Record); docs/tasks/2026-11-19-promptkit-v2-3-upgrade.md (this record).`
+- **Changed-File Summary**: `12 distinct paths across four commits (a5e7769, 2ab2288, d0530f0, and this closure commit; the last three touch only docs/STATE.md, the Planning Record and this record): .promptkit (gitlink to 52adbe1); AGENTS.md, CLAUDE.md, .opencode/rules.md, .clinerules/promptkit.md, .github/copilot-instructions.md (directive block re-injected, md5 edb5dc6d -> b28a1cd8); PROMPTKIT.md (engine prose, md5, 2.3.0 bullet); docs/STATE.md (Engine Version, Last Updated, session row, section 3A); eslint.config.mjs (.promptkit/** ignore); docs/tasks/2026-10-23-ci-runtime-reduction.md (link labels and In Scope); docs/specs/2026-11-19-spec-promptkit-v2-3-upgrade.md (Planning Record); docs/tasks/2026-11-19-promptkit-v2-3-upgrade.md (this record).`
 - **Completion Exception**: `None`
-- **Completion Decision and Timestamp**: `Awaiting human review - 2026-11-19 09:29 UTC`
+- **Completion Decision and Timestamp**: `Owner signed off - 2026-11-19 10:03 UTC`

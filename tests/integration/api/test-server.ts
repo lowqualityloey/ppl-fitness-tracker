@@ -1,25 +1,35 @@
-import { spawn, type ChildProcess } from 'node:child_process';
+import { closeSync, openSync, readSync } from 'node:fs';
 import { setTimeout as delay } from 'node:timers/promises';
-
-const port = Number(process.env.M1_16_API_TEST_PORT ?? '3101');
-export const apiOrigin = `http://127.0.0.1:${port}`;
-
-let server: ChildProcess | undefined;
+import {
+  API_TEST_PORT,
+  RESULTS_DIR,
+  answersReadiness,
+  apiOrigin,
+  fileSize,
+  isProcessAlive,
+  logTail,
+  readServerManifest,
+  removeServerManifest,
+  spawnNextDev,
+  truncateFile,
+  waitForReady,
+  type SpawnedServer,
+} from './server-process.js';
 
 /**
  * M4-05 (#94): the app's structured trail, read where it actually lands.
  *
  * `consoleSink` splits streams by severity — `info`/`debug` on stdout,
- * `warn`/`error` on stderr — so a spec that only watched one would be
- * blind to half the trail it is asserting on. Both are absorbed here and
+ * `warn`/`error` on stderr — so a spec that only watched one would be blind to
+ * half the trail it is asserting on. Both go to the same log file and are
  * rejoined by request id, which is the whole point of the id.
  *
- * Lines are filtered by shape (`level` + `request_id` keys), not by a
- * marker: `next dev` writes its own prose to the same pipes, and a JSON
- * entry from the seam is the only structured thing in the stream. The
- * filter is deliberately `in`-based on the two envelope keys every entry
- * carries, so a malformed seam line surfaces as a failed predicate rather
- * than as a silently dropped one.
+ * Lines are filtered by shape (`level` + `request_id` keys), not by a marker:
+ * `next dev` writes its own prose to the same destination, and a JSON entry
+ * from the seam is the only structured thing in the file. The filter is
+ * deliberately `in`-based on the two envelope keys every entry carries, so a
+ * malformed seam line surfaces as a failed predicate rather than as a silently
+ * dropped one.
  */
 export interface ServerLogEntry {
   time: string;
@@ -29,48 +39,88 @@ export interface ServerLogEntry {
   [field: string]: unknown;
 }
 
+/** Lines this file has read, in arrival order. */
 const capturedLogs: ServerLogEntry[] = [];
-const partialLines: Map<'stdout' | 'stderr', string> = new Map();
 
-function absorbChunk(stream: 'stdout' | 'stderr', chunk: string): void {
-  let buffer = (partialLines.get(stream) ?? '') + chunk;
-  let newlineAt = buffer.indexOf('\n');
-  while (newlineAt >= 0) {
-    const line = buffer.slice(0, newlineAt).trim();
-    buffer = buffer.slice(newlineAt + 1);
-    newlineAt = buffer.indexOf('\n');
-    if (!line.startsWith('{')) continue;
-    try {
-      const parsed: unknown = JSON.parse(line);
-      if (
-        parsed !== null &&
-        typeof parsed === 'object' &&
-        'level' in parsed &&
-        'request_id' in parsed
-      ) {
-        capturedLogs.push(parsed as ServerLogEntry);
-      }
-    } catch {
-      // `next dev`'s own stdout is prose that can start with `{` (webpack
-      // digests). It is not the seam's line, and the seam either writes
-      // whole lines or is the bug under test.
-    }
-  }
-  partialLines.set(stream, buffer);
+/** Where this file's slice of the trail starts. */
+let logPath: string | undefined;
+let logReadOffset = 0;
+
+/** A server this process spawned and therefore must stop. */
+let ownedServer: SpawnedServer | undefined;
+/** Attached to the server `globalSetup` booted; this process must not stop it. */
+let attachedToSharedServer = false;
+
+/**
+ * Whether a parsed JSON value is one of the seam's log entries.
+ *
+ * Exported so the shape can be asserted directly. `msg` is required by
+ * `ServerLogEntry` and is the field the timeout message joins, so a line
+ * without a string `msg` is not an entry - it used to be pushed anyway, which
+ * put `undefined` into every failure message that listed captured msgs.
+ */
+export function isServerLogEntry(value: unknown): value is ServerLogEntry {
+  if (value === null || typeof value !== 'object') return false;
+  if (!('level' in value) || !('request_id' in value) || !('msg' in value)) return false;
+  return typeof (value as { msg: unknown }).msg === 'string';
 }
 
-/** Every structured line captured from the running server, in arrival order. */
-export function serverLogEntries(): readonly ServerLogEntry[] {
-  return capturedLogs;
+function absorbLine(line: string): void {
+  if (!line.startsWith('{')) return;
+  try {
+    const parsed: unknown = JSON.parse(line);
+    if (isServerLogEntry(parsed)) {
+      capturedLogs.push(parsed);
+    }
+  } catch {
+    // `next dev`'s own output is prose that can start with `{` (webpack
+    // digests). It is not the seam's line, and the seam either writes whole
+    // lines or is the bug under test.
+  }
+}
+
+/**
+ * Reads whatever has been appended since the last call.
+ *
+ * The offset is the reason a shared log does not leak between files: file N
+ * starts reading at EOF, so the three assertions in `sync.test.ts` only ever see
+ * the lines produced by their own requests. A partially written trailing line is
+ * left unconsumed — the JSON parse would fail on it anyway, and the 25 ms poll
+ * loop picks it up once the newline lands.
+ */
+function refreshCapturedLogs(): void {
+  const path = logPath;
+  if (!path) return;
+
+  const size = fileSize(path);
+  if (size <= logReadOffset) return;
+
+  const fd = openSync(path, 'r');
+  let read: number;
+  const buffer = Buffer.alloc(size - logReadOffset);
+  try {
+    read = readSync(fd, buffer, 0, buffer.length, logReadOffset);
+  } finally {
+    closeSync(fd);
+  }
+
+  const chunk = buffer.subarray(0, read);
+  const lastNewline = chunk.lastIndexOf(0x0a);
+  if (lastNewline < 0) return;
+
+  logReadOffset += lastNewline + 1;
+  for (const line of chunk.subarray(0, lastNewline).toString('utf8').split('\n')) {
+    absorbLine(line.trim());
+  }
 }
 
 /**
  * Polls the captured trail until a matching entry exists. The write happens
- * in the server child and crosses a pipe, so "the response has arrived" does
- * not imply "the line has arrived" — the wait is what keeps the spec from
- * racing its own assertion. On timeout the failure names the predicates'
- * neighbourhood (captured msgs) rather than nothing, because "found none"
- * with no context is the worst possible debugging output.
+ * in the server child and crosses a file descriptor, so "the response has
+ * arrived" does not imply "the line has landed" — the wait is what keeps the
+ * spec from racing its own assertion. On timeout the failure names the
+ * predicates' neighbourhood (captured msgs) rather than nothing, because
+ * "found none" with no context is the worst possible debugging output.
  */
 export async function waitForLogEntry(
   predicate: (entry: ServerLogEntry) => boolean,
@@ -78,6 +128,7 @@ export async function waitForLogEntry(
 ): Promise<ServerLogEntry> {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
+    refreshCapturedLogs();
     const found = capturedLogs.find(predicate);
     if (found) return found;
     if (Date.now() >= deadline) {
@@ -91,117 +142,75 @@ export async function waitForLogEntry(
   }
 }
 
-function signalApiServer(child: ChildProcess, signal: NodeJS.Signals): void {
-  if (process.platform !== 'win32' && child.pid !== undefined) {
-    try {
-      process.kill(-child.pid, signal);
-      return;
-    } catch {
-      // Fall through when the process group has already exited.
-    }
-  }
-  child.kill(signal);
-}
-
+/**
+ * Makes a server available to the caller, one of two ways.
+ *
+ * **Shared**: `globalSetup` already booted one for the whole run and left a
+ * manifest. Attach to it, starting this file's log window at EOF.
+ *
+ * **Owned**: there is no manifest, so this process spawns and stops its own
+ * server — the path a direct `npx vitest run tests/integration/api/<file>.test.ts`
+ * takes, which must keep working without the shared config.
+ *
+ * A manifest whose pid is gone is stale (a run that was killed, or a fallback
+ * run after one); it is removed and owned mode takes over. A manifest whose pid
+ * is *alive* but silent is the "server died mid-suite" case, and it fails here
+ * with the log tail rather than quietly spawning a second server on the same
+ * port.
+ */
 export async function startApiServer(): Promise<void> {
-  if (server) return;
+  if (ownedServer || attachedToSharedServer) return;
 
-  const child = spawn(
-    'npx',
-    ['--no-install', 'next', 'dev', '--port', String(port)],
-    {
-      cwd: process.cwd(),
-      detached: true,
-      env: {
-        ...process.env,
-        NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL ?? apiOrigin,
-        NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'http://127.0.0.1:54321',
-        NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
-          'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0',
-      },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    },
-  );
-  server = child;
-
-  const stderr: string[] = [];
-  child.stderr?.setEncoding('utf8');
-  child.stderr?.on('data', (chunk: string) => {
-    stderr.push(chunk);
-    absorbChunk('stderr', chunk);
-  });
-  child.stdout?.setEncoding('utf8');
-  child.stdout?.on('data', (chunk: string) => absorbChunk('stdout', chunk));
-
-  let lastError: unknown;
-  child.once('error', (error) => {
-    lastError = error;
-  });
-
-  const describeFailure = (): string => stderr.join('').trim() || String(lastError);
-  const deadline = Date.now() + 30_000;
-  while (Date.now() < deadline) {
-    if (child.exitCode !== null) {
-      server = undefined;
-      throw new Error(`Next test server exited before readiness: ${describeFailure()}`);
+  const manifest = readServerManifest();
+  if (manifest && manifest.port === API_TEST_PORT) {
+    if (isProcessAlive(manifest.pid)) {
+      if (!(await answersReadiness(apiOrigin))) {
+        throw new Error(
+          `Shared API server (pid ${manifest.pid}) is not reachable at ${apiOrigin}. ` +
+            `Its log is ${manifest.logPath}. This is an infrastructure failure, not an assertion:\n` +
+            logTail(manifest.logPath),
+        );
+      }
+      attachedToSharedServer = true;
+      logPath = manifest.logPath;
+      logReadOffset = fileSize(manifest.logPath);
+      return;
     }
-
-    try {
-      // Probed path: an unmatched route whose 404 the app router itself produces,
-      // rather than `/`.
-      //
-      // What is established: a readiness probe must not be a request through a
-      // product screen. `/` is now the dashboard (M3-04, #61), so probing it means
-      // the harness's notion of "up" depends on that route compiling and, for a
-      // signed-in visitor, on Supabase auth and three database queries. Any future
-      // work on `/` then changes what "ready" means, and a 500 from a hiccup reads as
-      // "the server never started".
-      //
-      // What is **not** established, and was measured rather than assumed: this is
-      // not a speed fix, at least not on a warm cache. Measured here with `.next`
-      // already populated — production server: probe 166 ms, `/` 162 ms (unauthenticated
-      // `/` answers 307 to sign-in and never reaches the queries). Dev server, first
-      // request after boot: probe **3115 ms**, `/` **1827 ms**; second request 70 ms and
-      // 87 ms. The probe is the *slower* one cold, because it compiles the not-found
-      // route instead. So the case for it is the dependency, not the latency, and the
-      // CI failure this followed (`Hook timed out in 10000ms` in `prefill.test.ts`) is
-      // attributed to the budget below — which was genuinely unreachable — rather than
-      // to a proven cost in `/`. A cold CI checkout, where the dashboard's route graph
-      // has to compile from nothing, remains the untested suspect.
-      //
-      // `status < 500` stays the contract: a 500 means the router is up but broken.
-      const response = await fetch(`${apiOrigin}/__readiness-probe__`);
-      if (response.status < 500) return;
-    } catch (error) {
-      lastError = error;
-    }
-
-    await delay(100);
+    removeServerManifest();
   }
 
-  server = undefined;
-  signalApiServer(child, 'SIGKILL');
-  throw new Error(`Next test server did not become ready: ${describeFailure()}`);
+  const ownedLogPath = `${RESULTS_DIR}/api-server-owned-${process.pid}.log`;
+  truncateFile(ownedLogPath);
+  const server = await spawnNextDev({ port: API_TEST_PORT, logPath: ownedLogPath });
+  ownedServer = server;
+  logPath = ownedLogPath;
+  logReadOffset = 0;
+
+  try {
+    await waitForReady(apiOrigin, server.child, ownedLogPath, 30_000);
+  } catch (error) {
+    ownedServer = undefined;
+    throw error;
+  }
 }
 
+/**
+ * Stops only what this process started.
+ *
+ * In shared mode this is deliberately a no-op for the process, but it does drop
+ * the attachment: the next file re-validates the manifest instead of inheriting
+ * this file's worker state, which is what keeps a dead server from reading as
+ * alive for the rest of the run.
+ */
 export async function stopApiServer(): Promise<void> {
-  const activeServer = server;
-  server = undefined;
-  if (!activeServer || activeServer.exitCode !== null) return;
+  if (attachedToSharedServer) {
+    attachedToSharedServer = false;
+    return;
+  }
 
-  signalApiServer(activeServer, 'SIGTERM');
-  await new Promise<void>((resolve) => {
-    const finish = (): void => {
-      clearTimeout(timeout);
-      resolve();
-    };
-    const timeout = setTimeout(() => {
-      signalApiServer(activeServer, 'SIGKILL');
-      finish();
-    }, 5_000);
-
-    activeServer.once('exit', finish);
-  });
+  const activeServer = ownedServer;
+  ownedServer = undefined;
+  if (activeServer) await activeServer.stop();
 }
 
 export async function apiRequest(path: string, init?: RequestInit): Promise<Response> {

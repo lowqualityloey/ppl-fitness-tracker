@@ -93,3 +93,69 @@ the ignore list does not silently unverify anything.
 the owner), making the repo public (would publish a committed `PASSWORD` literal in
 `supabase/migrations/0001`), and self-hosted runners (billed at $0.002/min on private repos since
 1 Mar 2026 — also spending).
+
+---
+
+## Step-level timings: the API suite, 2026-10-23
+
+The section above prices *policy* levers — when a run exists at all. This section prices one
+**step**, for `TASK-ci-runtime-reduction` and `TASK-api-suite-shared-server`.
+
+### What CI measured before the change
+
+From `gh run view <id> --json jobs` on the two lanes, before 2026-10-23:
+
+| Step | PR run | `main` run |
+| :--- | ---: | ---: |
+| Run API route-handler suites | **249 s** | **208 s** |
+
+The step ran 14 test files, and **each file booted its own `next dev`** because
+`fileParallelism: false` runs files serially and the child lived in module scope.
+
+### What the suite costs locally, measured on one revision
+
+**Correction (2026-11-19, review finding F4).** This section used to label the 259 s column
+"before" and derive "~156–169 s saved" from it. That label was wrong, and the saving it produced
+compared two configurations of the **new** code, not the code that was there before the change.
+
+Both columns below were measured on the same revision (`560ebde` plus the harness change), same
+database, same machine. The 259 s column is that revision's **own fallback path** —
+`startApiServer()` spawning one server per file when no shared manifest exists
+(`tests/integration/api/test-server.ts:181-193`) — not the pre-change harness.
+
+| Measurement | Fallback path, one server per file | Shared server |
+| :--- | ---: | ---: |
+| Wall clock, warm `.next` | **259 s** | **103 s / 91 s / 90 s** (three consecutive runs) |
+| Wall clock, cold `.next`, file order shuffled | not measured | **100 s** |
+| `next dev` boots | **14** (14 log files, 14 `Ready in` lines) | **1** |
+| Files / tests | 14 / 84, 0 skipped | 14 / 84, 0 skipped |
+
+The 259 s → 90–103 s difference is real and it is the harness's own switch, but it measures
+**one boot vs fourteen** within the new code. It is a valid A/B of the mechanism. It is not a
+before/after of the change, and the phrase "~156–169 s saved per run" was withdrawn for that
+reason: the pre-change harness at `560ebde` wrote its child's output to **pipes**, not to a log
+file (`stdio: ['ignore', 'pipe', 'pipe']`), so its wall clock was never measured with the same
+instrument and cannot be subtracted from anything here.
+
+**Pre-change harness wall clock: `not measured`.** The only honest before/after pair available is
+the CI one in the table above (249 s PR / 208 s `main`), which is a different instrument on a
+different machine, and the post-merge number it would be compared against does not exist yet.
+
+Boot cost alone was measured at 16.65 s cold and 9.47 s warm per server; the per-boot route
+recompilation is what the rest of the difference buys.
+
+**These are local numbers, not CI numbers.** CI's step is slower end to end (208–249 s), so the
+projection in the spec — 70–110 s — is the band to check against a post-merge run, not the local
+figures. The local pair is a controlled comparison of boot count — both columns share the revision,
+the database, the machine, and every test — but it is a comparison of two ways to run the *new*
+harness, not of the harness against its predecessor. Only the post-merge CI step can answer that,
+and it is `not measured` until it runs.
+
+### One observed flake mode, and its cure
+
+During this work a run failed with the readiness probe answering **500**, the log naming
+`Can't resolve '@vercel/turbopack-next/internal/font/google/font'`. The cause was a `.next` font
+cache left half-written by a `next dev` that had been SIGKILLed mid-compile during port experiments,
+not the harness: `rm -rf .next` and the next run was green in 100 s, cold. CI never sees this — it
+has no persisted `.next` — but a workstation can, and the cure is the cache reset rather than a
+re-run.

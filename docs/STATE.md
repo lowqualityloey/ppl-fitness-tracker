@@ -703,29 +703,29 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
 
 ## 3A. Execution-Control Projection (Optional)
 
-> This section is a synchronized projection for checkpoint continuity when the host project uses Controlled Work. The canonical authority remains `docs/tasks/2026-11-19-promptkit-v2-3-upgrade.md`; disagreement with that record is a validation failure and leaves execution blocked or `checkpoint_due` until reconciled.
+> This section is a synchronized projection for checkpoint continuity when the host project uses Controlled Work. The canonical authority remains `docs/tasks/2026-11-19-api-suite-hardening.md`; disagreement with that record is a validation failure and leaves execution blocked or `checkpoint_due` until reconciled.
 
-- **Local Task Source**: `docs/tasks/2026-11-19-promptkit-v2-3-upgrade.md`
-- **Task ID**: `TASK-promptkit-v2-3-upgrade`
-- **Task Record**: `docs/tasks/2026-11-19-promptkit-v2-3-upgrade.md`
+- **Local Task Source**: `docs/tasks/2026-11-19-api-suite-hardening.md`
+- **Task ID**: `TASK-api-suite-hardening`
+- **Task Record**: `docs/tasks/2026-11-19-api-suite-hardening.md`
 - **Ceremony Level**: `Level 2 (Controlled Work)`
-- **Specification**: `docs/specs/2026-11-19-spec-promptkit-v2-3-upgrade.md`
+- **Specification**: `docs/specs/2026-11-19-spec-api-suite-hardening.md`
 - **Execution Scope**: `ppl-fitness-tracker, branch chore/promptkit-v2-sync, one worktree`
-- **Execution State**: `completed`
-- **Mapped `pk:tasks` Status**: `Done`
+- **Execution State**: `awaiting_review`
+- **Mapped `pk:tasks` Status**: `In Review`
 - **Active Task Pointer**: `None`
 - **Owner / Current Actor**: `Agent (DeepSeek Harness / lead)`
-- **Start Time**: `2026-11-19 09:14 UTC`
+- **Start Time**: `2026-11-19 10:41 UTC`
 - **Current Branch**: `chore/promptkit-v2-sync`
-- **Current Revision**: `d0530f0`
+- **Current Revision**: `05767c9`
 - **Checkpoint Policy**: `N/A - single session; host timer cannot mechanically enforce checkpoints or terminate the session.`
-- **Blockers and Resume Condition**: `None - task closed by owner sign-off on 2026-11-19 10:03 UTC.`
-- **Verification Status**: `2026-11-19, re-run after S9 pk:sync: validate-execution-control.sh VALID, RECORDS=5; validate-references.sh --strict exit 0; check-setup-assert.sh submodule OK; check-doctor.sh docs-drift OK and submodule OK, with version STALE(+5) recorded as a definitional artifact of pinning the tag rather than origin/main; npm run typecheck exit 0; eslint --max-warnings=0 exit 0.`
-- **CI Evidence**: `N/A - no PR or CI run; local governance gates passed`
-- **Changed-File Summary**: `12 distinct paths across four commits (a5e7769, 2ab2288, d0530f0, and the closure commit): .promptkit (gitlink); AGENTS.md; CLAUDE.md; .opencode/rules.md; .clinerules/promptkit.md; .github/copilot-instructions.md; PROMPTKIT.md; docs/STATE.md; eslint.config.mjs; docs/tasks/2026-10-23-ci-runtime-reduction.md; docs/specs/2026-11-19-spec-promptkit-v2-3-upgrade.md; docs/tasks/2026-11-19-promptkit-v2-3-upgrade.md`
+- **Blockers and Resume Condition**: `None - execution finished; owner sign-off is the only remaining gate.`
+- **Verification Status**: `Green - npm run typecheck exit 0; eslint exit 0; tests/unit/infra/api-harness.test.ts 36 passed; validate-references --strict exit 0; validate-execution-control VALID|RECORDS=6; scan-staged-secrets exit 0; npm test keeps exactly the 6 pre-existing Drizzle/RLS failures (130 database-backed files skip because the local Supabase stack cannot publish ports on this host). npm run test:api was last measured green (14 files / 84 tests, one boot) on 2026-11-19 while the database was reachable and cannot be re-measured today.`
+- **CI Evidence**: `N/A - no PR or CI run; local gates only`
+- **Changed-File Summary**: `13 paths: 4 harness sources plus one new unit suite, package.json, and the review/spec/task/measurement documents that record the findings.`
 - **Latest Checkpoint**: `None`
 - **Latest Handoff**: `None`
-- **Next Action**: `None - this task is closed. The queued API-suite review findings (Planning Record F-2) are the next unit of work and need their own Task Record.`
+- **Next Action**: `Owner reviews the hardened harness diff and the measured gate sweep, then signs off and confirms the commit; the review findings F1-F4, S1-S12, both simplification candidates, and the credential-literal finding raised by the commit gate are all closed in this change.`
 
 ---
 

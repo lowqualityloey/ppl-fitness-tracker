@@ -14,7 +14,7 @@
     "typecheck": "next typegen && tsc --noEmit",
     "lint": "eslint --max-warnings=0 .",
     "test": "node --env-file-if-exists=.env.local node_modules/vitest/vitest.mjs run --exclude 'tests/integration/api/**'",
-    "test:api": "node --env-file-if-exists=.env.local node_modules/vitest/vitest.mjs run tests/integration/api/",
+    "test:api": "node --env-file-if-exists=.env.local node_modules/vitest/vitest.mjs run --config vitest.api.config.ts tests/integration/api/",
     "test:api:preflight": "node --env-file-if-exists=.env.local node_modules/tsx/dist/cli.mjs scripts/preflight.ts",
     "test:red": "npm run test:api",
     "test:watch": "vitest",

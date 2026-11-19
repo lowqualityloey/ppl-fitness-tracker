@@ -711,21 +711,21 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
 - **Ceremony Level**: `Level 2 (Controlled Work)`
 - **Specification**: `docs/specs/2026-11-19-spec-promptkit-v2-3-upgrade.md`
 - **Execution Scope**: `ppl-fitness-tracker, branch chore/promptkit-v2-sync, one worktree`
-- **Execution State**: `in_progress`
-- **Mapped `pk:tasks` Status**: `In Progress`
-- **Active Task Pointer**: `TASK-promptkit-v2-3-upgrade`
+- **Execution State**: `awaiting_review`
+- **Mapped `pk:tasks` Status**: `In Review`
+- **Active Task Pointer**: `None`
 - **Owner / Current Actor**: `Agent (DeepSeek Harness / lead)`
 - **Start Time**: `2026-11-19 09:14 UTC`
 - **Current Branch**: `chore/promptkit-v2-sync`
-- **Current Revision**: `560ebde`
+- **Current Revision**: `2ab2288`
 - **Checkpoint Policy**: `N/A - single session; host timer cannot mechanically enforce checkpoints or terminate the session.`
 - **Blockers and Resume Condition**: `None`
 - **Verification Status**: `2026-11-19: validate-execution-control.sh VALID, RECORDS=5; validate-references.sh exit 0; check-setup-assert.sh submodule OK after the gitlink commit; check-doctor.sh docs-drift OK with version STALE(+5) recorded as a definitional artifact of pinning the tag rather than origin/main.`
 - **CI Evidence**: `N/A - no PR or CI run; local governance gates passed`
-- **Changed-File Summary**: `AGENTS.md; CLAUDE.md; .opencode/rules.md; .clinerules/promptkit.md; .github/copilot-instructions.md; PROMPTKIT.md; docs/STATE.md; eslint.config.mjs; docs/tasks/2026-10-23-ci-runtime-reduction.md; docs/tasks/2026-10-23-api-suite-shared-server.md; docs/specs/2026-11-19-spec-promptkit-v2-3-upgrade.md; docs/tasks/2026-11-19-promptkit-v2-3-upgrade.md`
+- **Changed-File Summary**: `12 paths across two commits: .promptkit (gitlink); AGENTS.md; CLAUDE.md; .opencode/rules.md; .clinerules/promptkit.md; .github/copilot-instructions.md; PROMPTKIT.md; docs/STATE.md; eslint.config.mjs; docs/tasks/2026-10-23-ci-runtime-reduction.md; docs/specs/2026-11-19-spec-promptkit-v2-3-upgrade.md; docs/tasks/2026-11-19-promptkit-v2-3-upgrade.md`
 - **Latest Checkpoint**: `None`
 - **Latest Handoff**: `None`
-- **Next Action**: `Commit the engine move and the section 3A repoint in their two separate commits, then run the S8 gate sweep and S9 pk:sync.`
+- **Next Action**: `Owner reviews the two commits and the green gate sweep, then signs off; S9 pk:sync runs in the next session so the 2.3.0 boundary is loaded from disk.`
 
 ---
 

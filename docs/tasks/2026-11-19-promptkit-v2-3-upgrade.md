@@ -51,54 +51,54 @@
 
 ## 3. Acceptance Criteria
 
-- [ ] **AC-1**: Engine is at 52adbe1 and git describe --tags --match 'v[0-9]*' returns v2.3.0.
-  - **Result**: `Pending`
-  - **Evidence**: `git -C .promptkit rev-parse HEAD; git -C .promptkit describe`
-- [ ] **AC-2**: .gitmodules names promptkit-os and git submodule status has no leading plus or minus.
-  - **Result**: `Pending`
+- [x] **AC-1**: Engine is at 52adbe1 and git describe --tags --match 'v[0-9]*' returns v2.3.0.
+  - **Result**: `PASS` — `rev-parse HEAD` = `52adbe16c0ff2aea0d538e10c3225c2f3e40e315`; `describe --tags --match 'v[0-9]*'` = `v2.3.0`.
+  - **Evidence**: `git -C .promptkit rev-parse HEAD; git -C .promptkit describe --tags --match 'v[0-9]*'`
+- [x] **AC-2**: .gitmodules names promptkit-os and git submodule status has no leading plus or minus.
+  - **Result**: `PASS` — url `https://github.com/lowqualityloey/promptkit-os`; status line ` 52adbe16c0ff2aea0d538e10c3225c2f3e40e315 .promptkit (v2.3.0)` (leading space, no + or -).
   - **Evidence**: `cat .gitmodules; git submodule status`
-- [ ] **AC-3**: All five host directives carry the v2.3.0 engine stamp.
-  - **Result**: `Pending`
-  - **Evidence**: `grep -c 'Engine: v2.3.0 (52adbe1)' across the five files`
-- [ ] **AC-4**: The Untrusted Content guardrail appears exactly once in each of the five directives.
-  - **Result**: `Pending`
-  - **Evidence**: `grep -c 'Untrusted Content' = 1 in each file`
-- [ ] **AC-5**: The nextjs-agent-rules block in AGENTS.md is byte-identical to HEAD.
-  - **Result**: `Pending`
-  - **Evidence**: `git diff -- AGENTS.md shows only the three PromptKit hunks`
-- [ ] **AC-6**: PROMPTKIT.md has one profile line, one tracking line, and Engine prose naming 52adbe1 and v2.3.0.
-  - **Result**: `Pending`
-  - **Evidence**: `grep -c '^profile:' = 1; grep -c '^tracking:' = 1; grep -n 'Engine:'`
-- [ ] **AC-7**: PROMPTKIT.md's directive-block md5 matches the block on disk, identically across all five hosts.
-  - **Result**: `Pending`
-  - **Evidence**: `awk '/<!-- PROMPTKIT_START -->/,/<!-- PROMPTKIT_END -->/' <file> | md5sum, five times`
-- [ ] **AC-8**: docs/STATE.md Engine Version reads v2.3.0; section 3A projects TASK-promptkit-v2-3-upgrade
+- [x] **AC-3**: All five host directives carry the v2.3.0 engine stamp.
+  - **Result**: `PASS` — `grep -c 'Engine: v2.3.0 (52adbe1)'` = 1 in each of the five.
+  - **Evidence**: `grep -c across AGENTS.md, CLAUDE.md, .opencode/rules.md, .clinerules/promptkit.md, .github/copilot-instructions.md`
+- [x] **AC-4**: The Untrusted Content guardrail appears exactly once in each of the five directives.
+  - **Result**: `PASS` — `grep -c 'Untrusted Content'` = 1 in each of the five.
+  - **Evidence**: `grep -c 'Untrusted Content' across the five host files`
+- [x] **AC-5**: The nextjs-agent-rules block in AGENTS.md is byte-identical to HEAD.
+  - **Result**: `PASS` — the block md5 is `01e8142356e15c3404e0d84c48187cd0` both at `560ebde` and in the working tree; `git diff 560ebde..HEAD -- AGENTS.md` has 0 occurrences of `nextjs-agent-rules`.
+  - **Evidence**: `awk '/<!-- BEGIN:nextjs-agent-rules -->/,/<!-- END:nextjs-agent-rules -->/' AGENTS.md | md5sum` versus the same on `git show 560ebde:AGENTS.md`
+- [x] **AC-6**: PROMPTKIT.md has one profile line, one tracking line, and Engine prose naming 52adbe1 and v2.3.0.
+  - **Result**: `PASS` — `^profile: turbo$` = 1, `^tracking: github$` = 1, line 8 reads `**Engine**: `.promptkit` (submodule @ `52adbe1` = **v2.3.0**, canonical `promptkit-os`).` The installer relocated `profile:` to end-of-file; there is still exactly one.
+  - **Evidence**: `grep -c '^profile: turbo$'; grep -c '^tracking: github$'; grep -n 'Engine\*\*:' PROMPTKIT.md`
+- [x] **AC-7**: PROMPTKIT.md's directive-block md5 matches the block on disk, identically across all five hosts.
+  - **Result**: `PASS` — all five compute `b28a1cd8d852eaf0de91979996c3904f`, the value PROMPTKIT.md line 10 records, and the value the Planning Record predicted.
+  - **Evidence**: `awk '/<!-- PROMPTKIT_START -->/,/<!-- PROMPTKIT_END -->/' <file> | md5sum`, five times
+- [x] **AC-8**: docs/STATE.md Engine Version reads v2.3.0; section 3A projects TASK-promptkit-v2-3-upgrade
   and satisfies the widened 10-pair projection contract (zero STATE_PROJECTION_MISMATCH rows); and
   check-doctor.sh reports docs-drift OK.
-  - **Result**: `Pending`
-  - **Evidence**: `grep; bash .promptkit/scripts/check-doctor.sh .`
-- [ ] **AC-9**: The diff is exactly the expected file set across two commits: the engine move carries the
+  - **Result**: `PASS` — line 264 reads `- **Engine Version**: v2.3.0 @ 52adbe1`; `validate-execution-control.sh` emits zero `STATE_` rows under the v2.3.0 10-pair contract; `check-doctor.sh` reports `docs-drift OK`.
+  - **Evidence**: `grep -n 'Engine Version' docs/STATE.md; bash .promptkit/scripts/validate-execution-control.sh --root .; bash .promptkit/scripts/check-doctor.sh .`
+- [x] **AC-9**: The diff is exactly the expected file set across two commits: the engine move carries the
   gitlink in the same commit as the directives, and the section 3A repoint lands separately.
-  - **Result**: `Pending`
-  - **Evidence**: `git show --stat`
-- [ ] **AC-10**: validate-references.sh --strict exits 0. The strict flag exists only from v2.1.0, so its availability is itself part of the evidence.
-  - **Result**: `Pending`
-  - **Evidence**: `bash .promptkit/scripts/validate-references.sh --strict`
-- [ ] **AC-11**: validate-execution-control.sh --root . exits 0 with VALID, or the remaining red is recorded with its cause.
-  - **Result**: `Pending`
+  - **Result**: `PASS` — commit 1 `a5e7769` carries 11 files including the `.promptkit` gitlink; commit 2 `2ab2288` carries only `docs/STATE.md` and this Task Record.
+  - **Evidence**: `git show --name-only --format='' a5e7769; git show --name-only --format='' 2ab2288`
+- [x] **AC-10**: validate-references.sh --strict exits 0. The strict flag exists only from v2.1.0, so its availability is itself part of the evidence.
+  - **Result**: `PASS` — exit 0, `✅ All references valid! No broken links found.` The installed script now defines `STRICT_MODE` (3 occurrences) and documents `Usage: validate-references.sh [--strict] [promptkit-dir]` at line 7; the pre-upgrade engine had no such flag.
+  - **Evidence**: `bash .promptkit/scripts/validate-references.sh --strict .promptkit`; `grep -c STRICT_MODE .promptkit/scripts/validate-references.sh`
+- [x] **AC-11**: validate-execution-control.sh --root . exits 0 with VALID, or the remaining red is recorded with its cause.
+  - **Result**: `PASS` — `VALID|RECORDS=5|ROOT=.`, exit 0. S5 repaired the 9 pre-existing errors; none remain.
   - **Evidence**: `bash .promptkit/scripts/validate-execution-control.sh --root .`
-- [ ] **AC-12**: check-doctor.sh reports every row OK except version STALE(+5), whose cause is recorded.
-  - **Result**: `Pending`
+- [x] **AC-12**: check-doctor.sh reports every row OK except version STALE(+5), whose cause is recorded.
+  - **Result**: `PASS` — the only non-OK, non-SKIP row is `version STALE(+5) engine v2.3.0 is 5 commit(s) behind refs/remotes/origin/main`. Cause recorded (D1/R5): the doctor compares against `refs/remotes/origin/main` and never a tag, and the 5 post-tag commits are docs-only release records (`git diff --stat v2.3.0..origin/main` = 2 files, +26/-0, both under `docs/releases/`). The four remaining non-OK rows are `SKIP`: five uninstalled hosts and `provenance SKIP(intake-status: legacy-partial)`. Exit 1 is this row alone.
   - **Evidence**: `bash .promptkit/scripts/check-doctor.sh .`
-- [ ] **AC-13**: check-setup-assert.sh exits 0 after the gitlink commit.
-  - **Result**: `Pending`
+- [x] **AC-13**: check-setup-assert.sh exits 0 after the gitlink commit.
+  - **Result**: `PASS` — `ASSERT|submodule|status|OK`, exit 0. It read `FAIL` before commit 1 and flipped on the commit, exactly as R4 predicted.
   - **Evidence**: `bash .promptkit/scripts/check-setup-assert.sh . .promptkit .promptkit`
-- [ ] **AC-14**: npm run typecheck and npm run lint both exit 0.
-  - **Result**: `Pending`
-  - **Evidence**: `npm run typecheck; npm run lint`
-- [ ] **AC-15**: No application source, test, schema, or CI runtime file changed.
-  - **Result**: `Pending`
-  - **Evidence**: `git show --stat scope check against this record's In Scope list`
+- [x] **AC-14**: npm run typecheck and npm run lint both exit 0.
+  - **Result**: `PASS` — typecheck exit 0 (`✓ Types generated successfully`); lint exit 0. Lint was `6 problems (5 errors, 1 warning)` / exit 1 after the engine bump and before S6.
+  - **Evidence**: `npm run typecheck; node node_modules/eslint/bin/eslint.js --max-warnings=0 .`
+- [x] **AC-15**: No application source, test, schema, or CI runtime file changed.
+  - **Result**: `PASS` — `git diff --name-only 560ebde..HEAD` lists 12 paths and none matches `^(app|lib|src|components|tests|supabase)/` or `^\.github/workflows/`.
+  - **Evidence**: `git diff --name-only 560ebde..HEAD | grep -E '^(app|lib|src|components|tests|supabase)/|^\.github/workflows/'`
 
 ## 4. Execution Policy
 
@@ -114,13 +114,13 @@
 
 ## 5. State and Active Ownership
 
-- **Execution State**: `in_progress`
-- **Mapped `pk:tasks` Status**: `In Progress`
-- **Active Task Pointer**: `TASK-promptkit-v2-3-upgrade`
+- **Execution State**: `awaiting_review`
+- **Mapped `pk:tasks` Status**: `In Review`
+- **Active Task Pointer**: `None`
 - **Start Time**: `2026-11-19 09:14 UTC`
 - **Current Actor**: `Agent (DeepSeek Harness / lead)`
-- **Next Action**: `Commit the engine move and the section 3A repoint in their two separate commits, then run the S8 gate sweep and S9 pk:sync.`
-- **Branch / Revision**: `chore/promptkit-v2-sync @ 560ebde`
+- **Next Action**: `Owner reviews the two commits and the green gate sweep, then signs off; S9 pk:sync runs in the next session so the 2.3.0 boundary is loaded from disk.`
+- **Branch / Revision**: `chore/promptkit-v2-sync @ 2ab2288`
 
 ### Transition History
 
@@ -129,6 +129,7 @@
 | `None` | `planned` | 2026-11-19 08:50 UTC | Agent (DeepSeek Harness / lead) | Owner selected pk:tasks after the pk:route answer | Planning Record |
 | `planned` | `ready` | 2026-11-19 08:50 UTC | Agent (DeepSeek Harness / lead) | Every readiness field is populated; execution awaits owner ratification | This record |
 | `ready` | `in_progress` | 2026-11-19 09:14 UTC | Agent (DeepSeek Harness / lead) | Owner ratified with reply 1; S0 captured the baseline and S1 pinned the engine | This record; S0/S1 command output |
+| `in_progress` | `awaiting_review` | 2026-11-19 09:29 UTC | Agent (DeepSeek Harness / lead) | S0-S8 complete, all 15 ACs PASS, gates green; owner sign-off remains | Commits a5e7769 and 2ab2288; S8 gate sweep |
 
 ## 6. Evidence and Completion Gate
 
@@ -143,25 +144,26 @@
   - `docs/STATE.md` - engine row, last updated, session row, section 3A
   - `eslint.config.mjs` - .promptkit/** ignore (S6, if run)
   - `docs/tasks/2026-10-23-ci-runtime-reduction.md` - link labels and In Scope (S5, if run)
-  - `docs/tasks/2026-10-23-api-suite-shared-server.md` - link labels and In Scope (S5, if run)
+  - `docs/tasks/2026-10-23-api-suite-shared-server.md` - link labels and In Scope (S5); the file is still untracked and travels with the queued API-suite work, so this repair is NOT in either commit
   - `docs/specs/2026-11-19-spec-promptkit-v2-3-upgrade.md` - Planning Record
   - `docs/tasks/2026-11-19-promptkit-v2-3-upgrade.md` - this Task Record
 - **Scope Change Records**: `None`
+- **Scope Note**: S5 repaired two records. `docs/tasks/2026-10-23-ci-runtime-reduction.md` is tracked and rides in commit `a5e7769`. `docs/tasks/2026-10-23-api-suite-shared-server.md` is untracked (part of the queued API-suite work), so its identical repair is applied on disk but deliberately unstaged; staging it would smuggle another task's artifact into this upgrade.
 - **Checkpoint Records**: `None`
 - **Handoff Records**: `None`
-- **Verification Evidence**: `Not yet executed. Baseline measured 2026-11-19: validate-references exit 0; validate-execution-control FAILED|ERRORS=9|RECORDS=4; check-setup-assert ASSERT|submodule|status|OK; check-doctor version STALE(+228).`
+- **Verification Evidence**: `2026-11-19, after both commits: validate-references.sh --strict exit 0 (✅ All references valid); validate-execution-control.sh --root . exit 0 (VALID|RECORDS=5|ROOT=.); check-setup-assert.sh exit 0 (ASSERT|submodule|status|OK); check-doctor.sh exit 1 on version STALE(+5) alone, docs-drift OK, submodule OK; npm run typecheck exit 0; eslint --max-warnings=0 exit 0. Baseline before execution: validate-execution-control FAILED|ERRORS=9|RECORDS=4; check-doctor version STALE(+228).`
 - **Behavior IDs [Required when enabled]**: `N/A - exception work type`
 - **TDD Intent Register [Required when enabled]**: `N/A - exception work type`
 - **TDD Execution Evidence [Required when enabled]**: `N/A - exception work type`
 - **TDD Exception Verification [Required for Documentation, Configuration, or Research Work; Not applicable for Code Work]**: `Configuration Work has no behavior seam to drive Red-Green-Refactor. Verification is the governance gate sweep in section 3 and the S4 diff-scope gate in the Planning Record.`
 - **CI Evidence**: `N/A - no PR or CI run; no governance workflow exists (follow-up F-1)`
 - **Review Evidence**: `N/A - the Planning Record is the design artifact; pk:review follows execution`
-- **Commit Evidence**: `N/A before commit`
+- **Commit Evidence**: `a5e7769 chore(promptkit): upgrade engine to v2.3.0 (52adbe1) — 11 files, the gitlink with the five directives; 2ab2288 docs(promptkit): project the v2.3.0 upgrade task in 3A — docs/STATE.md plus this record. Recorded in the commit AFTER the ones they name.`
 - **Pull Request Evidence**: `N/A - not opened`
 - **Release Evidence**: `N/A - consumes an existing upstream tag; creates no release`
-- **Blocker and Resume Condition**: `None - execution waits on owner ratification recorded in the Approval Boundary; resume when the owner accepts D1-D7 and chooses O1-O3.`
-- **Completion State**: `pending`
-- **Acceptance Results**: `AC-1 through AC-15 Pending`
-- **Changed-File Summary**: `No file changed yet. This record and its Planning Record are the only artifacts written.`
+- **Blocker and Resume Condition**: `None - execution is complete and the gates are green; resume when the owner reviews a5e7769 and 2ab2288 and signs off, or requests a rollback per the Planning Record section 7.`
+- **Completion State**: `awaiting_review`
+- **Acceptance Results**: `AC-1 through AC-15 PASS`
+- **Changed-File Summary**: `12 paths across two commits: .promptkit (gitlink to 52adbe1); AGENTS.md, CLAUDE.md, .opencode/rules.md, .clinerules/promptkit.md, .github/copilot-instructions.md (directive block re-injected, md5 edb5dc6d -> b28a1cd8); PROMPTKIT.md (engine prose, md5, 2.3.0 bullet); docs/STATE.md (Engine Version, Last Updated, session row, section 3A); eslint.config.mjs (.promptkit/** ignore); docs/tasks/2026-10-23-ci-runtime-reduction.md (link labels and In Scope); docs/specs/2026-11-19-spec-promptkit-v2-3-upgrade.md (Planning Record); docs/tasks/2026-11-19-promptkit-v2-3-upgrade.md (this record).`
 - **Completion Exception**: `None`
-- **Completion Decision and Timestamp**: `Not decided - 2026-11-19 08:50 UTC`
+- **Completion Decision and Timestamp**: `Awaiting human review - 2026-11-19 09:29 UTC`

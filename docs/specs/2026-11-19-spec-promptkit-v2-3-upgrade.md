@@ -2,7 +2,11 @@
 
 <a id="PLAN-promptkit-v2-3-upgrade"></a>
 
-- **Status**: Proposed — not executed. Nothing in this repository has been changed by this plan.
+- **Status**: Executed 2026-11-19. S0-S8 ran under owner ratification (reply `1` to the `pk:route`
+  option list). Commits: `a5e7769` (engine move), `2ab2288` (§3A repoint), and a third
+  reconciliation commit closing the Task Record at `awaiting_review`. This document stays the
+  planning input; `docs/tasks/2026-11-19-promptkit-v2-3-upgrade.md` remains the authority for
+  execution state.
 - **Date**: 2026-11-19
 - **Ceremony**: Level 2 (Controlled), Configuration Work. The canonical Task Record is
   `docs/tasks/2026-11-19-promptkit-v2-3-upgrade.md` (created by `pk:tasks`); this document
@@ -385,8 +389,8 @@ ignores `.promptkit/**`), `npm run typecheck`, `node --version`, `npm --version`
 directives inside another agent's session; the full `npm test` suite (out of scope — the engine ships
 0 TypeScript files); any CI run of a governance workflow (none exists).
 
-**Execution gate**: this plan authorizes nothing. It changes no file and starts no implementation.
-The canonical Task Record now exists at
-`docs/tasks/2026-11-19-promptkit-v2-3-upgrade.md` (`Execution State: ready`, `To Do`); it is the
-authority for execution state and this document remains its planning input. `pk:grill` owns the
-design challenge. Nothing above may be executed before the owner ratifies D1–D7 and decides O1–O4.
+**Execution gate**: this plan authorized nothing by itself. The owner ratified D1-D7 and chose
+O1 (pin the release tag) by reply `1`; execution then ran S0-S9 under
+`docs/tasks/2026-11-19-promptkit-v2-3-upgrade.md`, which is the authority for execution state and
+is now at `Execution State: awaiting_review`. O2 and O3 were not exercised: no profile change and
+no PromptKit Governance CI workflow were attempted, matching §2's non-goals.

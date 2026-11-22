@@ -24,9 +24,9 @@
 
 ## 2. Objective and Boundaries
 
-- **Objective**: `Convert the five findings the branch review left queued into tracked, individually verifiable work: F-1 the missing governance CI, F-2 the three evidence defects in the API-suite documents, F-3 the docs/STATE.md reconciliation against origin/main, F-4 the fixtures.ts anon-key fallback and the missing preflight check, and F-5 the six pre-existing Drizzle/RLS failures plus the owned-child leak. Each item closes on measured evidence, not on an assertion that it was addressed.`
+- **Objective**: `Convert the five follow-ups this plan left open into tracked, individually verifiable work: F-1 the missing governance CI (sourced from spec section 9, not from the review - see the Provenance Note below), F-2 the three evidence defects in the API-suite documents, F-3 the docs/STATE.md reconciliation against origin/main, F-4 the fixtures.ts anon-key fallback and the missing preflight check, and F-5 the six pre-existing Drizzle/RLS failures plus the owned-child leak. Each item closes on measured evidence, not on an assertion that it was addressed.`
 - **In Scope**:
-  - `.github/workflows/` - the governance workflow F-1 adds, and the `paths-ignore` cost control in `test.yml` it must not silently undo
+  - `.github/workflows/governance.yml` - the governance workflow F-1 adds; `.github/workflows/test.yml` is read only, so its `paths-ignore` cost control is not silently undone
   - `docs/specs/2026-11-19-spec-api-suite-hardening.md` - F-2: the 31-to-36 test count, the AC-13 row, and G5's scope
   - `docs/tasks/2026-11-19-api-suite-hardening.md` - F-2: AC-11's evidence and the 31-to-36 count in the completion gate
   - `tests/integration/api/fixtures.ts` - F-4: remove the anon-key fallback and the `process.env` assignment
@@ -36,6 +36,7 @@
   - `docs/STATE.md` - section 1 Last Updated, the section 3A projection, and the section 8 session row
   - `docs/tasks/2026-11-22-branch-review-follow-ups.md` - this Task Record
   - `docs/reviews/2026-11-22-promptkit-v2-sync-branch.md` - the findings register this record consumes, read only
+- **Provenance Note**: `F-1 does not come from the branch review. The review's own findings are F1 the AC-11 working-tree evidence, F2 the fixtures.ts anon key, F3 the owned-path child leak, F4 the stale STATE 3A, F5 the AC-13 counts; its "order of work, cheapest first" list is five items and none is a workflow, and it closes by stating that it authorizes nothing. F-1 is listed verbatim in docs/specs/2026-11-22-spec-promptkit-v2-4-upgrade.md section 9 ("Follow-ups this plan does not do"): "F-1 - PromptKit Governance CI. Still absent; test.yml ignores docs/** and **/*.md, so a governance-only commit runs no workflow at all." This record's earlier wording called all five "the findings the branch review left queued", which overstated the review's reach; corrected 2026-11-22 during F-1 so that no item is attributed to a source that does not contain it.`
 - **Explicit Non-Goals**:
   - Application source, schema, auth, API, database, or runtime changes of any kind
   - Re-reviewing the branch or re-opening findings the review already closed
@@ -49,15 +50,15 @@
 
 ## 3. Acceptance Criteria
 
-- [ ] **AC-1** (F-1): A governance workflow exists that runs the three governance validators on changes to the governance surface.
-  - **Result**: `Pending`
-  - **Evidence**: will be `grep -n 'validate-references\|validate-execution-control\|check-setup-assert' .github/workflows/<new>.yml` plus a parse check of the file
-- [ ] **AC-2** (F-1): The governance workflow's `paths` cover `docs/**`, `**/*.md`, `PROMPTKIT.md`, the five host directives, and `.promptkit`, so a governance-only commit runs at least one workflow.
-  - **Result**: `Pending`
-  - **Evidence**: will be the workflow's `on:` block read against `git show --name-only` for the four v2.4.0 commits, which currently trigger nothing
-- [ ] **AC-3** (F-1): The workflow is cheap by construction - one job, no browser download, no service containers - and the record states what it adds to the measured CI cost that `paths-ignore` was created to reduce.
-  - **Result**: `Pending`
-  - **Evidence**: will be the job definition plus a written cost comparison against `docs/releases/ci-triage/ci-cost-measurement.md`
+- [x] **AC-1** (F-1): A governance workflow exists that runs the three governance validators on changes to the governance surface.
+  - **Result**: `PASS`
+  - **Evidence**: `.github/workflows/governance.yml` (name `Governance`) runs all three, at `:114` `bash .promptkit/scripts/validate-references.sh --strict`, `:119` `bash .promptkit/scripts/validate-execution-control.sh --root .`, `:125` `bash .promptkit/scripts/check-setup-assert.sh . .promptkit .promptkit`. It parses under `python3 -c 'yaml.safe_load(...)'` with top keys name/on/concurrency/permissions/jobs, job `governance` keys `runs-on`/`timeout-minutes`/`steps`, `timeout-minutes: 5`, and exactly those four steps. `actionlint -no-color` 1.7.7 exits 0 on it, and on `test.yml` too.
+- [x] **AC-2** (F-1): The governance workflow's `paths` cover `docs/**`, `**/*.md`, `PROMPTKIT.md`, the five host directives, and `.promptkit`, so a governance-only commit runs at least one workflow.
+  - **Result**: `PASS`
+  - **Evidence**: both events carry the same ten paths: `docs/**`, `**/*.md`, `PROMPTKIT.md`, `AGENTS.md`, `CLAUDE.md`, `.clinerules/promptkit.md`, `.opencode/rules.md`, `.github/copilot-instructions.md`, `.promptkit`, `.promptkit/**`. Replaying every one of the 23 `origin/main..HEAD` commits through both path filters: `governance.yml` would run on 22 of 23, `test.yml` on 6 of 23. The four v2.4.0 commits resolve as follows - `17b64ed` already runs BOTH (it touches the `.promptkit` gitlink, which `paths-ignore` does not ignore), while `c54be47`, `b8d45c9` and `cee530a` are docs-only and run nothing today. So the criterion holds for three of the four, not all four; the earlier phrasing implied all four and is corrected here rather than left as a convenient overstatement. The single commit in the branch that governance does not cover is `81fdd3c`, the dependency upgrade, which is code-only.
+- [x] **AC-3** (F-1): The workflow is cheap by construction - one job, no browser download, no service containers - and the record states what it adds to the measured CI cost that `paths-ignore` was created to reduce.
+  - **Result**: `PASS`
+  - **Evidence**: one job, one runner, four steps, `permissions: contents: read`. No `npm ci`, no Node setup, no service container, no Playwright, no artifact or cache step; the only action is `actions/checkout@v4`. Cost comparison against `docs/releases/ci-triage/ci-cost-measurement.md`: replaying the 324 commits in its measurement window (2026-09-07 to 2026-09-21T04:26) through both filters gives 122 governance-only, 86 code-only, 49 both, 67 neither, so the worst case is 122 + 49 = 171 added runner-minutes, 24.4% of the 700 minutes `paths-ignore` removed. **That counterfactual is now moot**: `gh api repos/lowqualityloey/ppl-fitness-tracker` reports `visibility: public`, and GitHub's billing documentation states that standard GitHub-hosted runners in public repositories stay free and do not draw included compute, so this workflow's real cost is zero minutes. The 171-minute figure is retained because it is the number that would apply if the repository returned to private. Measured runtime is ~20 s of validator work (references 15.1-16.4 s, execution-control 4.3-5.9 s, setup-assert 0.05-0.07 s over three runs), which rounds to one billed minute. A first draft of the workflow header claimed 64 minutes / 9.1%; that arithmetic was wrong and is corrected in the file itself.
 - [x] **AC-4** (F-2): `docs/specs/2026-11-19-spec-api-suite-hardening.md` states 36 tests, not 31, in the M2 seam-hardening line.
   - **Result**: `PASS`
   - **Evidence**: `grep -cE '^\s+it\(' tests/unit/infra/api-harness.test.ts` → 36; `grep -n '36 tests' docs/specs/2026-11-19-spec-api-suite-hardening.md` → `:345: **Done** — 14 files / 84 tests green, 111.06 s; tests/unit/infra/api-harness.test.ts 36 tests`. The line keeps the 31 as a milestone count with its reason rather than dropping it, so the intermediate state stays visible.
@@ -114,8 +115,8 @@
 - **Active Task Pointer**: `TASK-branch-review-follow-ups`
 - **Start Time**: `2026-11-22 09:33 UTC`
 - **Current Actor**: `Agent (DeepSeek Harness / lead)`
-- **Next Action**: `F-2 is complete at this revision (AC-4 through AC-7 PASS, four falsified or unscoped claims corrected across two documents). Next is F-1, the governance workflow, which cannot be closed without the written cost comparison AC-3 requires against docs/releases/ci-triage/ci-cost-measurement.md. After F-1: F-4, which needs a reachable Supabase local stack, then F-5's separate record for the six Drizzle/RLS failures plus the owned-child leak.`
-- **Branch / Revision**: `chore/promptkit-v2-sync @ a08edf9`
+- **Next Action**: `F-1, F-2 and F-3 are complete (AC-1 through AC-9 PASS). Two items remain and both need a fresh go-ahead: F-4 removes the fixtures.ts anon-key fallback and adds the missing preflight check, which requires a reachable Supabase local stack to re-measure the green lane; F-5 needs its own Task Record for the six pre-existing Drizzle/RLS failures plus the owned-child leak at tests/integration/api/test-server.ts:184-194. F-4 is the smaller of the two and does not depend on the other.`
+- **Branch / Revision**: `chore/promptkit-v2-sync @ 766c55f`
 
 ### Transition History
 
@@ -127,7 +128,7 @@
 ## 6. Evidence and Completion Gate
 
 - **Changed Files**:
-  - `.github/workflows/` - the governance workflow F-1 adds
+  - `.github/workflows/governance.yml` - the governance workflow F-1 adds
   - `docs/specs/2026-11-19-spec-api-suite-hardening.md` - F-2 corrections
   - `docs/tasks/2026-11-19-api-suite-hardening.md` - F-2 corrections
   - `tests/integration/api/fixtures.ts` - F-4 fallback removal
@@ -139,23 +140,23 @@
 - **Scope Change Records**: `None`
 - **Checkpoint Records**: `None`
 - **Handoff Records**: `None`
-- **Verification Evidence**: `F-2 measured 2026-11-22 09:33 UTC on a08edf9 with the F-2 edits applied: grep -cE '^\s+it\(' tests/unit/infra/api-harness.test.ts = 36; grep -c '632/638' docs/specs/2026-11-19-spec-api-suite-hardening.md = 0; grep '31 unit tests' docs/tasks/2026-11-19-api-suite-hardening.md = no match; git diff --stat 544081d^...544081d -- .github/workflows/ = 0 lines. Gates after the edits: validate-references.sh --strict exit 0 (420 markdown files valid); validate-execution-control.sh --root . exit 0 VALID|RECORDS=8|ROOT=.. The pre-work baseline at cd745d2 was validate-references exit 0, validate-execution-control VALID|RECORDS=7 exit 0, check-setup-assert ASSERT|submodule|status|OK exit 0, check-doctor exit 1 on version STALE(+12) alone with submodule OK and docs-drift OK. No code item has been verified yet; AC-1, AC-2, AC-3 and AC-10 through AC-15 read Pending by design.`
+- **Verification Evidence**: `F-2 measured 2026-11-22 09:33 UTC on a08edf9 with the F-2 edits applied: grep -cE '^\s+it\(' tests/unit/infra/api-harness.test.ts = 36; grep -c '632/638' docs/specs/2026-11-19-spec-api-suite-hardening.md = 0; grep '31 unit tests' docs/tasks/2026-11-19-api-suite-hardening.md = no match; git diff --stat 544081d^...544081d -- .github/workflows/ = 0 lines. F-1 measured 2026-11-22 10:10 UTC at 766c55f: the workflow parses with four steps and `timeout-minutes: 5`; actionlint 1.7.7 exits 0 on it and on test.yml; a path-filter replay of all 23 origin/main..HEAD commits puts governance at 22 of 23 against test.yml's 6 of 23; and the same three validators were proven to pass in a `--depth 1 --shallow-submodules` clone, so no fetch-depth is needed. Gates after the edits: validate-references.sh --strict exit 0 (420 markdown files valid); validate-execution-control.sh --root . exit 0 VALID|RECORDS=8|ROOT=.; check-setup-assert.sh . .promptkit .promptkit exit 0 ASSERT|submodule|status|OK. The pre-work baseline at cd745d2 was the same three gates green, with check-doctor exit 1 on version STALE(+12) alone with submodule OK and docs-drift OK. No code item has been verified yet; AC-10 through AC-15 read Pending by design.`
 - **Behavior IDs [Required when enabled]**: `N/A - exception work type`
 - **TDD Intent Register [Required when enabled]**: `N/A - exception work type`
 - **TDD Execution Evidence [Required when enabled]**: `N/A - exception work type`
 - **TDD Exception Verification [Required for Documentation, Configuration, or Research Work; Not applicable for Code Work]**: `The documentation and configuration items have no behaviour seam to drive Red-Green-Refactor; their verification is the governance gate sweep plus the per-item commands in section 3. F-4 and the F-5 child leak do change code, so each must state its own TDD decision before it executes and may not inherit this record's disabled mode by default.`
-- **CI Evidence**: `N/A - no PR or CI run; no governance workflow exists, which is F-1 itself`
-- **Review Evidence**: `docs/reviews/2026-11-22-promptkit-v2-sync-branch.md - a Level 2 review of the branch with verdict Changes Requested and no BLOCKING findings. Its F1, F2, F3, F4 and F5 are the source of this record's items, each with a measured reproduction, and the specification's section 9 (follow-ups this plan does not do) is the queued list they came from. The report is currently untracked; committing it is a separate step the owner has not authorized.`
-- **Commit Evidence**: `cd745d2 chore(state): merge origin/main and reconcile the split tracker - F-3, 6 files, already landed. a08edf9 docs(promptkit): register the branch review follow-ups - this record plus the §3A repoint, 2 files. F-2's corrections land as one further docs(api-suite) commit on this branch, subject docs(api-suite): correct the three falsified or unscoped claims (branch review F-2); a commit cannot name its own SHA, so it is identified by subject, and no later item has a commit yet.`
+- **CI Evidence**: `No CI run exists for this branch: it has not been pushed and no pull request is open, so neither workflow has executed on it. F-1's evidence is therefore local - actionlint, a YAML parse, a path-filter replay of the branch's own commits, and the three validators run in a shallow clone that reproduces the runner's checkout shape. The workflow's first real run will be the first push that touches a governance path.`
+- **Review Evidence**: `docs/reviews/2026-11-22-promptkit-v2-sync-branch.md - a Level 2 review of the branch with verdict Changes Requested and no BLOCKING findings. Its own findings are F1 the AC-11 working-tree evidence, F2 the fixtures.ts anon key, F3 the owned-path child leak, F4 the stale STATE 3A and F5 the AC-13 counts; those map onto this record's F-2, F-4, F-5 and F-3. F-1 is not in the review - it comes from section 9 of the specification (follow-ups this plan does not do) - see the Provenance Note in section 2. The report is currently untracked; committing it is a separate step the owner has not authorized.`
+- **Commit Evidence**: `cd745d2 chore(state): merge origin/main and reconcile the split tracker - F-3, 6 files. a08edf9 docs(promptkit): register the branch review follow-ups - this record plus the §3A repoint, 2 files. 766c55f docs(api-suite): correct the three falsified or unscoped claims (branch review F-2) - 4 files, 50 insertions, 40 deletions. F-1's workflow lands as one further ci(governance) commit on this branch; a commit cannot name its own SHA, so it is identified by subject. F-4 and F-5 have no commit.`
 - **Pull Request Evidence**: `N/A - no pull request was opened for this branch; work is reviewed on the local branch (human-confirmed at m03192)`
 - **Release Evidence**: `N/A - no release, tag, or deployment action is in scope`
-- **Blocker and Resume Condition**: `Blocked on owner go-ahead per item. Resume when the owner names an item; F-4 additionally requires a reachable Supabase local stack, and F-1 requires the cost comparison in AC-3.`
+- **Blocker and Resume Condition**: `Blocked on owner go-ahead per item. Resume when the owner names F-4 or F-5; F-4 additionally requires a reachable Supabase local stack, and F-5 needs its own record opened first.`
 
 ## 7. Completion Gate
 
-- **Completion State**: `N/A - record is in_progress; F-2 is done, F-1, F-4 and F-5 remain`
-- **Acceptance Results**: `Six of fifteen criteria read PASS: AC-4, AC-5, AC-6 and AC-7 on F-2 executed this session, and AC-8 and AC-9 on F-3 landed at cd745d2. AC-1, AC-2, AC-3 and AC-10 through AC-15 read Pending; none was evaluated and none is claimed.`
-- **Changed-File Summary**: `F-2 is two documents, 15 insertions and 7 deletions: docs/specs/2026-11-19-spec-api-suite-hardening.md (18 lines changed - M2's test count, G5's scope plus the 560ebde carve-out, the §2 Scope Boundary sentence, the AC-11 evidence, the AC-13 row) and docs/tasks/2026-11-19-api-suite-hardening.md (4 lines - AC-11's correction note, AC-13's annotation, the Acceptance Results count). No other path changed.`
+- **Completion State**: `N/A - record is in_progress; F-1, F-2 and F-3 are done, F-4 and F-5 remain`
+- **Acceptance Results**: `Nine of fifteen criteria read PASS: AC-1, AC-2 and AC-3 on F-1 executed this session, AC-4 through AC-7 on F-2 landed at 766c55f, and AC-8 and AC-9 on F-3 landed at cd745d2. AC-10 through AC-15 read Pending; none was evaluated and none is claimed.`
+- **Changed-File Summary**: `F-2 changed two documents: docs/specs/2026-11-19-spec-api-suite-hardening.md (M2's test count, G5's scope plus the 560ebde carve-out, the §2 Scope Boundary sentence, the AC-11 evidence, the AC-13 row) and docs/tasks/2026-11-19-api-suite-hardening.md (AC-11's correction note, AC-13's annotation, the Acceptance Results count). F-1 adds one new file, .github/workflows/governance.yml, and changes nothing else - test.yml is untouched, which is the point of AC-15. No application source, schema, or test file changed in either item.`
 - **Completion Exception**: `None`
 - **Completion Decision and Timestamp**: `N/A - no completion decision has been taken`
 

@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { SyncResponseSchema } from '../../../lib/contracts/sync.js';
 import { refusedSyncResponseBody, syncResponseBody } from '../../e2e/sync-fixtures.js';
@@ -89,7 +90,9 @@ describe('the e2e sync-response fixture is the contract, not a description of it
  * The proof half lives in the assertions above.
  */
 describe('no e2e spec authors a sync response body beside the builder', () => {
-  const E2E_DIR = new URL('../../e2e', import.meta.url).pathname;
+  // `URL.pathname` is `/C:/…` on Windows, which `join` turns into `C:\C:\…`; `fileURLToPath`
+  // is the platform-correct conversion, so the scan finds the specs on every host.
+  const E2E_DIR = fileURLToPath(new URL('../../e2e', import.meta.url));
 
   it('finds the specs it claims to have scanned', () => {
     // Counted, so the loop below cannot pass by having nothing to check.

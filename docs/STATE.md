@@ -717,7 +717,7 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
 - **Owner / Current Actor**: `Agent (DeepSeek Harness / lead)`
 - **Start Time**: `2026-11-22 14:07 UTC`
 - **Current Branch**: `chore/promptkit-v2-sync`
-- **Current Revision**: `17b64ed`
+- **Current Revision**: `c54be47`
 - **Checkpoint Policy**: `N/A - single session; host timer cannot mechanically enforce checkpoints or terminate the session.`
 - **Blockers and Resume Condition**: `None - execution is complete and awaiting owner sign-off; resume when the owner reviews 17b64ed and the projection commit, or requests a rollback per the Planning Record section 7.`
 - **Verification Status**: `Green after commit 17b64ed - validate-references --strict exit 0; validate-execution-control VALID|RECORDS=7 exit 0; check-setup-assert ASSERT|submodule|status|OK exit 0; check-doctor exit 1 on version STALE(+12) alone with submodule OK and docs-drift OK; typecheck and eslint --max-warnings=0 exit 0. Baseline before execution at f0b413e was VALID|RECORDS=6 with STALE(+36).`

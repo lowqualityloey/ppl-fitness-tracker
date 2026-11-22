@@ -75,7 +75,7 @@
   - **Result**: `PASS` — `git show --stat --format='' 17b64ed` = 7 files, 14 insertions(+), 8 deletions(-). The six installer paths are `.clinerules/promptkit.md`, `.github/copilot-instructions.md`, `.opencode/rules.md`, `.promptkit` (gitlink), `AGENTS.md`, `CLAUDE.md`, each at 1+/1-; `PROMPTKIT.md` carries 8+/2- of hand edits from S4. Zero untracked or created paths outside the three planning artifacts. The criterion was restated at S3 because the installer's footprint and the commit's footprint are not the same set.
   - **Evidence**: `git show --stat --format='' 17b64ed; git status --porcelain --untracked-files=all`
 - [ ] **AC-9**: Commit 1 carries the gitlink plus the five directives plus PROMPTKIT.md; commit 2 carries docs/STATE.md plus the spec plus this record.
-  - **Result**: `Pending` — commit 1 verified: `17b64ed` carries exactly `.clinerules/promptkit.md`, `.github/copilot-instructions.md`, `.opencode/rules.md`, `.promptkit`, `AGENTS.md`, `CLAUDE.md`, `PROMPTKIT.md`. Commit 2 is not created yet; its evidence cannot live inside itself, so this criterion is evaluated in the docs-only closure commit per the template's commit-evidence rule.
+  - **Result**: `Pending` — commit 1 `17b64ed` carries exactly `.clinerules/promptkit.md`, `.github/copilot-instructions.md`, `.opencode/rules.md`, `.promptkit`, `AGENTS.md`, `CLAUDE.md`, `PROMPTKIT.md`; commit 2 `c54be47` carries exactly `docs/STATE.md`, `docs/specs/2026-11-22-spec-promptkit-v2-4-upgrade.md`, `docs/tasks/2026-11-22-promptkit-v2-4-upgrade.md`. Both halves are measured, but the criterion stays Pending until the docs-only closure commit names `c54be47`, because an entry cannot live inside the commit it names (template commit-evidence rule).
   - **Evidence**: `git show --name-only --format='' 17b64ed; git show --name-only --format='' <commit 2>`
 - [x] **AC-10**: validate-references.sh --strict exits 0.
   - **Result**: `PASS` — exit 0, `✅ All references valid! No broken links found.`
@@ -116,7 +116,7 @@
 - **Start Time**: `2026-11-22 14:07 UTC`
 - **Current Actor**: `Agent (DeepSeek Harness / lead)`
 - **Next Action**: `Owner reviews 17b64ed with the projection commit; on sign-off, close this record at completed with the close commit revision.`
-- **Branch / Revision**: `chore/promptkit-v2-sync @ 17b64ed`
+- **Branch / Revision**: `chore/promptkit-v2-sync @ c54be47`
 
 ### Transition History
 

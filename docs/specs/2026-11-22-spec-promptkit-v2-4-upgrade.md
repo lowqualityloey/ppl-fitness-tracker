@@ -2,7 +2,12 @@
 
 <a id="PLAN-promptkit-v2-4-upgrade"></a>
 
-- **Status**: Planned — awaiting owner ratification. This plan authorizes no execution by itself.
+- **Status**: Executed and closed 2026-11-22. S0-S8 ran under owner ratification (reply `1` to the `pk:route`
+  option list; sign-off at `m03111`). Commits: `17b64ed` (engine move), `c54be47` (§3A repoint plus the
+  Planning and Task Records), `b8d45c9` (measured AC evidence; record to `awaiting_review`), and a fourth
+  docs-only closure commit (record to `completed`; a commit cannot cite its own SHA). This document stays
+  the planning input; `docs/tasks/2026-11-22-promptkit-v2-4-upgrade.md` remains the authority for execution
+  state.
 - **Date**: 2026-11-22
 - **Ceremony**: Level 2 (Controlled) — Configuration Work, not Code Work. The canonical Task Record is
   `docs/tasks/2026-11-22-promptkit-v2-4-upgrade.md`; this spec supplies its planning inputs and creates

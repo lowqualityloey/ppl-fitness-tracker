@@ -74,9 +74,9 @@
 - [x] **AC-8**: The installer's own footprint is exactly six files at 1+/1- each, with zero new paths; PROMPTKIT.md's extra hand edits are counted separately.
   - **Result**: `PASS` — `git show --stat --format='' 17b64ed` = 7 files, 14 insertions(+), 8 deletions(-). The six installer paths are `.clinerules/promptkit.md`, `.github/copilot-instructions.md`, `.opencode/rules.md`, `.promptkit` (gitlink), `AGENTS.md`, `CLAUDE.md`, each at 1+/1-; `PROMPTKIT.md` carries 8+/2- of hand edits from S4. Zero untracked or created paths outside the three planning artifacts. The criterion was restated at S3 because the installer's footprint and the commit's footprint are not the same set.
   - **Evidence**: `git show --stat --format='' 17b64ed; git status --porcelain --untracked-files=all`
-- [ ] **AC-9**: Commit 1 carries the gitlink plus the five directives plus PROMPTKIT.md; commit 2 carries docs/STATE.md plus the spec plus this record.
-  - **Result**: `Pending` — commit 1 `17b64ed` carries exactly `.clinerules/promptkit.md`, `.github/copilot-instructions.md`, `.opencode/rules.md`, `.promptkit`, `AGENTS.md`, `CLAUDE.md`, `PROMPTKIT.md`; commit 2 `c54be47` carries exactly `docs/STATE.md`, `docs/specs/2026-11-22-spec-promptkit-v2-4-upgrade.md`, `docs/tasks/2026-11-22-promptkit-v2-4-upgrade.md`. Both halves are measured, but the criterion stays Pending until the docs-only closure commit names `c54be47`, because an entry cannot live inside the commit it names (template commit-evidence rule).
-  - **Evidence**: `git show --name-only --format='' 17b64ed; git show --name-only --format='' <commit 2>`
+- [x] **AC-9**: The engine move carries the gitlink in the same commit as the directives and PROMPTKIT.md; the docs-only commits that follow carry only docs/STATE.md, the Planning Record and this record.
+  - **Result**: `PASS` — commit 1 `17b64ed` carries exactly `.clinerules/promptkit.md`, `.github/copilot-instructions.md`, `.opencode/rules.md`, `.promptkit`, `AGENTS.md`, `CLAUDE.md`, `PROMPTKIT.md`. Commit 2 `c54be47` carries exactly `docs/STATE.md`, `docs/specs/2026-11-22-spec-promptkit-v2-4-upgrade.md`, `docs/tasks/2026-11-22-promptkit-v2-4-upgrade.md`. Commit 3 `b8d45c9` carries `docs/STATE.md` and this record only. The criterion was restated at the S7 gate: the original wording assumed two commits, and the measured evidence, the `awaiting_review` state change and this closure form three, all docs-only after the engine move. This entry names only the three commits that precede it, per the template commit-evidence rule.
+  - **Evidence**: `git show --name-only --format='' 17b64ed; git show --name-only --format='' c54be47; git show --name-only --format='' b8d45c9`
 - [x] **AC-10**: validate-references.sh --strict exits 0.
   - **Result**: `PASS` — exit 0, `✅ All references valid! No broken links found.`
   - **Evidence**: `bash .promptkit/scripts/validate-references.sh --strict`
@@ -110,13 +110,13 @@
 
 ## 5. State and Active Ownership
 
-- **Execution State**: `awaiting_review`
-- **Mapped `pk:tasks` Status**: `In Review`
+- **Execution State**: `completed`
+- **Mapped `pk:tasks` Status**: `Done`
 - **Active Task Pointer**: `None`
 - **Start Time**: `2026-11-22 14:07 UTC`
 - **Current Actor**: `Agent (DeepSeek Harness / lead)`
-- **Next Action**: `Owner reviews 17b64ed with the projection commit; on sign-off, close this record at completed with the close commit revision.`
-- **Branch / Revision**: `chore/promptkit-v2-sync @ c54be47`
+- **Next Action**: `None - this task is closed. The queued review findings (Planning Record F-1 through F-5) are the next unit of work and need their own Task Record.`
+- **Branch / Revision**: `chore/promptkit-v2-sync @ b8d45c9`
 
 ### Transition History
 
@@ -125,6 +125,7 @@
 | `None` | `planned` | 2026-11-22 14:05 UTC | Agent (DeepSeek Harness / lead) | Owner selected the upgrade as the first unit of work (reply 4 at m02599); the Planning Record exists and this record seeds its readiness fields | Planning Record |
 | `planned` | `in_progress` | 2026-11-22 14:07 UTC | Agent (DeepSeek Harness / lead) | Owner ratified the plan; execution began at S0 with HEAD at f0b413e and the engine at 52adbe1 (v2.3.0) | S0 baseline commands |
 | `in_progress` | `awaiting_review` | 2026-11-22 14:33 UTC | Agent (DeepSeek Harness / lead) | S0 through S6 are complete: the engine is at v2.4.0, the five directives and the four hand-maintained claims are written, the section 3A projection is repointed, and the gate sweep ran with one accepted red | section 6 Verification Evidence; section 3 Acceptance Criteria |
+| `awaiting_review` | `completed` | 2026-11-22 20:32 UTC | Owner (reply `1` at m03111), recorded by Agent (DeepSeek Harness / lead) | The owner reviewed 17b64ed, c54be47 and b8d45c9 with the 15 measured criteria and the gate sweep and signed off at the S8 boundary; the section 3A projection is reconciled to the same state in this closure commit | section 6 Review Evidence; section 7 Completion Gate |
 
 ## 6. Evidence and Completion Gate
 
@@ -148,18 +149,18 @@
 - **TDD Execution Evidence [Required when enabled]**: `N/A - exception work type`
 - **TDD Exception Verification [Required for Documentation, Configuration, or Research Work; Not applicable for Code Work]**: `Configuration Work has no behavior seam to drive Red-Green-Refactor. Verification is the governance gate sweep in section 3 and the S3 diff-scope gate in the Planning Record.`
 - **CI Evidence**: `N/A - no PR or CI run; no governance workflow exists (follow-up F-1)`
-- **Review Evidence**: `Owner review requested at the S8 boundary: commit 17b64ed, the projection commit, the 15 measured criteria and the gate sweep are presented for sign-off. No independent reviewer is engaged - this is a governance install with no application code, and the review is the owner's own.`
-- **Commit Evidence**: `17b64ed chore(promptkit) upgrade engine to v2.4.0 (13006a6) - 7 files: the gitlink, the five host directives and PROMPTKIT.md. The projection commit is named in the close commit, because an entry cannot live inside the commit it names (template commit-evidence rule).`
-- **Pull Request Evidence**: `N/A before PR`
+- **Review Evidence**: `Owner review at the S8 boundary: commits 17b64ed, c54be47 and b8d45c9, the 15 measured criteria and the full gate sweep were presented and signed off with reply 1 at m03111; the closure commit then reconciled section 3A to the same state. No independent reviewer was engaged - this is a governance install with no application code, and the review was the owner's own.`
+- **Commit Evidence**: `17b64ed chore(promptkit) upgrade engine to v2.4.0 (13006a6) - 7 files: the .promptkit gitlink, the five host directives and PROMPTKIT.md; c54be47 docs(promptkit) plan and project the v2.4.0 upgrade - docs/STATE.md, the Planning Record and this record; b8d45c9 docs(promptkit): move the v2.4.0 upgrade task to awaiting_review - the measured AC evidence and the projection state change. Each entry is recorded in a later commit than the one it names, per the template commit-evidence rule; this closure commit carries the evidence for all three.`
+- **Pull Request Evidence**: `N/A - no pull request was opened; the owner reviewed the commits on the local branch and signed off directly (human-confirmed at m03111)`
 - **Release Evidence**: `N/A - no release, tag, or deployment action is in scope`
-- **Blocker and Resume Condition**: `None`
+- **Blocker and Resume Condition**: `None - execution is complete and the gates are green; resume when the owner reviews 17b64ed, c54be47 and b8d45c9 and signs off, or requests a rollback per the Planning Record section 7.`
 
 ## 7. Completion Gate
 
-- **Completion State**: `N/A - the record is at awaiting_review; the gate is populated at the completed close after owner sign-off`
-- **Acceptance Results**: `AC-1 through AC-8 and AC-10 through AC-15 PASS with measured evidence; AC-9 stays Pending until the projection commit exists, because the commit that satisfies it cannot carry its own evidence`
-- **Changed-File Summary**: `Commit 17b64ed changed seven paths (the .promptkit gitlink, AGENTS.md, CLAUDE.md, .opencode/rules.md, .clinerules/promptkit.md, .github/copilot-instructions.md, PROMPTKIT.md); the projection commit adds docs/STATE.md, the Planning Record and this Task Record.`
+- **Completion State**: `completed`
+- **Acceptance Results**: `AC-1 through AC-15 PASS`
+- **Changed-File Summary**: `10 distinct paths across four commits (17b64ed, c54be47, b8d45c9, and this closure commit; the last three touch only docs/STATE.md, the Planning Record and this record): .promptkit (gitlink to 13006a6); AGENTS.md, CLAUDE.md, .opencode/rules.md, .clinerules/promptkit.md, .github/copilot-instructions.md (directive block re-injected, md5 b28a1cd8 -> 98425dbe); PROMPTKIT.md (engine prose, md5, the 2.4.0 bullet); docs/STATE.md (Engine Version, Last Updated, session row, section 3A); docs/specs/2026-11-22-spec-promptkit-v2-4-upgrade.md (Planning Record); docs/tasks/2026-11-22-promptkit-v2-4-upgrade.md (this record).`
 - **Completion Exception**: `None`
-- **Completion Decision and Timestamp**: `N/A - no completion decision has been taken`
+- **Completion Decision and Timestamp**: `Owner signed off - 2026-11-22 20:32 UTC`
 
 A task may be marked `completed` only after acceptance results, verification evidence, changed-file summary, and required commit evidence are linked. This record authorizes nothing beyond the Approval Boundary in section 1.

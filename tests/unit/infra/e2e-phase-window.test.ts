@@ -75,7 +75,11 @@ describe('#100: the phase-label fence holds as code, not as intent', () => {
   });
 
   it('asserts exactly the labels the app renders, no more and no fewer', () => {
-    const helper = readFileSync(join(ROOT, 'tests', 'e2e', 'runner-fixtures.ts'), 'utf8');
+    // This parser's anchors are lines, so a CRLF checkout (Windows with `core.autocrlf=true`)
+    // makes `[^\n]+` swallow the `\r` and run past the union. Normalize first; an LF checkout
+    // is byte-identical after this.
+    const helper = readFileSync(join(ROOT, 'tests', 'e2e', 'runner-fixtures.ts'), 'utf8')
+      .replace(/\r\n/g, '\n');
     const union = helper.match(/label:\s*([^\n]+(?:\n[^\n]+)*?),\s*\n\s*\)\: Promise/);
     if (!union) {
       throw new Error(

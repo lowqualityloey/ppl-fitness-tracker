@@ -12,6 +12,15 @@
  * This script separates "the environment is broken" from "the code is broken" in about
  * two seconds, and never prints a secret — it compares SHA-256 prefixes.
  *
+ * The anon key became a precondition of the whole lane when `resolveSpawnEnv`
+ * (`tests/integration/api/server-process.ts`) stopped substituting a
+ * local-development key: a missing `NEXT_PUBLIC_SUPABASE_ANON_KEY` now kills
+ * `npm run test:api` inside `globalSetup` with a readiness failure that reads
+ * like a server bug. `npm run test:api` loads `.env.local` with
+ * `--env-file-if-exists`, silently, so without the check below this script would
+ * print "Preflight green" and hand the operator exactly the
+ * environment-versus-code conflation it exists to prevent.
+ *
  * Usage: npm run db:up && npm run test:api:preflight
  */
 import { createHash } from 'node:crypto';
@@ -103,6 +112,46 @@ async function main(): Promise<void> {
       );
     }
     return `aligned (${digest(literal)})`;
+  });
+
+  /**
+   * The key the spawned server and the cookie jar both read.
+   *
+   * Absent, empty, and the `.env.example` placeholder all fail the same way on
+   * purpose: none of them is a key the operator chose, and each one otherwise
+   * surfaces minutes later as a 500 from a route handler. The value is never
+   * printed — the digest is enough to tell two candidate keys apart.
+   */
+  await check('anon key present (NEXT_PUBLIC_SUPABASE_ANON_KEY)', async () => {
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (anonKey === undefined || anonKey === '') {
+      throw new Error(
+        'NEXT_PUBLIC_SUPABASE_ANON_KEY is not set. The API suite no longer substitutes a ' +
+          'local-development key, so `npm run test:api` fails in globalSetup with a readiness ' +
+          'error that looks like a server bug. Add it to .env.local (values: `npm run db:status`).',
+      );
+    }
+    if (anonKey === 'REPLACE_ME') {
+      throw new Error(
+        'NEXT_PUBLIC_SUPABASE_ANON_KEY is still the .env.example placeholder. ' +
+          'Take the real value from `npm run db:status`.',
+      );
+    }
+    return `present (${digest(anonKey)}, len ${anonKey.length})`;
+  });
+
+  /**
+   * Reported, never failed: the harness does supply this default itself
+   * (`resolveSpawnEnv`), so an unset value is a fact worth printing and not a
+   * broken environment. The port comes from the same variable the harness reads.
+   */
+  await check('app URL (NEXT_PUBLIC_APP_URL)', async () => {
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+    if (appUrl === undefined || appUrl === '') {
+      const port = process.env.M1_16_API_TEST_PORT ?? '3101';
+      return `not set — the harness will use http://127.0.0.1:${port}`;
+    }
+    return appUrl;
   });
 
   await check('GoTrue reachable', async () => {

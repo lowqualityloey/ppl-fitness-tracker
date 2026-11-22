@@ -8,6 +8,7 @@ import {
   answersReadiness,
   apiOrigin,
   assertSupportedPlatform,
+  assertTrackedTsconfigUnchanged,
   confirmSurvived,
   describeExit,
   fileSize,
@@ -16,6 +17,7 @@ import {
   parseServerManifest,
   pruneStaleOwnedLogs,
   readPort,
+  readTrackedTsconfig,
   removeServerManifest,
   resolveSpawnEnv,
   signalApiServer,
@@ -147,6 +149,29 @@ describe('fileSize (S9)', () => {
       return;
     }
     expect(() => fileSize(underFile)).toThrow(/ENOTDIR/);
+  });
+});
+
+describe('tracked tsconfig (D6)', () => {
+  it('accepts the file it just read', () => {
+    // What a boot that writes nothing looks like at teardown.
+    expect(() => assertTrackedTsconfigUnchanged(readTrackedTsconfig())).not.toThrow();
+  });
+
+  it('names the rewrite and leaves the change on disk instead of hiding it', () => {
+    const original = readTrackedTsconfig();
+    try {
+      writeFileSync('tsconfig.json', Buffer.concat([original, Buffer.from('\n')]));
+      expect(() => assertTrackedTsconfigUnchanged(original)).toThrow(
+        /rewrote the tracked tsconfig\.json/,
+      );
+      // Deliberately not restored: a silent revert would hide a Next bump that
+      // now wants a new entry, and the next reader would meet the same dirty
+      // tree with no explanation.
+      expect(readTrackedTsconfig().length).toBe(original.length + 1);
+    } finally {
+      writeFileSync('tsconfig.json', original);
+    }
   });
 });
 

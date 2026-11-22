@@ -420,6 +420,42 @@ export function resolveSpawnEnv(
 }
 
 /**
+ * Reads the tracked `tsconfig.json` as bytes, for comparison across a boot.
+ *
+ * Next.js rewrites this file in place when it wants compiler options or
+ * `include` entries the checked-in file does not have yet. That is D6: a run
+ * left the tracked file dirty, so `git status` afterwards said nothing about
+ * what the developer had actually changed. The entries Next 16 asks for are
+ * committed (`0aa95fb`), so a boot should not write the file at all - this
+ * snapshot is what makes that checkable rather than assumed.
+ *
+ * Relative path on purpose: the same `process.cwd()` the child is spawned with
+ * is the directory Next reads its config from.
+ */
+export function readTrackedTsconfig(): Buffer {
+  return readFileSync('tsconfig.json');
+}
+
+/**
+ * Fails the run when Next rewrote the tracked `tsconfig.json` during it.
+ *
+ * The file is deliberately **not** restored. Reverting it would hide a Next
+ * version bump that now wants a new include entry, and the next reader would
+ * meet the same dirty tree with no explanation of where it came from. Failing
+ * loudly leaves the change on disk, where `git diff tsconfig.json` names it and
+ * the operator commits it on purpose.
+ */
+export function assertTrackedTsconfigUnchanged(before: Buffer): void {
+  const after = readTrackedTsconfig();
+  if (after.equals(before)) return;
+  throw new Error(
+    'The API suite rewrote the tracked tsconfig.json: Next.js adds the compiler options and ' +
+      'include entries it expects. The change is still on disk. Run `git diff tsconfig.json`, ' +
+      'commit those entries deliberately, and rerun - do not sweep them in with unrelated work.',
+  );
+}
+
+/**
  * Spawns `next dev` with its stdout/stderr going straight to `logPath`.
  *
  * Two file descriptors on the same path in append mode, not one shared fd: a

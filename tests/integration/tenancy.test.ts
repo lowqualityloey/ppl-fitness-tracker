@@ -3,6 +3,7 @@ import { Client, Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { eq, sql } from 'drizzle-orm';
 import * as schema from '../../db/schema/index.js';
+import { expectSqlState } from './test-helpers.js';
 
 /**
  * M1-08: Tenancy integration gate - THE merge gate.
@@ -321,9 +322,10 @@ describe('M1-08: Tenancy integration gate (THE MERGE GATE)', () => {
 
     it('should verify app role cannot reach auth schema directly', async () => {
       // Least privilege - policies resolve auth.uid() but app cannot call it directly
-      await expect(
+      await expectSqlState(
         withUser(appDirect.db, userA.claims, (tx) => tx.execute(sql`SELECT auth.uid()`)),
-      ).rejects.toMatchObject({ code: '42501' });
+        '42501',
+      );
     });
   });
 
@@ -440,7 +442,7 @@ describe('M1-08: Tenancy integration gate (THE MERGE GATE)', () => {
 
     it('should reject inserting workout session attributed to B (42501, not silent drop)', async () => {
       // WITH CHECK raises 42501 rather than filtering - rejection is correct outcome
-      await expect(
+      await expectSqlState(
         withUserHardened(appDirect.db, userA.claims, (tx) =>
           tx.insert(schema.workoutSessions).values({
             userId: userB.id,
@@ -451,11 +453,12 @@ describe('M1-08: Tenancy integration gate (THE MERGE GATE)', () => {
             phase: 'pre_workout',
           }),
         ),
-      ).rejects.toMatchObject({ code: '42501' });
+        '42501',
+      );
     });
 
     it('should reject inserting session set attributed to B (42501, not silent drop)', async () => {
-      await expect(
+      await expectSqlState(
         withUserHardened(appDirect.db, userA.claims, (tx) =>
           tx.insert(schema.sessionSets).values({
             userId: userB.id,
@@ -467,7 +470,8 @@ describe('M1-08: Tenancy integration gate (THE MERGE GATE)', () => {
             clientTs: new Date(),
           }),
         ),
-      ).rejects.toMatchObject({ code: '42501' });
+        '42501',
+      );
     });
 
     it('should verify B data survived all attempts intact', async () => {
@@ -496,11 +500,12 @@ describe('M1-08: Tenancy integration gate (THE MERGE GATE)', () => {
     });
 
     it('should error on garbage sub, not open door', async () => {
-      await expect(
+      await expectSqlState(
         withUser(appDirect.db, { sub: 'not-a-uuid', role: 'authenticated' }, (tx) =>
           tx.select().from(schema.sessionSets),
         ),
-      ).rejects.toMatchObject({ code: '22P02' });
+        '22P02',
+      );
     });
   });
 

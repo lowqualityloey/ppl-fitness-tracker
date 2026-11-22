@@ -1,0 +1,125 @@
+name: Governance
+
+# Cheap gate for the governance surface — the three PromptKit OS validators.
+#
+# Why this exists: `.github/workflows/test.yml` ignores `docs/**` and `**/*.md`
+# (cost control, 2026-09-21 — see `docs/releases/ci-triage/ci-cost-measurement.md`),
+# so a commit that only touches Markdown or the engine gitlink runs **no workflow
+# at all**. That is right for the test suite: a Markdown edit cannot change a test
+# outcome. It is wrong for the validators, because the governance documents ARE
+# the input those validators read. Three Markdown-only edits in a single session
+# on 2026-11-22 each broke one of them:
+#
+#   TABLE_COLUMN_MISMATCH      a literal `|` inside a `docs/STATE.md` §8 cell
+#   ORPHANED_TABLE_ROW         two §8 rows separated by a blank line
+#   STATE_PROJECTION_MISMATCH  §3A left disagreeing with its Task Record
+#
+# Every one was caught by hand, after the fact. This workflow catches them instead.
+#
+# Cost: one job — no Node, no `npm ci`, no service containers, no browser
+# download, no Playwright. Measured locally on 2026-11-22 over three runs:
+# `validate-references --strict` 14.8-16.4 s, `validate-execution-control` 4.3-5.9 s,
+# `check-setup-assert` 0.05-0.07 s — roughly 20 s of work, which bills as **one
+# runner minute** per qualifying run because GitHub rounds each job up to the
+# minute.
+#
+# This repository is public, so standard GitHub-hosted runners are free here and
+# draw nothing from included compute
+# (https://docs.github.com/en/billing/concepts/product-billing/github-actions).
+# The cost of this workflow is therefore zero minutes, not merely cheap ones.
+#
+# The counterfactual still matters if the repository ever goes private again, so
+# it was measured rather than waved away. Replaying every commit in the
+# `ci-cost-measurement.md` window (2026-09-07 to 2026-09-21T04:26, 324 commits)
+# through both path filters: 122 commits touch only governance paths, 86 touch
+# only code, 49 touch both, 67 touch neither. Worst case is 122 + 49 = 171 added
+# runner-minutes, which is 24.4% of the 700 minutes `paths-ignore` removed. An
+# earlier draft of this comment claimed 64 minutes / 9.1% by treating the 64
+# docs-only runs as if each had also been a qualifying push; it had not.
+#
+# `check-doctor` is deliberately NOT a step. Its `version` row is accepted red at
+# `STALE(+12)` by decision (spec D1 / risk R5) because the engine is pinned to tag
+# `v2.4.0` rather than to `origin/main`. Gating on doctor would mean either a
+# workflow that is permanently red, or a bespoke filter that suppresses the exact
+# drift signal doctor exists to report. It stays a manual gate until that row can
+# go green honestly.
+#
+# Like `test.yml`, `paths` is safe on both events only while `main` carries no
+# protection ruleset — a path-skipped workflow cannot strand a pull request on a
+# required check that never reports. If a ruleset is ever added, revisit both files.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - '**/*.md'
+      - 'PROMPTKIT.md'
+      - 'AGENTS.md'
+      - 'CLAUDE.md'
+      - '.clinerules/promptkit.md'
+      - '.opencode/rules.md'
+      - '.github/copilot-instructions.md'
+      - '.promptkit'
+      - '.promptkit/**'
+
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - '**/*.md'
+      - 'PROMPTKIT.md'
+      - 'AGENTS.md'
+      - 'CLAUDE.md'
+      - '.clinerules/promptkit.md'
+      - '.opencode/rules.md'
+      - '.github/copilot-instructions.md'
+      - '.promptkit'
+      - '.promptkit/**'
+
+# Same shape as `test.yml`: one run in flight per ref, cancellation PR-only.
+# Cancelling on `main` would leave a revision `cancelled` instead of giving it a
+# verdict, which `test.yml` already declined for exactly that reason.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Read-only: these validators never write, and nothing here needs a token.
+permissions:
+  contents: read
+
+jobs:
+  governance:
+    runs-on: ubuntu-latest
+    # Ceiling, not an estimate. The measured work is ~20 s; five minutes only
+    # exists so a hung submodule fetch cannot hold a runner for the default 6 h.
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # The engine is a submodule and all three validators read it.
+          #
+          # Default depth is deliberate, unlike `test.yml`'s `fetch-depth: 0`.
+          # `check-doctor` is the only script that wants full history and it is not
+          # a step here; the three validators below need the working tree only.
+          # Verified 2026-11-22 in a `--depth 1 --shallow-submodules` clone of this
+          # branch: references exit 0, execution-control `VALID` over 8 records,
+          # setup-assert `ASSERT|submodule|status|OK`.
+          submodules: recursive
+
+      # Strict, because a warning-only tree is how a broken reference survives:
+      # the gate mode is what the repo's own sessions already run by hand.
+      - name: Validate references (strict)
+        run: bash .promptkit/scripts/validate-references.sh --strict
+
+      # Reads docs/tasks/**, docs/STATE.md and docs/STATE-ARCHIVE.md. This is the
+      # step that would have caught both table defects and the stale projection.
+      - name: Validate execution-control records
+        run: bash .promptkit/scripts/validate-execution-control.sh --root .
+
+      # Confirms the install door is still structurally whole — a truncated or
+      # half-registered engine tree fails loudly here instead of at the next
+      # `pk:` invocation.
+      - name: Assert the engine install door
+        run: bash .promptkit/scripts/check-setup-assert.sh . .promptkit .promptkit

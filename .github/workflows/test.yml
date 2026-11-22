@@ -128,8 +128,15 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # Same stack the repo develops against locally (`npm run db:up`). CI previously
+      # booted the full stack — including six services nothing here uses (verified
+      # 2026-10-23 across `src/`, `lib/`, `db/`, `scripts/`, `tests/`): Storage,
+      # Realtime, Edge Runtime, Logflare, Vector, and the imgproxy in front of Storage.
+      # `mailpit` stays: `supabase/config.toml` enables `[local_smtp]`, and a sign-in
+      # path that enqueues mail fails without its SMTP target. Excluding these matches
+      # `db:up` exactly, so a suite that needed one would already fail locally first.
       - name: Start Supabase
-        run: npx supabase start
+        run: npx supabase start -x realtime,storage-api,imgproxy,edge-runtime,logflare,vector
 
       - name: Run type check
         run: npm run typecheck
@@ -161,6 +168,40 @@ jobs:
       - name: Run API route-handler suites
         run: npm run test:api
 
+      # CI-runtime reduction (2026-10-23). Measured on runs 39886239089 (PR) and
+      # 39888699197 (main): the browser download cost 152 s and 453 s respectively —
+      # the same work, a 5-minute spread from network alone. Cache it and pay that
+      # cost only when the Playwright version actually changes.
+      #
+      # The key is the exact installed version, deliberately not the lockfile hash
+      # (an unrelated dependency bump would throw the cache away) and deliberately
+      # without `restore-keys` (a partial browser set from another revision is worse
+      # than a clean miss). `--with-deps` stays on the install so system libraries
+      # are still installed on a hit; the cache holds browsers, never credentials.
+      #
+      # Cache scope is not symmetric: a `push` run on main writes a cache every PR can
+      # restore, while a `pull_request` run writes only to refs/pull/N/merge. The first
+      # run after this lands is therefore a MISS on both lanes — expected, not a failure.
+      # The probe must fail the step, not just print nothing: a failed command
+      # substitution inside an `echo` still exits 0, which would write an empty
+      # version and poison the key with a cache every future run restores.
+      - name: Resolve Playwright version
+        id: playwright-version
+        run: |
+          version="$(npx --no-install playwright --version | awk '{print $2}')"
+          if [ -z "$version" ]; then
+            echo "::error::Could not resolve the installed Playwright version"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
+
       # M3-03 (#60): the browser gate, deliberately last. Every suite above proves a
       # contract; this one proves the thing a user can see, and it is the only job
       # that boots a **production** build (`playwright.config.ts` webServer runs
@@ -178,6 +219,7 @@ jobs:
       - name: Run E2E suite against the production build
         run: npm run test:e2e
 
-      - name: Stop Supabase
-        run: npx supabase stop
-        if: always()
+      # `Stop Supabase` used to run here under `if: always()`. Deleted 2026-10-23: the
+      # job runs on a fresh `ubuntu-latest` VM that is destroyed with the job, so the
+      # teardown cost 16-26 s per run and could not affect a later step. If local `act`
+      # use ever appears, restore it as `if: always() && env.ACT`.

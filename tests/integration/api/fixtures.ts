@@ -59,9 +59,30 @@ function mintFixtureIds(): FixtureIds {
 
 export const clientTs = '2026-09-08T12:00:00.000Z';
 
+/**
+ * The URL keeps a default; the anon key does not.
+ *
+ * That asymmetry is the whole of the harness's credential policy, and this file
+ * used to violate it: `NEXT_PUBLIC_SUPABASE_ANON_KEY` fell back to the
+ * well-known local-development JWT and was then written back onto
+ * `process.env`, which is the one thing `resolveSpawnEnv`
+ * (`./server-process.ts`) was hardened to stop. Because every API test file
+ * imports this module, that assignment ran *before* any `beforeAll`, so on the
+ * owned single-file path the child was spawned with a key the operator never
+ * chose and `resolveSpawnEnv`'s named error was unreachable — it fired only
+ * under `globalSetup`, which imports `./server-process.js` alone.
+ *
+ * `http://127.0.0.1:54321` is an **address** with one obvious local answer. A
+ * key is a **credential**: any value invented here is one the operator did not
+ * choose, and silently substituting it is how a fixture key survives into a
+ * place it was never meant to reach. So the key is now a hard precondition,
+ * checked at collection time with the other two below.
+ *
+ * `SUPABASE_SERVICE_ROLE_KEY` is out of scope here on purpose: it is never
+ * written onto `process.env`, so it does not defeat `resolveSpawnEnv`, and CI
+ * supplies it at job level.
+ */
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'http://127.0.0.1:54321';
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0';
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ??
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU';
 const OWNER_URL = process.env.MIGRATION_DATABASE_URL;
@@ -71,7 +92,6 @@ const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => { setTimeout(resolve, ms); });
 
 process.env.NEXT_PUBLIC_SUPABASE_URL ??= SUPABASE_URL;
-process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??= SUPABASE_ANON_KEY;
 
 /**
  * Fail loudly at collection time if the suite cannot possibly work.
@@ -95,6 +115,9 @@ process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??= SUPABASE_ANON_KEY;
 const REQUIRED_ENV = [
   ['MIGRATION_DATABASE_URL', 'owner role, direct port 54322 — fixture setup and seeds'],
   ['DATABASE_URL', 'app role, through the pooler — what the route handlers connect as'],
+  // The child server and `createClientFromCookieJar` both read this from the
+  // environment; it has no default here by design (see the note above).
+  ['NEXT_PUBLIC_SUPABASE_ANON_KEY', 'anon key for the spawned server and the cookie jar — from .env.local'],
 ] as const;
 
 const missing = REQUIRED_ENV.filter(([name]) => !process.env[name])

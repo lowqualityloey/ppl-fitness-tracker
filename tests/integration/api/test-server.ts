@@ -6,6 +6,7 @@ import {
   answersReadiness,
   apiOrigin,
   fileSize,
+  installSignalCleanup,
   isProcessAlive,
   logTail,
   readServerManifest,
@@ -48,6 +49,14 @@ let logReadOffset = 0;
 
 /** A server this process spawned and therefore must stop. */
 let ownedServer: SpawnedServer | undefined;
+/**
+ * Removes the SIGINT/SIGTERM handler installed for `ownedServer`.
+ *
+ * Held at module scope rather than in a local so `stopApiServer()` can retire
+ * it: a handler left registered after the child is gone would still run on a
+ * later Ctrl-C and `process.exit()` the worker out of a run it no longer owns.
+ */
+let removeOwnedSignalCleanup: (() => void) | undefined;
 /** Attached to the server `globalSetup` booted; this process must not stop it. */
 let attachedToSharedServer = false;
 
@@ -186,10 +195,42 @@ export async function startApiServer(): Promise<void> {
   logPath = ownedLogPath;
   logReadOffset = 0;
 
+  /*
+   * Own the signals before waiting, not after.
+   *
+   * The shared path gets this handler from `globalSetup`, but that is only
+   * wired in by `vitest.api.config.ts`. A direct single-file run
+   * (`npx vitest run tests/integration/api/<file>.test.ts`) has no globalSetup,
+   * so this process is the only one that could ever stop the child it just
+   * spawned. Without a handler, Ctrl-C during the 30 s readiness wait killed
+   * the worker and left the detached child on :3101, and the next run failed
+   * the "something is already serving" pre-check - the same leak
+   * `global-setup.ts` documents, on the path that had no fix.
+   *
+   * `clearManifest: false`: only `globalSetup` writes `test-results/api-server.json`,
+   * so an owned worker deleting it would remove a document it did not author.
+   */
+  removeOwnedSignalCleanup = installSignalCleanup(server);
+
   try {
     await waitForReady(apiOrigin, server.child, ownedLogPath, 30_000);
   } catch (error) {
+    /*
+     * Retire the handler and stop the child before rethrowing.
+     *
+     * The previous version only cleared `ownedServer`, which made
+     * `stopApiServer()` a no-op in `afterAll` and left the half-started child
+     * running. `waitForReady` SIGKILLs the group at its deadline, but it throws
+     * for other reasons too - a spawn error, a child that exited on its own
+     * (EADDRINUSE), a port that answers from something else - and on those the
+     * child may still be alive. `stop()` resolves only once it is gone, so the
+     * failure path now ends with nothing listening, which is what AC-9 of
+     * `docs/tasks/2026-11-22-drizzle-rls-failures.md` measures.
+     */
+    removeOwnedSignalCleanup?.();
+    removeOwnedSignalCleanup = undefined;
     ownedServer = undefined;
+    await server.stop();
     throw error;
   }
 }
@@ -207,6 +248,9 @@ export async function stopApiServer(): Promise<void> {
     attachedToSharedServer = false;
     return;
   }
+
+  removeOwnedSignalCleanup?.();
+  removeOwnedSignalCleanup = undefined;
 
   const activeServer = ownedServer;
   ownedServer = undefined;

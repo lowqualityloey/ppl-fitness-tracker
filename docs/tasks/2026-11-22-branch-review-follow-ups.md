@@ -110,13 +110,13 @@
 
 ## 5. State and Active Ownership
 
-- **Execution State**: `in_progress`
-- **Mapped `pk:tasks` Status**: `In Progress`
-- **Active Task Pointer**: `TASK-branch-review-follow-ups`
+- **Execution State**: `awaiting_review`
+- **Mapped `pk:tasks` Status**: `In Review`
+- **Active Task Pointer**: `None`
 - **Start Time**: `2026-11-22 09:33 UTC`
 - **Current Actor**: `Agent (DeepSeek Harness / lead)`
-- **Next Action**: `F-1, F-2, F-3 and F-4 are complete and AC-13 now passes because the separate F-5 record exists at docs/tasks/2026-11-22-drizzle-rls-failures.md (thirteen of the fifteen criteria satisfied). Two criteria remain, and both need code work this record does not own: AC-14 needs the owned-child fix in tests/integration/api/test-server.ts to land under that new record, and AC-15 is a close-time scope claim that can only be made once the whole change set is final. F-5's fixes are not authorized yet - the new record is planned and its own Approval Boundary requires a fresh go-ahead per half.`
-- **Branch / Revision**: `chore/promptkit-v2-sync @ 833d05c`
+- **Next Action**: `Nothing further is executable here without the other record. F-1 through F-5 are registered and AC-1 through AC-13 read PASS; AC-14 waits on the owned-child fix, which the Drizzle/RLS record now owns and has finished, and AC-15 is a close-time scope claim that cannot be made while another record is still mid-flight. The active pointer has moved to TASK-drizzle-rls-failures, so this record resumes only when that one settles and AC-14 and AC-15 can be closed together.`
+- **Branch / Revision**: `chore/promptkit-v2-sync @ 7820617`
 
 ### Transition History
 
@@ -124,6 +124,7 @@
 |---|---|---|---|---|---|
 | `None` | `planned` | 2026-11-22 08:45 UTC | Agent (DeepSeek Harness / lead) | Owner instruction at m03192 ("do next steps 1 and 3") asked for this record and for F-3; F-3 was executed first because the merge was already in progress, and this record registers the five findings as tracked work | section 2 Objective; section 3 Acceptance Criteria |
 | `planned` | `in_progress` | 2026-11-22 09:33 UTC | Agent (DeepSeek Harness / lead) | Owner instruction at m03699 ("1") selected the offered next step, executing F-2; the record takes the active pointer because F-2 is work under it and the remaining items stay open | AC-4 through AC-7 PASS; section 6 Verification Evidence |
+| `in_progress` | `awaiting_review` | 2026-11-23 01:05 UTC | Agent (DeepSeek Harness / lead) | Every item this record can execute alone is done (AC-1 to AC-13 PASS). Its two remaining criteria both depend on the separate Drizzle/RLS record: AC-14 needs that record's owned-child fix, and AC-15 is a close-time scope claim that cannot be made while another record is mid-flight. The pointer moves to TASK-drizzle-rls-failures at m04497, so this record yields it rather than sitting in_progress beside it (which the validator rejects as ACTIVE_TASK_CONFLICT) | AC-14 and AC-15 read Pending; docs/tasks/2026-11-22-drizzle-rls-failures.md AC-9 and AC-10 PASS |
 
 ## 6. Evidence and Completion Gate
 

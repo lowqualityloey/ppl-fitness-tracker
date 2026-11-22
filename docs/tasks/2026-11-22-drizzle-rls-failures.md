@@ -17,7 +17,7 @@
 - **External Reference**: `N/A - local Markdown tracking; no issue filed`
 - **Owner / Actor**: `Agent (DeepSeek Harness / lead)`
 - **Execution Scope**: `ppl-fitness-tracker, branch chore/promptkit-v2-sync, one worktree`
-- **Approval Boundary**: `The owner's instruction at m04215 authorizes opening this record, reproducing the six failures from 81fdd3c, and writing the record itself. It explicitly does not authorize implementing either fix ("Do not implement the fixes yet"), and it forbids touching application source or .github/workflows/test.yml. Each fix needs a fresh go-ahead. Commit, push, PR, merge, tag, release, deploy, and any action outside this repository require explicit human confirmation.`
+- **Approval Boundary**: `The owner's instruction at m04215 authorizes opening this record, reproducing the six failures from 81fdd3c, and writing the record itself. It explicitly does not authorize implementing either fix ("Do not implement the fixes yet"), and it forbids touching application source or .github/workflows/test.yml. Each fix needs a fresh go-ahead. The owned-child leak half received one at m04497 and is done; the assertion half still needs its own. Commit, push, PR, merge, tag, release, deploy, and any action outside this repository require explicit human confirmation.`
 - **Created**: `2026-11-22 11:20 UTC`
 
 > This Local Task Source is authoritative for Controlled Work. The Planning Record supplies context only; it does not control readiness, execution state, active ownership, completion, or approval.
@@ -29,6 +29,8 @@
   - `tests/integration/tenancy.test.ts` - the four failing assertions that match `code: '42501'` or `code: '22P02'` on the rejection's top level
   - `tests/integration/rls-user-data-tables.test.ts` - the two failing owner-attribution cases in the same assertion class
   - `tests/integration/api/test-server.ts` - the owned-child leak at `:184-194` and the missing signal cleanup on the owned path
+  - `tests/integration/api/server-process.ts` - `installSignalCleanup` lifted here and exported, because both lifecycle owners now need it and a copy in each file is what let the two drift
+  - `tests/integration/api/global-setup.ts` - its local copy deleted so the shared path imports the lifted one instead
   - `tests/integration/test-helpers.ts` - a shared assertion helper, only if the assertion repair is deduplicated rather than repeated at each site; adding it requires a Scope Change Record first
   - `docs/tasks/2026-11-22-drizzle-rls-failures.md` - this record
   - `docs/STATE.md` - the section 3A projection and the section 8 session row
@@ -71,12 +73,12 @@
 - [ ] **AC-8** (property preserved): No assertion is deleted or loosened into accepting any error.
   - **Result**: `Pending`
   - **Evidence**: `To be shown when authorized: a diff review proving each repaired matcher still constrains the SQLSTATE, plus one probe per lane that a connection failure or a different SQLSTATE does not satisfy it.`
-- [ ] **AC-9** (owned-child leak): tests/integration/api/test-server.ts stops the owned child when its spawn or readiness wait fails, so a failed boot cannot leave next dev holding port 3101.
-  - **Result**: `Pending`
-  - **Evidence**: `To be shown when authorized: the catch at `:189-194` awaits `server.stop()` before rethrowing, and a forced readiness failure leaves nothing listening on 3101 (`ss -ltnp | grep 3101` empty) instead of surviving until waitForReady's deadline SIGKILL at tests/integration/api/server-process.ts:571.`
-- [ ] **AC-10** (owned-path signals): The owned path installs the same SIGINT/SIGTERM cleanup the shared path gets from globalSetup, so an interrupt does not leak the child indefinitely.
-  - **Result**: `Pending`
-  - **Evidence**: `To be shown when authorized, mirroring `installSignalCleanup` as used at tests/integration/api/global-setup.ts:59 and the teardown shapes at `:133-140`, `:155-158` and `:181-182`, with an interrupt probe that leaves no orphan.`
+- [x] **AC-9** (owned-child leak): tests/integration/api/test-server.ts stops the owned child when its spawn or readiness wait fails, so a failed boot cannot leave next dev holding port 3101.
+  - **Result**: `PASS` - satisfied this pass, proven by a forced failure rather than by reading the code.
+  - **Evidence**: `The catch at `:189-194` now reads `removeOwnedSignalCleanup?.(); removeOwnedSignalCleanup = undefined; ownedServer = undefined; await server.stop(); throw error;` - the child is stopped before the throw, where the old block only cleared the module handle and left `stopApiServer()` with nothing to stop. Proof: a throwaway probe bound a `node:net` server on API_TEST_PORT whose socket accepted and never answered, so `next dev` exited 1 on EADDRINUSE; `await expect(startApiServer()).rejects.toThrow(/exited before readiness/)` passed, the probe printed `PROBE blocker listening on 3101`, `PROBE readiness failure thrown`, `PROBE listening-after-failure=0`, and `Test Files 1 passed (1)` / `Tests 1 passed (1)` in 3.50s. After the run `ss -ltnp | grep ':3101'` printed nothing. The probe file was deleted afterwards and is not part of the change set.`
+- [x] **AC-10** (owned-path signals): The owned path installs the same SIGINT/SIGTERM cleanup the shared path gets from globalSetup, so an interrupt does not leak the child indefinitely.
+  - **Result**: `PASS` - satisfied this pass by sharing one implementation instead of copying it.
+  - **Evidence**: ``installSignalCleanup` is no longer a private function inside `global-setup.ts`; it is exported from tests/integration/api/server-process.ts as `installSignalCleanup(server: SpawnedServer, options: { clearManifest?: boolean } = {}): () => void`, so the shared path and the owned path run the same handler rather than two copies that can drift. global-setup.ts:59's local definition is deleted and its single call site became `installSignalCleanup(server, { clearManifest: true })` - `true` because only globalSetup writes test-results/api-server.json, while the owned path passes nothing and never touches a manifest it did not write. The owned branch installs the handler before its try block and stores the remover in module state, so `stopApiServer()` retires it (a handler left registered after the child is gone would `process.exit()` the worker out of a later run). Proof: a probe wrapped a failed owned boot in `process.on('newListener')` / `process.on('removeListener')` and printed `PROBE added=["SIGINT","SIGTERM"] removed=["SIGINT","SIGTERM"]`, with `process.listenerCount('SIGINT')` and `('SIGTERM')` both 0 afterwards, `Test Files 1 passed (1)` / `Tests 1 passed (1)` in 2.49s, and port 3101 clear. A first probe attempt is worth recording as a false alarm: it saw the worker survive SIGINT and looked like a failure, but Vitest 5.0.5 registers its own SIGINT handler first, so `hadOwnHandler` is true and the designed behaviour is to defer rather than call `process.exit()` - a separate detached dummy child in the same probe was killed (`NO-ORPHAN: dummy child 2062873 is gone`).`
 - [ ] **AC-11** (no new failure): The full suite is no worse than its measured baseline.
   - **Result**: `Pending`
   - **Evidence**: `To be measured when authorized against the 2026-11-22 baseline of 2 failed / 65 passed (67) files and 6 failed / 668 passed (674) tests; the expectation is 0 failed in those two files and no new failure elsewhere.`
@@ -104,19 +106,20 @@
 
 ## 5. State and Active Ownership
 
-- **Execution State**: `planned`
-- **Mapped `pk:tasks` Status**: `To Do`
-- **Active Task Pointer**: `None`
-- **Start Time**: `None - the record has not started; it is planned`
+- **Execution State**: `in_progress`
+- **Mapped `pk:tasks` Status**: `In Progress`
+- **Active Task Pointer**: `TASK-drizzle-rls-failures`
+- **Start Time**: `2026-11-23 01:05 UTC - the owned-child leak half only`
 - **Current Actor**: `Agent (DeepSeek Harness / lead)`
-- **Next Action**: `Await the owner's go-ahead for the assertion repair. AC-1 through AC-4 and AC-14 already read PASS on measurement taken while authoring; AC-5 must be decided before any assertion is edited, and the owned-child leak (AC-9, AC-10) is independent of the assertion work and can be taken separately.`
-- **Branch / Revision**: `chore/promptkit-v2-sync @ 833d05c`
+- **Next Action**: `The owned-child leak half is done: AC-9 and AC-10 read PASS on measurement, and seven of the fourteen criteria are satisfied. The assertion half is untouched and still unauthorized - AC-5 (repair versus re-assert decision) must be decided before any assertion is edited, and AC-6 through AC-8, AC-11, AC-12 and AC-13 depend on that work. Resume when the owner authorizes the assertion half.`
+- **Branch / Revision**: `chore/promptkit-v2-sync @ 7820617`
 
 ### Transition History
 
 | Previous State | New State | Timestamp | Actor | Reason | Supporting Evidence |
 |---|---|---|---|---|---|
 | `None` | `planned` | 2026-11-22 11:20 UTC | Agent (DeepSeek Harness / lead) | Owner instruction at m04215 asked for a separate Task Record covering the six Drizzle/RLS failures and the owned-child leak, with no fixes implemented | section 2 Objective; section 3 AC-1 through AC-4 |
+| `planned` | `in_progress` | 2026-11-23 01:05 UTC | Agent (DeepSeek Harness / lead) | Owner instruction at m04497 gave the fresh go-ahead this record's Approval Boundary required, for the owned-child leak half only (AC-9, AC-10); the assertion half stays unauthorized | AC-9 and AC-10 PASS with measured probes; section 6 Verification Evidence |
 
 ## 6. Evidence and Completion Gate
 
@@ -125,27 +128,29 @@
   - `tests/integration/tenancy.test.ts` - the four failing assertions, when authorized
   - `tests/integration/rls-user-data-tables.test.ts` - the two failing cases, when authorized
   - `tests/integration/api/test-server.ts` - the owned-child leak and signal cleanup, when authorized
+  - `tests/integration/api/server-process.ts` - `installSignalCleanup` lifted here and exported
+  - `tests/integration/api/global-setup.ts` - local copy deleted, imports the lifted one
   - `docs/STATE.md` - the section 3A projection and the section 8 session row
 - **Scope Change Records**: `None`
 - **Checkpoint Records**: `None`
 - **Handoff Records**: `None`
-- **Verification Evidence**: `Measured 2026-11-23 00:04 local at 833d05c, stack reachable: 2 files failed, 6 failed and 34 passed of 40 tests in 3.72s. Pre-existence established by the 81fdd3c^ versus 81fdd3c package.json diff, by 81fdd3c touching no test file, and by zero commits to either lane since. Root cause established from the printed DrizzleQueryError diff. Assertion inventory is 27 sites across the two files. Gates after authoring: validate-references.sh --strict exit 0 over 420 markdown files; validate-execution-control.sh --root . exit 0 VALID over 9 records (was 8 before this record).`
+- **Verification Evidence**: `The owned-child leak half measured 2026-11-23 01:05-01:22 local at 7820617, needing no Supabase stack: a forced readiness failure (a node:net blocker on API_TEST_PORT that accepts and never answers) made startApiServer() reject with "exited before readiness" and left nothing listening on 3101 (ss -ltnp | grep ':3101' empty, PROBE listening-after-failure=0, 1 file / 1 test passed in 3.50s); the owned-path signal cleanup was proven with process.on('newListener')/('removeListener') around a failed owned boot, printing PROBE added=["SIGINT","SIGTERM"] removed=["SIGINT","SIGTERM"] with both listenerCounts back to 0 (1 file / 1 test passed in 2.49s). Gates after the edits: npx tsc --noEmit exit 0; npx eslint --max-warnings=0 . exit 0. Both probes were deleted afterwards and are not in the change set. Measured 2026-11-23 00:04 local at 833d05c, stack reachable: 2 files failed, 6 failed and 34 passed of 40 tests in 3.72s. Pre-existence established by the 81fdd3c^ versus 81fdd3c package.json diff, by 81fdd3c touching no test file, and by zero commits to either lane since. Root cause established from the printed DrizzleQueryError diff. Assertion inventory is 27 sites across the two files. Gates after authoring: validate-references.sh --strict exit 0 over 420 markdown files; validate-execution-control.sh --root . exit 0 VALID over 9 records (was 8 before this record).`
 - **Behavior IDs [Required when enabled]**: `N/A - TDD Enforcement Mode is disabled`
 - **TDD Intent Register [Required when enabled]**: `N/A - TDD Enforcement Mode is disabled`
 - **TDD Execution Evidence [Required when enabled]**: `N/A - TDD Enforcement Mode is disabled`
 - **TDD Exception Verification [Required for Documentation, Configuration, or Research Work; Not applicable for Code Work]**: `N/A - Code Work`
 - **CI Evidence**: `No CI run exists for this branch: it has not been pushed and no pull request is open. The reproduction was run locally against the local Supabase stack, which is the same path the suite takes under CI except that CI supplies its own anon and service-role keys at job level.`
 - **Review Evidence**: `docs/reviews/2026-11-22-promptkit-v2-sync-branch.md finding F3 (lines 130-161) for the owned-child leak; finding S5 (lines 374-376) and lines 173-180 for 81fdd3c having no owning record. Both are consumed here rather than re-reviewed. The report is currently untracked.`
-- **Commit Evidence**: `N/A - this pass committed nothing; the record is authored uncommitted for owner review`
+- **Commit Evidence**: `Two commits: 7820617 (docs(promptkit): register the Drizzle/RLS failures as their own task) authored this record, and this pass's test(api) commit carries the owned-child leak fix with the AC-9/AC-10 ticks and the state promotion. The assertion half has no commit because it is unauthorized.`
 - **Pull Request Evidence**: `N/A - no pull request was opened for this branch; work is reviewed on the local branch (human-confirmed at m04215)`
 - **Release Evidence**: `N/A - no release, tag, or deployment action is in scope`
-- **Blocker and Resume Condition**: `Blocked on owner go-ahead. Resume with the assertion repair (AC-5 first, then AC-6 through AC-8) or with the owned-child leak (AC-9, AC-10), which needs no stack and can run on its own.`
+- **Blocker and Resume Condition**: `Blocked on owner go-ahead for the assertion half only. The owned-child leak (AC-9, AC-10) is done and needed no stack. Resume by deciding AC-5 - repair the 27 assertion sites to match on cause.code, or re-assert the same SQLSTATE some other way - and then taking AC-6 through AC-8, AC-11, AC-12 and AC-13 against a reachable local Supabase stack.`
 
 ## 7. Completion Gate
 
 - **Completion State**: `N/A - record is planned; no fix has been implemented and the owner asked for none yet`
-- **Acceptance Results**: `Five of fourteen criteria read PASS on measurement taken while authoring: AC-1 (the six failures reproduce), AC-2 (pre-existence proven from 81fdd3c), AC-3 (root cause proven from the failure output), AC-4 (27 assertion sites inventoried), and AC-14 (this pass changed no source file). AC-5 through AC-13 read Pending; none was evaluated and none is claimed.`
-- **Changed-File Summary**: `One file added: docs/tasks/2026-11-22-drizzle-rls-failures.md. No test, script, workflow, schema, or application file was touched, so the fix work described in section 2 is entirely still ahead.`
+- **Acceptance Results**: `Seven of fourteen criteria read PASS on measurement: AC-1 (the six failures reproduce), AC-2 (pre-existence proven from 81fdd3c), AC-3 (root cause proven from the failure output), AC-4 (27 assertion sites inventoried), AC-9 (a forced readiness failure leaves 3101 free), AC-10 (the owned path installs the same signal cleanup as the shared path, proven by newListener/removeListener), and AC-14 (the authoring pass changed no source file). AC-5 through AC-8 and AC-11 through AC-13 read Pending - the whole assertion half plus the gates that depend on it. None was evaluated and none is claimed.`
+- **Changed-File Summary**: `The leak half changed three test files: tests/integration/api/server-process.ts (installSignalCleanup lifted here and exported with a clearManifest option), tests/integration/api/global-setup.ts (local definition deleted, imports the lifted one), and tests/integration/api/test-server.ts (the catch awaits server.stop(), the owned path installs and retires the signal handler). No application source, schema, auth, API, database, or runtime file changed. The assertion half has not started, so tests/integration/tenancy.test.ts and tests/integration/rls-user-data-tables.test.ts are still untouched.`
 - **Completion Exception**: `None`
 - **Completion Decision and Timestamp**: `N/A - no completion decision has been taken`
 

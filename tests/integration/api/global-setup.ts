@@ -4,17 +4,16 @@ import {
   apiOrigin,
   confirmSurvived,
   describeExit,
+  installSignalCleanup,
   logTail,
   pruneStaleOwnedLogs,
   readServerManifest,
   removeServerManifest,
   SHARED_LOG_PATH,
-  signalApiServer,
   spawnNextDev,
   truncateFile,
   waitForReady,
   writeServerManifest,
-  type SpawnedServer,
 } from './server-process.js';
 
 /**
@@ -32,55 +31,6 @@ API suite setup failed:
 ${message}
 `);
   throw new Error(message);
-}
-
-/**
- * Signals the child and drops the manifest on the way out of a killed run.
- *
- * `globalSetup` returns a teardown closure, and Vitest only runs that closure
- * on its normal exit path. Its SIGINT/SIGTERM handler calls `process.exit()`
- * from a `setTimeout(..., 1)` without running teardown (measured in Vitest
- * 5.0.5, `dist/chunks/index.1TqnEahn.js:8578-8595`), so Ctrl-C on a running
- * suite used to leave the detached child holding :3101 forever. The next run
- * then failed the "something is already serving" pre-check and had to be
- * cleaned up by hand; 17 orphaned `api-server-owned-*.log` files dated
- * 2026-10-23 were the residue of exactly this.
- *
- * The first half is deliberately synchronous. A competing listener may call
- * `process.exit()` one tick later, so the SIGTERM to the child's process group
- * and the manifest removal happen before anything is awaited - both are
- * operations that have already taken effect by the time the next line runs.
- * The awaited `stop()` afterwards is best effort.
- *
- * Registering a signal listener suppresses Node's default terminate, so when
- * nothing else is listening this handler exits with the conventional 128+n
- * status instead of hanging the terminal.
- */
-function installSignalCleanup(server: SpawnedServer): () => void {
-  const hadOwnHandler = new Map<NodeJS.Signals, boolean>([
-    ['SIGINT', process.listenerCount('SIGINT') > 0],
-    ['SIGTERM', process.listenerCount('SIGTERM') > 0],
-  ]);
-  let handled = false;
-
-  const onSignal = (signal: NodeJS.Signals): void => {
-    if (handled) return;
-    handled = true;
-    signalApiServer(server.child, 'SIGTERM');
-    removeServerManifest();
-    void server.stop();
-    if (hadOwnHandler.get(signal) !== true) {
-      process.exitCode = signal === 'SIGINT' ? 130 : 143;
-      process.exit(process.exitCode);
-    }
-  };
-
-  process.once('SIGINT', onSignal);
-  process.once('SIGTERM', onSignal);
-  return () => {
-    process.off('SIGINT', onSignal);
-    process.off('SIGTERM', onSignal);
-  };
 }
 
 /**
@@ -130,7 +80,7 @@ export default async function setup(): Promise<() => Promise<void>> {
 
   truncateFile(SHARED_LOG_PATH);
   const server = await spawnNextDev({ port: API_TEST_PORT, logPath: SHARED_LOG_PATH });
-  const removeSignalCleanup = installSignalCleanup(server);
+  const removeSignalCleanup = installSignalCleanup(server, { clearManifest: true });
   try {
     await waitForReady(apiOrigin, server.child, SHARED_LOG_PATH, 30_000);
   } catch (error) {

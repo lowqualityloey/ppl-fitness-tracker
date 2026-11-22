@@ -302,6 +302,69 @@ export async function stopChild(child: ChildProcess): Promise<void> {
 }
 
 /**
+ * Signals the child and, when asked, drops the manifest on the way out of a killed run.
+ *
+ * `globalSetup` returns a teardown closure, and Vitest only runs that closure
+ * on its normal exit path. Its SIGINT/SIGTERM handler calls `process.exit()`
+ * from a `setTimeout(..., 1)` without running teardown (measured in Vitest
+ * 5.0.5, `dist/chunks/index.1TqnEahn.js:8578-8595`), so Ctrl-C on a running
+ * suite used to leave the detached child holding :3101 forever. The next run
+ * then failed the "something is already serving" pre-check and had to be
+ * cleaned up by hand; 17 orphaned `api-server-owned-*.log` files dated
+ * 2026-10-23 were the residue of exactly this.
+ *
+ * It lives here rather than in `global-setup.ts` because both lifecycle owners
+ * need it. The owned path (`startApiServer()`) had no handler at all: a Ctrl-C
+ * during its readiness wait killed the worker and left the child it had just
+ * spawned on :3101, which is the same leak the shared path was fixed for. A
+ * copy in each file is what let the two drift apart in the first place.
+ *
+ * The first half is deliberately synchronous. A competing listener may call
+ * `process.exit()` one tick later, so the SIGTERM to the child's process group
+ * (and the manifest removal, for the owner that wrote one) happen before
+ * anything is awaited - both are operations that have already taken effect by
+ * the time the next line runs. The awaited `stop()` afterwards is best effort.
+ *
+ * Registering a signal listener suppresses Node's default terminate, so when
+ * nothing else is listening this handler exits with the conventional 128+n
+ * status instead of hanging the terminal.
+ *
+ * `clearManifest` is false for the owned path on purpose: only `globalSetup`
+ * writes `test-results/api-server.json`, so an owned worker removing it would
+ * be deleting a document another process is the author of.
+ */
+export function installSignalCleanup(
+  server: SpawnedServer,
+  options: { clearManifest?: boolean } = {},
+): () => void {
+  const clearManifest = options.clearManifest === true;
+  const hadOwnHandler = new Map<NodeJS.Signals, boolean>([
+    ['SIGINT', process.listenerCount('SIGINT') > 0],
+    ['SIGTERM', process.listenerCount('SIGTERM') > 0],
+  ]);
+  let handled = false;
+
+  const onSignal = (signal: NodeJS.Signals): void => {
+    if (handled) return;
+    handled = true;
+    signalApiServer(server.child, 'SIGTERM');
+    if (clearManifest) removeServerManifest();
+    void server.stop();
+    if (hadOwnHandler.get(signal) !== true) {
+      process.exitCode = signal === 'SIGINT' ? 130 : 143;
+      process.exit(process.exitCode);
+    }
+  };
+
+  process.once('SIGINT', onSignal);
+  process.once('SIGTERM', onSignal);
+  return () => {
+    process.off('SIGINT', onSignal);
+    process.off('SIGTERM', onSignal);
+  };
+}
+
+/**
  * The variables the spawned child cannot invent, with the ones it can.
  *
  * `NEXT_PUBLIC_SUPABASE_ANON_KEY` used to fall back to the well-known Supabase

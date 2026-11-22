@@ -36,6 +36,20 @@ import { isServerLogEntry } from '../../../tests/integration/api/test-server.js'
  * suite and reading a confusing failure.
  */
 
+/**
+ * Cases that exercise the real POSIX signal path, skipped where it cannot exist.
+ *
+ * `signalApiServer` addresses a process group and refuses win32 by design (S4):
+ * Windows has no process-group kill, and the deleted win32 branch could not
+ * reach the `next dev` child behind the `npx` shim. These cases spawn a real
+ * child and signal it, so they can only run where the capability exists.
+ *
+ * This skips the capability, not the refusal: `assertSupportedPlatform (S4)`
+ * below still asserts the win32 refusal on every host, including Windows, so
+ * the guard cannot be removed without this file going red.
+ */
+const itPosixSignalPath = it.skipIf(process.platform === 'win32');
+
 const scratch = mkdtempSync(join(tmpdir(), 'api-harness-'));
 
 describe('readPort (S8)', () => {
@@ -124,7 +138,15 @@ describe('fileSize (S9)', () => {
     // a missing log line instead of a broken path.
     const blocker = join(scratch, 'not-a-directory');
     writeFileSync(blocker, '');
-    expect(() => fileSize(join(blocker, 'child.log'))).toThrow(/ENOTDIR/);
+    const underFile = join(blocker, 'child.log');
+    if (process.platform === 'win32') {
+      // Windows collapses this shape to ENOENT, so a real path cannot reach the
+      // rethrow branch here. Assert the measured answer instead of pretending
+      // to cover the throw; the rethrow itself is asserted on POSIX and in CI.
+      expect(fileSize(underFile)).toBe(0);
+      return;
+    }
+    expect(() => fileSize(underFile)).toThrow(/ENOTDIR/);
   });
 });
 
@@ -187,7 +209,7 @@ describe('assertSupportedPlatform (S4)', () => {
 });
 
 describe('stopChild (S1)', () => {
-  it('resolves once the child is gone, not on a timer', async () => {
+  itPosixSignalPath('resolves once the child is gone, not on a timer', async () => {
     const child = spawn('sleep', ['30'], { detached: true, stdio: 'ignore' });
     await new Promise<void>((resolve) => child.once('spawn', () => resolve()));
     const started = Date.now();
@@ -204,7 +226,7 @@ describe('stopChild (S1)', () => {
     expect(Date.now() - started).toBeLessThan(500);
   });
 
-  it('describes a signal death rather than a null code', async () => {
+  itPosixSignalPath('describes a signal death rather than a null code', async () => {
     const child = spawn('sleep', ['30'], { detached: true, stdio: 'ignore' });
     await new Promise<void>((resolve) => child.once('spawn', () => resolve()));
     signalApiServer(child, 'SIGKILL');
@@ -222,7 +244,7 @@ describe('confirmSurvived (S12)', () => {
     expect(Date.now() - started).toBeLessThan(3_000);
   });
 
-  it('returns true when the child outlives the window', async () => {
+  itPosixSignalPath('returns true when the child outlives the window', async () => {
     const child = spawn('sleep', ['30'], { detached: true, stdio: 'ignore' });
     await new Promise<void>((resolve) => child.once('spawn', () => resolve()));
     await expect(confirmSurvived(child, 200, 25)).resolves.toBe(true);

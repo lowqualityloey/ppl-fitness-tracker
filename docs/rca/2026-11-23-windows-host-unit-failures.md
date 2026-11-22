@@ -51,6 +51,22 @@ Totals: 3 + 1 + 1 + 2 = 7, matching the reported count exactly.
   parser, a `fileURLToPath` call, and a platform-aware skip for the three child-spawning cases.
   That is a separate task with its own record, not a gate on any branch.
 
+## Resolution (2026-11-23)
+
+All seven cases are resolved. `61ff169` fixed the two `URL.pathname` scans and the LF-only
+label parser; `54f76b8` made the last four platform-aware rather than changing the helpers:
+
+- the three signal-path cases (`stopChild` ×2, `confirmSurvived` ×1) are skipped on win32
+  because `signalApiServer` refuses that platform by design (S4), and `assertSupportedPlatform`
+  still asserts the refusal on every host, so the guard is not weakened;
+- the `fileSize` case asserts Windows' measured `ENOENT` → `0` answer, because Windows cannot
+  produce the `ENOTDIR` this record measured on POSIX. No `ENOTDIR` fallback was added, so the
+  rethrow stays asserted where it can be reached instead of being pretended on win32.
+
+`npm test` now reads 67 passed (67) files and 671 passed | 3 skipped (674) on this host, with
+`npx tsc --noEmit` and `npx eslint --max-warnings=0` exit 0. The three skipped cases and the
+`ENOTDIR` rethrow are POSIX-only, so CI remains their executor.
+
 ## Provenance
 
 | Fact | Measured by |

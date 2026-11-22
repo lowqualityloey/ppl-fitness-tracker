@@ -110,12 +110,12 @@
 
 ## 5. State and Active Ownership
 
-- **Execution State**: `awaiting_review`
-- **Mapped `pk:tasks` Status**: `In Review`
+- **Execution State**: `completed`
+- **Mapped `pk:tasks` Status**: `Done`
 - **Active Task Pointer**: `None`
 - **Start Time**: `2026-11-22 09:33 UTC`
 - **Current Actor**: `Agent (DeepSeek Harness / lead)`
-- **Next Action**: `Fifteen of fifteen criteria read PASS. AC-14 closes on TASK-drizzle-rls-failures AC-9/AC-10, and AC-15 closes on this record's own change set (cee530a..HEAD) as the owner scoped it on 2026-11-23: test.yml is untouched across the span, and no commit authored here touches an application directory - the only such commit is origin/main's 4d06e7a, brought in by the F-3 merge. Nothing is blocked. Resume at owner review and sign-off; the record may not be marked completed before that, and no completion decision has been taken by the agent.`
+- **Next Action**: `Fifteen of fifteen criteria read PASS. AC-14 closes on TASK-drizzle-rls-failures AC-9/AC-10, and AC-15 closes on this record's own change set (cee530a..HEAD) as the owner scoped it on 2026-11-23: test.yml is untouched across the span, and no commit authored here touches an application directory - the only such commit is origin/main's 4d06e7a, brought in by the F-3 merge. Nothing was blocked. The owner signed off on 2026-11-23 on fifteen of fifteen and the record closed at `completed` in the same pass; no further action is authorized by this record.`
 - **Branch / Revision**: `chore/promptkit-v2-sync @ 1001591`
 
 ### Transition History
@@ -125,6 +125,7 @@
 | `None` | `planned` | 2026-11-22 08:45 UTC | Agent (DeepSeek Harness / lead) | Owner instruction at m03192 ("do next steps 1 and 3") asked for this record and for F-3; F-3 was executed first because the merge was already in progress, and this record registers the five findings as tracked work | section 2 Objective; section 3 Acceptance Criteria |
 | `planned` | `in_progress` | 2026-11-22 09:33 UTC | Agent (DeepSeek Harness / lead) | Owner instruction at m03699 ("1") selected the offered next step, executing F-2; the record takes the active pointer because F-2 is work under it and the remaining items stay open | AC-4 through AC-7 PASS; section 6 Verification Evidence |
 | `in_progress` | `awaiting_review` | 2026-11-23 01:05 UTC | Agent (DeepSeek Harness / lead) | Every item this record can execute alone is done (AC-1 to AC-13 PASS). Its two remaining criteria both depend on the separate Drizzle/RLS record: AC-14 needs that record's owned-child fix, and AC-15 is a close-time scope claim that cannot be made while another record is mid-flight. The pointer moves to TASK-drizzle-rls-failures at m04497, so this record yields it rather than sitting in_progress beside it (which the validator rejects as ACTIVE_TASK_CONFLICT) | AC-14 and AC-15 read Pending; docs/tasks/2026-11-22-drizzle-rls-failures.md AC-9 and AC-10 PASS |
+| `awaiting_review` | `completed` | 2026-11-23 (local) | Owner (sign-off in chat), recorded by Agent (Freebuff/Buffy) | The owner reviewed the record at fifteen of fifteen with the gate sweep and signed off, so the completion gate can be taken | section 7 Completion Gate; section 6 Verification and Review Evidence; commit 9e70a3a and this closure commit |
 
 ## 6. Evidence and Completion Gate
 
@@ -151,14 +152,14 @@
 - **Commit Evidence**: `cd745d2 chore(state): merge origin/main and reconcile the split tracker - F-3, 6 files. a08edf9 docs(promptkit): register the branch review follow-ups - this record plus the §3A repoint, 2 files. 766c55f docs(api-suite): correct the three falsified or unscoped claims (branch review F-2) - 4 files, 50 insertions, 40 deletions. 7b5c3ac ci(governance): run the PromptKit validators on governance-only changes (branch review F-1) - 3 files, 156 insertions, 29 deletions. F-4 lands as one further test(api) commit on this branch; a commit cannot name its own SHA, so it is identified by subject. F-5 has no commit; this pass commits the F-5 Task Record and the AC-13 tick as one further docs commit, identified by subject because a commit cannot name its own SHA.`
 - **Pull Request Evidence**: `N/A - no pull request was opened for this branch; work is reviewed on the local branch (human-confirmed at m03192)`
 - **Release Evidence**: `N/A - no release, tag, or deployment action is in scope`
-- **Blocker and Resume Condition**: `Nothing is blocked. AC-14 closes on TASK-drizzle-rls-failures AC-9/AC-10, and AC-15 closes on this record's own change set as the owner scoped it on 2026-11-23; the branch-wide reading is deliberately not claimed, because 560ebde changes test.yml under TASK-ci-runtime-reduction and that item is out of this record. Resume at the owner's review and sign-off, the only step left before the record can be marked completed.`
+- **Blocker and Resume Condition**: `Nothing is blocked. AC-14 closes on TASK-drizzle-rls-failures AC-9/AC-10, and AC-15 closes on this record's own change set as the owner scoped it on 2026-11-23; the branch-wide reading is deliberately not claimed, because 560ebde changes test.yml under TASK-ci-runtime-reduction and that item is out of this record. The owner signed off on 2026-11-23 and the record closed at `completed`.`
 
 ## 7. Completion Gate
 
-- **Completion State**: `N/A - record is awaiting_review; F-1 through F-5 are done, all fifteen criteria read PASS, and the owner's sign-off is the only step left before a completion decision can be taken`
+- **Completion State**: `completed`
 - **Acceptance Results**: `Fifteen of fifteen criteria read PASS: AC-1, AC-2 and AC-3 on F-1, AC-4 through AC-7 on F-2 landed at 766c55f, AC-8 and AC-9 on F-3 landed at cd745d2, AC-10 through AC-12 on F-4, AC-13 because docs/tasks/2026-11-22-drizzle-rls-failures.md now exists with the reproduction and the 81fdd3c attribution, AC-14 on TASK-drizzle-rls-failures AC-9/AC-10, and AC-15 on this record's own change set as the owner scoped it on 2026-11-23.`
 - **Changed-File Summary**: `F-2 changed two documents: docs/specs/2026-11-19-spec-api-suite-hardening.md (M2's test count, G5's scope plus the 560ebde carve-out, the §2 Scope Boundary sentence, the AC-11 evidence, the AC-13 row) and docs/tasks/2026-11-19-api-suite-hardening.md (AC-11's correction note, AC-13's annotation, the Acceptance Results count). F-1 adds one new file, .github/workflows/governance.yml, and changes nothing else - test.yml is untouched, which is the point of AC-15. F-4 changed two files: tests/integration/api/fixtures.ts (the anon-key const, the `process.env` assignment, and a new REQUIRED_ENV entry) and scripts/preflight.ts (two checks plus the header paragraph that explains why). No application source, schema, auth, API, database, or runtime file changed in any of F-1, F-2 or F-4, which is AC-15's claim.`
 - **Completion Exception**: `None`
-- **Completion Decision and Timestamp**: `N/A - no completion decision has been taken`
+- **Completion Decision and Timestamp**: `2026-11-23 - owner sign-off given in chat on fifteen of fifteen; the record was marked completed and the section 3A projection and section 8 session log were reconciled in the closure commit`
 
 A task may be marked `completed` only after acceptance results, verification evidence, changed-file summary, and required commit evidence are linked. This record authorizes nothing beyond the Approval Boundary in section 1.

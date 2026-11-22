@@ -106,12 +106,12 @@
 
 ## 5. State and Active Ownership
 
-- **Execution State**: `awaiting_review`
-- **Mapped `pk:tasks` Status**: `In Review`
+- **Execution State**: `completed`
+- **Mapped `pk:tasks` Status**: `Done`
 - **Active Task Pointer**: `None`
 - **Start Time**: `2026-11-23 01:05 UTC for the owned-child leak half; 2026-11-23 (local) for the assertion half`
 - **Current Actor**: `Agent (DeepSeek Harness / lead)`
-- **Next Action**: `All fourteen criteria read PASS on measurement: the assertion half was taken this pass, so AC-5 to AC-8 and AC-11 to AC-13 are no longer pending. Nothing is blocked. Resume at owner review and sign-off; the record may not be marked completed before that, and no completion decision has been taken by the agent.`
+- **Next Action**: `All fourteen criteria read PASS on measurement: the assertion half was taken this pass, so AC-5 to AC-8 and AC-11 to AC-13 are no longer pending. Nothing was blocked. The owner signed off on 2026-11-23 on fourteen of fourteen and the record closed at completed in the same pass; no further action is authorized by this record.`
 - **Branch / Revision**: `chore/promptkit-v2-sync @ 1001591` for the assertion half (the commit that landed is test(integration): assert SQLSTATE on the rejection cause chain, built on 83d9aed)
 
 ### Transition History
@@ -121,6 +121,7 @@
 | `None` | `planned` | 2026-11-22 11:20 UTC | Agent (DeepSeek Harness / lead) | Owner instruction at m04215 asked for a separate Task Record covering the six Drizzle/RLS failures and the owned-child leak, with no fixes implemented | section 2 Objective; section 3 AC-1 through AC-4 |
 | `planned` | `in_progress` | 2026-11-23 01:05 UTC | Agent (DeepSeek Harness / lead) | Owner instruction at m04497 gave the fresh go-ahead this record's Approval Boundary required, for the owned-child leak half only (AC-9, AC-10); the assertion half stays unauthorized | AC-9 and AC-10 PASS with measured probes; section 6 Verification Evidence |
 | `in_progress` | `awaiting_review` | 2026-11-23 (local) | Agent (Freebuff/Buffy) | The assertion half was authorized by the owner's "ingest and continue where it left off"; AC-5 was decided before the first edit, and the remaining seven criteria were then taken on measurement | AC-5 to AC-8 and AC-11 to AC-13 PASS; both lanes green; wrong-SQLSTATE and connection-failure modes proven |
+| `awaiting_review` | `completed` | 2026-11-23 (local) | Owner (sign-off in chat), recorded by Agent (Freebuff/Buffy) | The owner reviewed the record at fourteen of fourteen with both lanes green and signed off, so the completion gate can be taken | section 7 Completion Gate; section 6 Verification Evidence; commit 9e70a3a and this closure commit |
 
 
 ## 6. Evidence and Completion Gate
@@ -146,14 +147,14 @@
 - **Commit Evidence**: `Two commits: 7820617 (docs(promptkit): register the Drizzle/RLS failures as their own task) authored this record, and this pass's test(api) commit carries the owned-child leak fix with the AC-9/AC-10 ticks and the state promotion. The assertion half lands as this pass's test(integration) commit (subject: test(integration): assert SQLSTATE on the rejection cause chain), which also carries the AC-5 to AC-13 ticks, SCR-1 and the state promotion; a commit cannot name its own SHA, so it is identified by subject.`
 - **Pull Request Evidence**: `N/A - no pull request was opened for this branch; work is reviewed on the local branch (human-confirmed at m04215)`
 - **Release Evidence**: `N/A - no release, tag, or deployment action is in scope`
-- **Blocker and Resume Condition**: `Blocked on owner go-ahead for the assertion half only. The owned-child leak (AC-9, AC-10) is done and needed no stack. Nothing is blocked: AC-5 was decided as one shared helper, all 24 sites were rewritten onto it, and AC-6 through AC-8 and AC-11 through AC-13 are measured. Resume at owner review and sign-off.`
+- **Blocker and Resume Condition**: `Blocked on owner go-ahead for the assertion half only. The owned-child leak (AC-9, AC-10) is done and needed no stack. Nothing is blocked: AC-5 was decided as one shared helper, all 24 sites were rewritten onto it, and AC-6 through AC-8 and AC-11 through AC-13 are measured. The owner signed off on 2026-11-23 and the record closed at `completed`.`
 
 ## 7. Completion Gate
 
-- **Completion State**: `All fourteen criteria PASS on measurement; the record is awaiting owner review and sign-off, which is the only step left before completed.`
+- **Completion State**: `completed`
 - **Acceptance Results**: `Fourteen of fourteen criteria read PASS on measurement: AC-1 (the six failures reproduce), AC-2 (pre-existence proven from 81fdd3c), AC-3 (root cause proven from the failure output), AC-4 (27 assertion sites inventoried), AC-9 (a forced readiness failure leaves 3101 free), AC-10 (the owned path installs the same signal cleanup as the shared path, proven by newListener/removeListener), and AC-14 (the authoring pass changed no source file). AC-5 through AC-8 and AC-11 through AC-13 were taken this pass and read PASS; AC-1 to AC-4, AC-9, AC-10 and AC-14 were already PASS and are restated only where this pass ran them again. Nothing is claimed that was not executed in this pass.`
 - **Changed-File Summary**: `The leak half changed three test files: tests/integration/api/server-process.ts (installSignalCleanup lifted here and exported with a clearManifest option), tests/integration/api/global-setup.ts (local definition deleted, imports the lifted one), and tests/integration/api/test-server.ts (the catch awaits server.stop(), the owned path installs and retires the signal handler). No application source, schema, auth, API, database, or runtime file changed. The assertion half adds tests/integration/test-helpers.ts (SCR-1) and rewrites all 24 SQLSTATE assertions onto it: 4 in tests/integration/tenancy.test.ts and 20 in tests/integration/rls-user-data-tables.test.ts. No application source, schema, auth, API, database, or runtime file changed, and .github/workflows/test.yml is untouched.`
 - **Completion Exception**: `None`
-- **Completion Decision and Timestamp**: `2026-11-23 - awaiting owner review and sign-off; no completion decision has been taken by the agent.`
+- **Completion Decision and Timestamp**: `2026-11-23 - owner sign-off given in chat on fourteen of fourteen; the record was marked completed and the section 3A projection and section 8 session log were reconciled in the closure commit`
 
 A task may be marked `completed` only after acceptance results, verification evidence, changed-file summary, and required commit evidence are linked. This record authorizes nothing beyond the Approval Boundary in section 1.

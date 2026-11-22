@@ -260,8 +260,8 @@
   rather than dropped. **One environment correction from this pass**: the first `git checkout main`
   **refused** because that same block is durable working-tree dirt — a dirty tree blocks the post-merge
   switch, not just the commit — and the block's own text names the remedy (commit it).
-- **Last Updated**: 2026-11-19 (**PromptKit OS v2.3.0 upgrade — engine pinned at `52adbe1` (tag `v2.3.0`), the five host directives re-injected with the new 2.3.0 untrusted-content boundary, and `PROMPTKIT.md`'s engine prose and directive md5 re-stated. The Task Record is `docs/tasks/2026-11-19-promptkit-v2-3-upgrade.md`; §3A is repointed at it and `docs-drift` is OK.**). Earlier: 2026-10-23 (**PromptKit OS v2.0.0-71 migration — engine pinned at `0cfa093`, five host directives re-injected, profile machine lines plus `size: large` set, and the §8 table repair is green (`VALID|RECORDS=2`). The Task Record is `docs/tasks/2026-10-23-promptkit-v2-migration.md`; §3A is populated and `docs-drift` is OK; the only remaining follow-up is the C6 governance CI; the release tag stays held.**). Earlier: 2026-09-21 (`pk:checkpoint` 03 at `532c1c9`; the drizzle upgrade landed afterward at `81fdd3c`).
-- **Engine Version**: v2.3.0 @ 52adbe1
+- **Last Updated**: 2026-11-22 (**PromptKit OS v2.4.0 upgrade — engine pinned at `13006a6` (tag `v2.4.0`), the five host directives re-injected, and `PROMPTKIT.md`'s engine prose, directive md5 and the new 2.4.0 drift-table bullet written. The Task Record is `docs/tasks/2026-11-22-promptkit-v2-4-upgrade.md`; §3A is repointed at it. The one behavioural delta is `check-doctor`'s bidirectional ancestry probe, which fixes DIVERGED-for-ahead and leaves our STALE(+12) red as the accepted cost of pinning a release.**). Earlier: 2026-11-19 (**PromptKit OS v2.3.0 upgrade — engine pinned at `52adbe1` (tag `v2.3.0`), the five host directives re-injected with the new 2.3.0 untrusted-content boundary, and `PROMPTKIT.md`'s engine prose and directive md5 re-stated. The Task Record is `docs/tasks/2026-11-19-promptkit-v2-3-upgrade.md`; §3A is repointed at it and `docs-drift` is OK.**). Earlier: 2026-10-23 (**PromptKit OS v2.0.0-71 migration — engine pinned at `0cfa093`, five host directives re-injected, profile machine lines plus `size: large` set, and the §8 table repair is green (`VALID|RECORDS=2`). The Task Record is `docs/tasks/2026-10-23-promptkit-v2-migration.md`; §3A is populated and `docs-drift` is OK; the only remaining follow-up is the C6 governance CI; the release tag stays held.**). Earlier: 2026-09-21 (`pk:checkpoint` 03 at `532c1c9`; the drizzle upgrade landed afterward at `81fdd3c`).
+- **Engine Version**: v2.4.0 @ 13006a6
   identified as already-merged planning PR, milestone #4 open=18/closed=15. Earlier: **post-#156 checkpoint** — #101/M4-12 merged as `a543188`, keyword
   closed the issue, local branch pruned, milestone #4 open=19/closed=14. Earlier: **post-#155 checkpoint** — #149/M4-25 merged as `5ac4c1c`, local branch pruned,
   milestone #4 open=20/closed=13. Earlier: **#149 / M4-25 implemented** — the Lighthouse gate runs on this box now, four
@@ -703,29 +703,29 @@ Formalized 2026-09-08 in `docs/specs/2026-09-08-m2-core-domain-engine.md` with a
 
 ## 3A. Execution-Control Projection (Optional)
 
-> This section is a synchronized projection for checkpoint continuity when the host project uses Controlled Work. The canonical authority remains `docs/tasks/2026-11-19-api-suite-hardening.md`; disagreement with that record is a validation failure and leaves execution blocked or `checkpoint_due` until reconciled.
+> This section is a synchronized projection for checkpoint continuity when the host project uses Controlled Work. The canonical authority remains `docs/tasks/2026-11-22-promptkit-v2-4-upgrade.md`; disagreement with that record is a validation failure and leaves execution blocked or `checkpoint_due` until reconciled.
 
-- **Local Task Source**: `docs/tasks/2026-11-19-api-suite-hardening.md`
-- **Task ID**: `TASK-api-suite-hardening`
-- **Task Record**: `docs/tasks/2026-11-19-api-suite-hardening.md`
+- **Local Task Source**: `docs/tasks/2026-11-22-promptkit-v2-4-upgrade.md`
+- **Task ID**: `TASK-promptkit-v2-4-upgrade`
+- **Task Record**: `docs/tasks/2026-11-22-promptkit-v2-4-upgrade.md`
 - **Ceremony Level**: `Level 2 (Controlled Work)`
-- **Specification**: `docs/specs/2026-11-19-spec-api-suite-hardening.md`
+- **Specification**: `docs/specs/2026-11-22-spec-promptkit-v2-4-upgrade.md`
 - **Execution Scope**: `ppl-fitness-tracker, branch chore/promptkit-v2-sync, one worktree`
-- **Execution State**: `completed`
-- **Mapped `pk:tasks` Status**: `Done`
+- **Execution State**: `awaiting_review`
+- **Mapped `pk:tasks` Status**: `In Review`
 - **Active Task Pointer**: `None`
 - **Owner / Current Actor**: `Agent (DeepSeek Harness / lead)`
-- **Start Time**: `2026-11-19 10:41 UTC`
+- **Start Time**: `2026-11-22 14:07 UTC`
 - **Current Branch**: `chore/promptkit-v2-sync`
-- **Current Revision**: `544081d`
+- **Current Revision**: `17b64ed`
 - **Checkpoint Policy**: `N/A - single session; host timer cannot mechanically enforce checkpoints or terminate the session.`
-- **Blockers and Resume Condition**: `None - execution finished, the change is committed as 544081d, and no resume condition remains.`
-- **Verification Status**: `Green - npm run typecheck exit 0; eslint exit 0; tests/unit/infra/api-harness.test.ts 36 passed; validate-references --strict exit 0; validate-execution-control VALID|RECORDS=6; scan-staged-secrets exit 0; npm test keeps exactly the 6 pre-existing Drizzle/RLS failures (130 database-backed files skip because the local Supabase stack cannot publish ports on this host). npm run test:api was last measured green (14 files / 84 tests, one boot) on 2026-11-19 while the database was reachable and cannot be re-measured today.`
-- **CI Evidence**: `N/A - no PR or CI run; local gates only`
-- **Changed-File Summary**: `13 paths: 4 harness sources plus one new unit suite, package.json, and the review/spec/task/measurement documents that record the findings.`
+- **Blockers and Resume Condition**: `None - execution is complete and awaiting owner sign-off; resume when the owner reviews 17b64ed and the projection commit, or requests a rollback per the Planning Record section 7.`
+- **Verification Status**: `Green after commit 17b64ed - validate-references --strict exit 0; validate-execution-control VALID|RECORDS=7 exit 0; check-setup-assert ASSERT|submodule|status|OK exit 0; check-doctor exit 1 on version STALE(+12) alone with submodule OK and docs-drift OK; typecheck and eslint --max-warnings=0 exit 0. Baseline before execution at f0b413e was VALID|RECORDS=6 with STALE(+36).`
+- **CI Evidence**: `N/A - no PR or CI run; no governance workflow exists (follow-up F-1)`
+- **Changed-File Summary**: `Commit 17b64ed changed seven paths (the .promptkit gitlink, the five host directives, PROMPTKIT.md); the projection commit adds docs/STATE.md, the Planning Record and the Task Record.`
 - **Latest Checkpoint**: `None`
 - **Latest Handoff**: `None`
-- **Next Action**: `None - task closed; the remediation landed as 544081d and the remaining review follow-ups (the 6 pre-existing Drizzle/RLS failures, and CI wiring under F-1) are separate work with their own records.`
+- **Next Action**: `Owner reviews 17b64ed with the projection commit; on sign-off, close this record at completed with the close commit revision.`
 
 ---
 
@@ -1575,6 +1575,7 @@ Carried forward, still open:
 
 | Date | Engineer / Agent | Milestone / Focus | Key Changes & Artifacts |
 | :--- | :--- | :--- | :--- |
+| 2026-11-22 | Agent (DeepSeek Harness / lead) | PromptKit OS v2.4.0 upgrade | Engine pinned to `v2.4.0` (`13006a6`), five host directives re-injected, `PROMPTKIT.md` engine prose plus directive md5 (`98425dbe…`) re-stated and a 2.4.0 drift-table bullet added; plan `docs/specs/2026-11-22-spec-promptkit-v2-4-upgrade.md`; Task Record `docs/tasks/2026-11-22-promptkit-v2-4-upgrade.md`; §3A repointed; validator `VALID`; doctor version row accepted red at `STALE(+12)`. |
 | 2026-11-19 | Agent (DeepSeek Harness / lead) | PromptKit OS v2.3.0 upgrade | Engine pinned to `v2.3.0` (`52adbe1`), five host directives re-injected with the 2.3.0 untrusted-content boundary, `PROMPTKIT.md` engine prose plus directive md5 re-stated; plan `docs/specs/2026-11-19-spec-promptkit-v2-3-upgrade.md`; Task Record `docs/tasks/2026-11-19-promptkit-v2-3-upgrade.md`; §3A repointed; validator `VALID`; doctor `docs-drift OK`. |
 | 2026-10-23 | Agent (Codebuff/Buffy) | PromptKit OS v2 migration | Engine pinned to `v2.0.0-71` (`0cfa093`), five host directives re-injected, profile machine lines plus `size: large` set; plan `docs/specs/2026-10-23-spec-promptkit-v2-migration.md`; Task Record `docs/tasks/2026-10-23-promptkit-v2-migration.md` (`awaiting_review`); §3A projection added; validator `VALID`, `RECORDS=2`; doctor `docs-drift OK`. |
 | 2026-09-21 | Agent (Freebuff/Buffy) | `pk:checkpoint` 03 | `docs/tasks/m4/M4-29-first-release.checkpoint-03.md`; release provisioned, CI blocked on account billing, tag held. |

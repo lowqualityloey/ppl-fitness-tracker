@@ -5,6 +5,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { eq, sql } from 'drizzle-orm';
 import * as schema from '../../db/schema/index.js';
 import { withUser, type JwtClaims } from '../../lib/db/with-user.js';
+import { expectSqlState } from './test-helpers.js';
 
 /**
  * M1-06: RLS on user-data tables.
@@ -669,7 +670,7 @@ describe('M1-06: RLS on all user-data tables', () => {
     const bMutation = fixtures.bRows.find((row) => row.table === 'sync_mutations');
     if (!bSession || !bMutation) throw new Error('Missing B relationship fixtures');
 
-    await expect(
+    await expectSqlState(
       withUser(appDb, userA.claims, (tx) =>
         tx.insert(schema.syncEntityVersions).values({
           userId: userA.id,
@@ -683,8 +684,9 @@ describe('M1-06: RLS on all user-data tables', () => {
           serverSeq: 2,
         }),
       ),
-    ).rejects.toMatchObject({ code: '42501' });
-    await expect(
+      '42501',
+    );
+    await expectSqlState(
       withUser(appDb, userA.claims, (tx) =>
         tx.insert(schema.syncChanges).values({
           userId: userA.id,
@@ -696,89 +698,100 @@ describe('M1-06: RLS on all user-data tables', () => {
           operation: 'phase.advance',
         }),
       ),
-    ).rejects.toMatchObject({ code: '42501' });
+      '42501',
+    );
 
-    await expect(
+    await expectSqlState(
       withUser(appDb, userA.claims, (tx) =>
         tx
           .update(schema.syncEntityVersions)
           .set({ sessionId: bSession.id })
           .where(eq(schema.syncEntityVersions.id, ownRows.version.id)),
       ),
-    ).rejects.toMatchObject({ code: '42501' });
-    await expect(
+      '42501',
+    );
+    await expectSqlState(
       withUser(appDb, userA.claims, (tx) =>
         tx
           .update(schema.syncEntityVersions)
           .set({ mutationId: bMutation.id })
           .where(eq(schema.syncEntityVersions.id, ownRows.version.id)),
       ),
-    ).rejects.toMatchObject({ code: '42501' });
-    await expect(
+      '42501',
+    );
+    await expectSqlState(
       withUser(appDb, userA.claims, (tx) =>
         tx
           .update(schema.syncChanges)
           .set({ sessionId: bSession.id })
           .where(eq(schema.syncChanges.id, ownRows.change.id)),
       ),
-    ).rejects.toMatchObject({ code: '42501' });
-    await expect(
+      '42501',
+    );
+    await expectSqlState(
       withUser(appDb, userA.claims, (tx) =>
         tx
           .update(schema.syncChanges)
           .set({ mutationId: bMutation.id })
           .where(eq(schema.syncChanges.id, ownRows.change.id)),
       ),
-    ).rejects.toMatchObject({ code: '42501' });
+      '42501',
+    );
 
-    await expect(
+    await expectSqlState(
       withUser(appDb, userA.claims, (tx) =>
         tx
           .update(schema.workoutSessions)
           .set({ userId: userB.id })
           .where(eq(schema.workoutSessions.id, ownRows.session.id)),
       ),
-    ).rejects.toMatchObject({ code: '42501' });
-    await expect(
+      '42501',
+    );
+    await expectSqlState(
       withUser(appDb, userA.claims, (tx) =>
         tx
           .update(schema.sessionSets)
           .set({ userId: userB.id })
           .where(eq(schema.sessionSets.id, ownRows.set.id)),
       ),
-    ).rejects.toMatchObject({ code: '42501' });
-    await expect(
+      '42501',
+    );
+    await expectSqlState(
       withUser(appDb, userA.claims, (tx) =>
         tx
           .update(schema.sessionTasks)
           .set({ sessionId: bSession.id })
           .where(eq(schema.sessionTasks.id, ownRows.task.id)),
       ),
-    ).rejects.toMatchObject({ code: '42501' });
-    await expect(
+      '42501',
+    );
+    await expectSqlState(
       withUser(appDb, userA.claims, (tx) =>
         tx
           .update(schema.personalRecords)
           .set({ userId: userB.id })
           .where(eq(schema.personalRecords.id, ownRows.record.id)),
       ),
-    ).rejects.toMatchObject({ code: '42501' });
-    await expect(
+      '42501',
+    );
+    await expectSqlState(
       withUser(appDb, userA.claims, (tx) =>
         tx
           .update(schema.syncMutations)
           .set({ userId: userB.id })
           .where(eq(schema.syncMutations.mutationId, ownRows.mutation.mutationId)),
       ),
-    ).rejects.toMatchObject({ code: '42501' });
-    await expect(
+      '42501',
+    );
+    await expectSqlState(
       withUser(appDb, userA.claims, (tx) =>
         tx
           .update(schema.importBatches)
           .set({ userId: userB.id })
           .where(eq(schema.importBatches.id, ownRows.importBatch.id)),
       ),
-    ).rejects.toMatchObject({ code: '42501' });
+      '42501',
+    );
 
     const unchanged = await ownerClient.query<{
       session_user_id: string;
@@ -815,13 +828,14 @@ describe('M1-06: RLS on all user-data tables', () => {
   });
 
   it('rejects inserts or relationship changes that attribute rows to B', async () => {
-    await expect(
+    await expectSqlState(
       withUser(appDb, userA.claims, (tx) =>
         tx.insert(schema.profiles).values({ id: userB.id, email: 'spoofed-profile@example.com' }),
       ),
-    ).rejects.toMatchObject({ code: '42501' });
+      '42501',
+    );
 
-    await expect(
+    await expectSqlState(
       withUser(appDb, userA.claims, (tx) =>
         tx.insert(schema.workoutSessions).values({
           userId: userB.id,
@@ -830,9 +844,10 @@ describe('M1-06: RLS on all user-data tables', () => {
           localDate: '2030-01-03',
         }),
       ),
-    ).rejects.toMatchObject({ code: '42501' });
+      '42501',
+    );
 
-    await expect(
+    await expectSqlState(
       withUser(appDb, userA.claims, (tx) =>
         tx.insert(schema.sessionSets).values({
           userId: userB.id,
@@ -842,11 +857,12 @@ describe('M1-06: RLS on all user-data tables', () => {
           clientTs: new Date(),
         }),
       ),
-    ).rejects.toMatchObject({ code: '42501' });
+      '42501',
+    );
 
     const bSession = fixtures.bRows.find((row) => row.table === 'workout_sessions');
     if (!bSession) throw new Error('Missing B workout-session fixture');
-    await expect(
+    await expectSqlState(
       withUser(appDb, userA.claims, (tx) =>
         tx.insert(schema.sessionTasks).values({
           sessionId: bSession.id,
@@ -854,9 +870,10 @@ describe('M1-06: RLS on all user-data tables', () => {
           clientTs: new Date(),
         }),
       ),
-    ).rejects.toMatchObject({ code: '42501' });
+      '42501',
+    );
 
-    await expect(
+    await expectSqlState(
       withUser(appDb, userA.claims, (tx) =>
         tx.insert(schema.personalRecords).values({
           userId: userB.id,
@@ -865,15 +882,17 @@ describe('M1-06: RLS on all user-data tables', () => {
           achievedAt: new Date(),
         }),
       ),
-    ).rejects.toMatchObject({ code: '42501' });
+      '42501',
+    );
 
-    await expect(
+    await expectSqlState(
       withUser(appDb, userA.claims, (tx) =>
         tx.insert(schema.syncMutations).values({ mutationId: randomUUID(), userId: userB.id }),
       ),
-    ).rejects.toMatchObject({ code: '42501' });
+      '42501',
+    );
 
-    await expect(
+    await expectSqlState(
       withUser(appDb, userA.claims, (tx) =>
         tx.insert(schema.importBatches).values({
           userId: userB.id,
@@ -881,15 +900,17 @@ describe('M1-06: RLS on all user-data tables', () => {
           report: '{"status":"spoofed"}',
         }),
       ),
-    ).rejects.toMatchObject({ code: '42501' });
+      '42501',
+    );
 
-    await expect(
+    await expectSqlState(
       withUser(appDb, userA.claims, (tx) =>
         tx
           .update(schema.profiles)
           .set({ id: userB.id })
           .where(eq(schema.profiles.id, userA.id)),
       ),
-    ).rejects.toMatchObject({ code: '42501' });
+      '42501',
+    );
   });
 });

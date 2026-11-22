@@ -34,7 +34,9 @@
   exit 0; `validate-execution-control.sh` reports zero `STATE_` rows.
 - **Scope Boundary**: the four API-harness source files, one new unit test file, three governance
   documents the review corrected, and the `docs/STATE.md` projection. No product code, no schema,
-  no workflow YAML, no assertion weakened.
+  no workflow YAML, no assertion weakened. The workflow constraint binds `544081d` itself;
+  `.github/workflows/test.yml` does change elsewhere on the branch, in `560ebde`, which belongs to
+  `TASK-ci-runtime-reduction`.
 - **TDD Enforcement Proposal (Reference Only)**: `disabled` — Code Work on test infrastructure with
   no product behaviour. The canonical Task Record owns the mode.
 
@@ -138,7 +140,10 @@ The two that matter most:
   interrupted run leaves no orphan holding `:3101`.
 - **G4** — The three governance documents agree with each other and with the tree on AC numbering,
   AC-8's evidence, and what each measurement measured.
-- **G5** — No test body, assertion, budget, threshold, or workflow file changes.
+- **G5** — No test body, assertion, budget, threshold, or workflow file changes **in `544081d`**.
+  The scope is the commit, not the branch: `560ebde` changes `.github/workflows/test.yml` on the same
+  branch under its own record (`TASK-ci-runtime-reduction`), and this specification neither claims
+  nor governs that change.
 
 ### Non-Goals (Explicit Scope Boundary)
 
@@ -337,8 +342,9 @@ dependency-ordered milestones, no Red→Green requirement (there is no product b
   (was exit 0 before the change). The base lane still exits 0 on the same shape, which is intended.
 - [x] **M2 — Seam hardening (S1, S3, S4, S5, S7, S8, S9, S11).** `server-process.ts` only.
   Acceptance: `npm run test:api` still 14/84 green; unit suite over the pure helpers green.
-  **Done** — 14 files / 84 tests green, 111.06 s; `tests/unit/infra/api-harness.test.ts` 31 tests
-  green. One extra fix landed here that the finding list did not carry: each readiness probe is now
+  **Done** — 14 files / 84 tests green, 111.06 s; `tests/unit/infra/api-harness.test.ts` 36 tests
+  green (31 at this milestone, plus the 5 credential cases added later in the same change; the
+  Task Record's Verification Evidence at §3 AC-13 carries both counts). One extra fix landed here that the finding list did not carry: each readiness probe is now
   bounded to 2 s and aborted the moment the child exits (see §4.5). Without it an occupied port took
   45 s to report, because the loop sat inside an unanswered `fetch`.
 - [x] **M3 — Lifecycle cleanup (S2, S12).** `global-setup.ts` only. Acceptance: teardown leaves no
@@ -372,9 +378,9 @@ dependency-ordered milestones, no Red→Green requirement (there is no product b
 | `AC-8` | `fileSize` distinguishes missing (`0`) from unreadable (throws) | unit suite |
 | `AC-9` | A JSON line without `msg` is not captured | `sync.test.ts` still green; unit assertion over the shape check |
 | `AC-10` | The `win32` path throws a named error instead of pretending to work | `grep` for the message; unit assertion |
-| `AC-11` | No test body, assertion, budget, threshold, or workflow file changed | `git diff --stat` review |
+| `AC-11` | No test body, assertion, budget, threshold, or workflow file changed in `544081d` | `git diff --stat 544081d^...544081d -- .github/workflows/ tests/ vitest.config.ts package.json` (empty for workflows; the test diff is the two new files) |
 | `AC-12` | `npm run typecheck` and `npm run lint` exit 0 | both commands |
-| `AC-13` | `npm test` shows the same 6 pre-existing failures and no new one | Vitest summary; 632/638 unchanged |
+| `AC-13` | `npm test` shows the same 6 pre-existing failures and no new one | Vitest summary; the counts and their two measurement dates live in the Task Record's AC-13 evidence, which is the single source for them |
 | `AC-14` | AC numbering agrees between spec §7 and the record; AC-8 evidence matches the tree; the measurement doc names its before-column | read all three documents |
 | `AC-15` | `validate-execution-control.sh` exits 0 with zero `STATE_` rows, and the staged index is credential-clean | `bash .promptkit/scripts/validate-execution-control.sh --root .`; `bash .promptkit/scripts/scan-staged-secrets.sh` |
 

@@ -58,18 +58,18 @@
 - [ ] **AC-3** (F-1): The workflow is cheap by construction - one job, no browser download, no service containers - and the record states what it adds to the measured CI cost that `paths-ignore` was created to reduce.
   - **Result**: `Pending`
   - **Evidence**: will be the job definition plus a written cost comparison against `docs/releases/ci-triage/ci-cost-measurement.md`
-- [ ] **AC-4** (F-2): `docs/specs/2026-11-19-spec-api-suite-hardening.md` states 36 tests, not 31, in the M2 seam-hardening line.
-  - **Result**: `Pending`
-  - **Evidence**: will be `grep -c '  it(' tests/unit/infra/api-harness.test.ts` returning 36 and the spec line reading 36
-- [ ] **AC-5** (F-2): The spec's AC-13 row cites the Task Record for the counts instead of restating `632/638`.
-  - **Result**: `Pending`
-  - **Evidence**: will be `sed -n '377p' docs/specs/2026-11-19-spec-api-suite-hardening.md` showing a citation, and `grep -c '632/638'` on the spec returning 0
-- [ ] **AC-6** (F-2): The Task Record's AC-11 evidence is a diff scoped to `544081d`, not a working-tree status, and it names `560ebde` as the workflow change that rides the branch under `TASK-ci-runtime-reduction`.
-  - **Result**: `Pending`
-  - **Evidence**: will be `git diff --stat 544081d^...544081d -- .github/workflows/` returning nothing, recorded in the AC-11 evidence
-- [ ] **AC-7** (F-2): G5 in the spec is scoped to `544081d`, and the record's completion gate says 36 unit tests.
-  - **Result**: `Pending`
-  - **Evidence**: will be `sed -n '141p' docs/specs/2026-11-19-spec-api-suite-hardening.md` and `grep -n '31 unit tests' docs/tasks/2026-11-19-api-suite-hardening.md` returning nothing
+- [x] **AC-4** (F-2): `docs/specs/2026-11-19-spec-api-suite-hardening.md` states 36 tests, not 31, in the M2 seam-hardening line.
+  - **Result**: `PASS`
+  - **Evidence**: `grep -cE '^\s+it\(' tests/unit/infra/api-harness.test.ts` → 36; `grep -n '36 tests' docs/specs/2026-11-19-spec-api-suite-hardening.md` → `:345: **Done** — 14 files / 84 tests green, 111.06 s; tests/unit/infra/api-harness.test.ts 36 tests`. The line keeps the 31 as a milestone count with its reason rather than dropping it, so the intermediate state stays visible.
+- [x] **AC-5** (F-2): The spec's AC-13 row cites the Task Record for the counts instead of restating `632/638`.
+  - **Result**: `PASS`
+  - **Evidence**: `grep -c '632/638' docs/specs/2026-11-19-spec-api-suite-hardening.md` → 0; the row at `:383` now reads "the counts and their two measurement dates live in the Task Record's AC-13 evidence, which is the single source for them". The record's AC-13 gained an annotation stating that `663/669` was measured at the 31-test intermediate state and that the same lane reads `668 passed (674)` at the delivered 36.
+- [x] **AC-6** (F-2): The Task Record's AC-11 evidence is a diff scoped to `544081d`, not a working-tree status, and it names `560ebde` as the workflow change that rides the branch under `TASK-ci-runtime-reduction`.
+  - **Result**: `PASS`
+  - **Evidence**: `git diff --stat 544081d^...544081d -- .github/workflows/` → 0 lines. `git diff --stat origin/main...HEAD -- .github/workflows/test.yml` → 1 file, 46 insertions, 4 deletions, attributed by `git log` to `560ebde`. The record's AC-11 keeps its original working-tree evidence verbatim and appends a dated "Correction, 2026-11-22 (branch review F1)" note carrying both measurements, so the original claim is auditable rather than overwritten.
+- [x] **AC-7** (F-2): G5 in the spec is scoped to `544081d`, and the record's completion gate says 36 unit tests.
+  - **Result**: `PASS`
+  - **Evidence**: `grep -n 'G5' docs/specs/2026-11-19-spec-api-suite-hardening.md` → `:143: **G5** — No test body, assertion, budget, threshold, or workflow file changes **in 544081d**.` with the `560ebde` carve-out on the three lines below; the §2 Scope Boundary carries the same carve-out. `grep -n '31 unit tests' docs/tasks/2026-11-19-api-suite-hardening.md` → no match; the completion gate now reads 36 with the 31 kept as the intermediate state. Spec AC-11's evidence was also repointed to the scoped diff, which is the same claim at its second site.
 - [ ] **AC-8** (F-3): `docs/STATE.md` is main's split tracker with section 3A re-added, and the projection still agrees with its canonical record.
   - **Result**: `PASS` - satisfied at `cd745d2`: `docs/STATE.md` is 224 lines against main's 188-line skeleton plus `docs/STATE-ARCHIVE.md` (2724 lines), section 3A sits at line 66 and names `TASK-promptkit-v2-4-upgrade`, `git rev-list --left-right --count origin/main...HEAD` reads `0 21`, and `check-doctor` reports `docs-drift OK`.
   - **Evidence**: `git rev-list --left-right --count origin/main...HEAD; wc -l docs/STATE.md docs/STATE-ARCHIVE.md; grep -n '3A\. Execution-Control' docs/STATE.md; bash .promptkit/scripts/check-doctor.sh .`
@@ -109,19 +109,20 @@
 
 ## 5. State and Active Ownership
 
-- **Execution State**: `planned`
-- **Mapped `pk:tasks` Status**: `To Do`
-- **Active Task Pointer**: `None`
-- **Start Time**: `N/A - not started`
+- **Execution State**: `in_progress`
+- **Mapped `pk:tasks` Status**: `In Progress`
+- **Active Task Pointer**: `TASK-branch-review-follow-ups`
+- **Start Time**: `2026-11-22 09:33 UTC`
 - **Current Actor**: `Agent (DeepSeek Harness / lead)`
-- **Next Action**: `Wait for the owner to pick the first item. F-3 was executed before this record existed and is closed at cd745d2; recommended order for the rest is F-2 first because it is documentation-only and clears three falsified claims in one pass, then F-1 with its cost comparison, then F-4 with a reachable stack, then F-5's two records.`
-- **Branch / Revision**: `chore/promptkit-v2-sync @ cd745d2`
+- **Next Action**: `F-2 is complete at this revision (AC-4 through AC-7 PASS, four falsified or unscoped claims corrected across two documents). Next is F-1, the governance workflow, which cannot be closed without the written cost comparison AC-3 requires against docs/releases/ci-triage/ci-cost-measurement.md. After F-1: F-4, which needs a reachable Supabase local stack, then F-5's separate record for the six Drizzle/RLS failures plus the owned-child leak.`
+- **Branch / Revision**: `chore/promptkit-v2-sync @ a08edf9`
 
 ### Transition History
 
 | Previous State | New State | Timestamp | Actor | Reason | Supporting Evidence |
 |---|---|---|---|---|---|
 | `None` | `planned` | 2026-11-22 08:45 UTC | Agent (DeepSeek Harness / lead) | Owner instruction at m03192 ("do next steps 1 and 3") asked for this record and for F-3; F-3 was executed first because the merge was already in progress, and this record registers the five findings as tracked work | section 2 Objective; section 3 Acceptance Criteria |
+| `planned` | `in_progress` | 2026-11-22 09:33 UTC | Agent (DeepSeek Harness / lead) | Owner instruction at m03699 ("1") selected the offered next step, executing F-2; the record takes the active pointer because F-2 is work under it and the remaining items stay open | AC-4 through AC-7 PASS; section 6 Verification Evidence |
 
 ## 6. Evidence and Completion Gate
 
@@ -138,23 +139,23 @@
 - **Scope Change Records**: `None`
 - **Checkpoint Records**: `None`
 - **Handoff Records**: `None`
-- **Verification Evidence**: `2026-11-22 at cd745d2, before this record existed: validate-references.sh --strict exit 0; validate-execution-control.sh --root . exit 0 with VALID|RECORDS=7|ROOT=.; check-setup-assert.sh exit 0 with ASSERT|submodule|status|OK; check-doctor.sh exit 1 on version STALE(+12) alone, with submodule OK and docs-drift OK. No code item has been verified yet; AC-1 through AC-7 and AC-10 through AC-15 read Pending by design.`
+- **Verification Evidence**: `F-2 measured 2026-11-22 09:33 UTC on a08edf9 with the F-2 edits applied: grep -cE '^\s+it\(' tests/unit/infra/api-harness.test.ts = 36; grep -c '632/638' docs/specs/2026-11-19-spec-api-suite-hardening.md = 0; grep '31 unit tests' docs/tasks/2026-11-19-api-suite-hardening.md = no match; git diff --stat 544081d^...544081d -- .github/workflows/ = 0 lines. Gates after the edits: validate-references.sh --strict exit 0 (420 markdown files valid); validate-execution-control.sh --root . exit 0 VALID|RECORDS=8|ROOT=.. The pre-work baseline at cd745d2 was validate-references exit 0, validate-execution-control VALID|RECORDS=7 exit 0, check-setup-assert ASSERT|submodule|status|OK exit 0, check-doctor exit 1 on version STALE(+12) alone with submodule OK and docs-drift OK. No code item has been verified yet; AC-1, AC-2, AC-3 and AC-10 through AC-15 read Pending by design.`
 - **Behavior IDs [Required when enabled]**: `N/A - exception work type`
 - **TDD Intent Register [Required when enabled]**: `N/A - exception work type`
 - **TDD Execution Evidence [Required when enabled]**: `N/A - exception work type`
 - **TDD Exception Verification [Required for Documentation, Configuration, or Research Work; Not applicable for Code Work]**: `The documentation and configuration items have no behaviour seam to drive Red-Green-Refactor; their verification is the governance gate sweep plus the per-item commands in section 3. F-4 and the F-5 child leak do change code, so each must state its own TDD decision before it executes and may not inherit this record's disabled mode by default.`
 - **CI Evidence**: `N/A - no PR or CI run; no governance workflow exists, which is F-1 itself`
 - **Review Evidence**: `docs/reviews/2026-11-22-promptkit-v2-sync-branch.md - a Level 2 review of the branch with verdict Changes Requested and no BLOCKING findings. Its F1, F2, F3, F4 and F5 are the source of this record's items, each with a measured reproduction, and the specification's section 9 (follow-ups this plan does not do) is the queued list they came from. The report is currently untracked; committing it is a separate step the owner has not authorized.`
-- **Commit Evidence**: `cd745d2 chore(state): merge origin/main and reconcile the split tracker - F-3, 6 files, already landed. This record and the §3A repoint land together in the commit immediately after it on this branch, subject docs(promptkit): register the branch review follow-ups; a commit cannot name its own SHA, so it is identified by subject, and no later item has a commit yet.`
+- **Commit Evidence**: `cd745d2 chore(state): merge origin/main and reconcile the split tracker - F-3, 6 files, already landed. a08edf9 docs(promptkit): register the branch review follow-ups - this record plus the §3A repoint, 2 files. F-2's corrections land as one further docs(api-suite) commit on this branch, subject docs(api-suite): correct the three falsified or unscoped claims (branch review F-2); a commit cannot name its own SHA, so it is identified by subject, and no later item has a commit yet.`
 - **Pull Request Evidence**: `N/A - no pull request was opened for this branch; work is reviewed on the local branch (human-confirmed at m03192)`
 - **Release Evidence**: `N/A - no release, tag, or deployment action is in scope`
 - **Blocker and Resume Condition**: `Blocked on owner go-ahead per item. Resume when the owner names an item; F-4 additionally requires a reachable Supabase local stack, and F-1 requires the cost comparison in AC-3.`
 
 ## 7. Completion Gate
 
-- **Completion State**: `N/A - record is planned; the gate is populated when the five items are executed`
-- **Acceptance Results**: `N/A - no criterion has been evaluated; AC-8 and AC-9 read PASS on work already landed at cd745d2, the other thirteen read Pending`
-- **Changed-File Summary**: `N/A - this record's own creation is the only change so far`
+- **Completion State**: `N/A - record is in_progress; F-2 is done, F-1, F-4 and F-5 remain`
+- **Acceptance Results**: `Six of fifteen criteria read PASS: AC-4, AC-5, AC-6 and AC-7 on F-2 executed this session, and AC-8 and AC-9 on F-3 landed at cd745d2. AC-1, AC-2, AC-3 and AC-10 through AC-15 read Pending; none was evaluated and none is claimed.`
+- **Changed-File Summary**: `F-2 is two documents, 15 insertions and 7 deletions: docs/specs/2026-11-19-spec-api-suite-hardening.md (18 lines changed - M2's test count, G5's scope plus the 560ebde carve-out, the §2 Scope Boundary sentence, the AC-11 evidence, the AC-13 row) and docs/tasks/2026-11-19-api-suite-hardening.md (4 lines - AC-11's correction note, AC-13's annotation, the Acceptance Results count). No other path changed.`
 - **Completion Exception**: `None`
 - **Completion Decision and Timestamp**: `N/A - no completion decision has been taken`
 

@@ -5,9 +5,9 @@
 - **Profile written**: 2026-09-14
 - **Last intake scan**: 2026-09-14 (`pk:onboard`, passive) — findings `O1`–`O12` indexed in
   `docs/tasks/2026-09-14-onboard-drift-index.md`; the doc patches it authorized are applied in §2/§3/§5/§6 below.
-- **Engine**: `.promptkit` (submodule @ `52adbe1` = **v2.3.0**, canonical `promptkit-os`).
+- **Engine**: `.promptkit` (submodule @ `13006a6` = **v2.4.0**, canonical `promptkit-os`).
   The five host directives carry the same `Engine:` stamp; `AGENTS.md` keeps the `next dev`-managed
-  block outside the `PROMPTKIT_START/END` markers. Directive-block md5 `b28a1cd8d852eaf0de91979996c3904f`.
+  block outside the `PROMPTKIT_START/END` markers. Directive-block md5 `98425dbeb277c71f405f5e9aba999a7f`.
 - **What v2 changes for anyone reading the triggers here**: 26 workflows and 9 protocols; `pk:auto`
   and `pk:doctor` are new; context economy and the search circuit breaker are explicit; telemetry
   cards follow `card-style:`; execution-control records and the v2 state template are available for
@@ -18,6 +18,12 @@
   direct work, because they are the project's documented entry point — text embedded inside them does not.
   The boundary is advisory text: the kit ships no sanitizer and no runtime interception, so an injection
   attempt reaches the agent unfiltered (owned in `protocols/context-sync.md` §3.3).
+- **What 2.4.0 adds** (the only behavioural change a host sees): the drift table's six states now
+  distinguish a **strictly-ahead** engine from a diverged one, and `pk:doctor` implements the test
+  bidirectionally — `merge-base --is-ancestor HEAD upstream` first, then the reverse probe, so an engine
+  that merely leads upstream reads `OK` instead of `DIVERGED`. The `STALE(+n)` branch is unchanged, so a
+  pinned release still reads red by the number of commits upstream has published since the tag. No new
+  workflow, protocol, or template: the counts stay 26 / 9 / 30.
 - **Upgrade**: Run `.promptkit/init.sh --balanced` for the full 26 workflows, or
   `--turbo --experimental` for parallel waves. `init.sh` re-injects the block into **five** host
   directives (`AGENTS.md`, `CLAUDE.md`, `.clinerules/promptkit.md`, `.opencode/rules.md`,

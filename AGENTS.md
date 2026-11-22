@@ -3,7 +3,7 @@
 <!-- PROMPTKIT_START -->
 ## PromptKit OS: Engineering Operating System
 PromptKit OS is active in this workspace (`./.promptkit`). Follow these protocols, workflows, and quality gates during pair-programming, design, code generation, and review:
-Engine: v2.3.0 (52adbe1) — stamped at install time; run `pk:sync` to check for drift.
+Engine: v2.4.0 (13006a6) — stamped at install time; run `pk:sync` to check for drift.
 
 ### Fast Shorthand Triggers (Collision-Free)
 Activate workflows anytime with these namespaced triggers:

@@ -112,7 +112,7 @@
 - **Start Time**: `2026-11-23 01:05 UTC for the owned-child leak half; 2026-11-23 (local) for the assertion half`
 - **Current Actor**: `Agent (DeepSeek Harness / lead)`
 - **Next Action**: `All fourteen criteria read PASS on measurement: the assertion half was taken this pass, so AC-5 to AC-8 and AC-11 to AC-13 are no longer pending. Nothing is blocked. Resume at owner review and sign-off; the record may not be marked completed before that, and no completion decision has been taken by the agent.`
-- **Branch / Revision**: `chore/promptkit-v2-sync @ 83d9aed` plus this pass's assertion-repair commit (subject: test(integration): assert SQLSTATE on the rejection cause chain)
+- **Branch / Revision**: `chore/promptkit-v2-sync @ 1001591` for the assertion half (the commit that landed is test(integration): assert SQLSTATE on the rejection cause chain, built on 83d9aed)
 
 ### Transition History
 
@@ -142,7 +142,7 @@
 - **TDD Execution Evidence [Required when enabled]**: `N/A - TDD Enforcement Mode is disabled`
 - **TDD Exception Verification [Required for Documentation, Configuration, or Research Work; Not applicable for Code Work]**: `N/A - Code Work`
 - **CI Evidence**: `No CI run exists for this branch: it has not been pushed and no pull request is open. The reproduction was run locally against the local Supabase stack, which is the same path the suite takes under CI except that CI supplies its own anon and service-role keys at job level.`
-- **Review Evidence**: `docs/reviews/2026-11-22-promptkit-v2-sync-branch.md finding F3 (lines 130-161) for the owned-child leak; finding S5 (lines 374-376) and lines 173-180 for 81fdd3c having no owning record. Both are consumed here rather than re-reviewed. The report is currently untracked.`
+- **Review Evidence**: `docs/reviews/2026-11-22-promptkit-v2-sync-branch.md finding F3 (lines 130-161) for the owned-child leak; finding S5 (lines 374-376) and lines 173-180 for 81fdd3c having no owning record. Both are consumed here rather than re-reviewed. The report was never committed and is no longer on disk, re-checked 2026-11-23: `git log --all --` that path prints nothing, `git status --short` lists only the seven mode-only `scripts/**.sh` diffs, and `git check-ignore` matches no rule. Both findings are therefore restated here rather than cited to a retrievable file - the owned-child leak was `tests/integration/api/test-server.ts` clearing its module handle and rethrowing, and `81fdd3c` has no owning record - and each was executed in this record (AC-1, AC-9, AC-10), so no acceptance result depends on the report surviving.`
 - **Commit Evidence**: `Two commits: 7820617 (docs(promptkit): register the Drizzle/RLS failures as their own task) authored this record, and this pass's test(api) commit carries the owned-child leak fix with the AC-9/AC-10 ticks and the state promotion. The assertion half lands as this pass's test(integration) commit (subject: test(integration): assert SQLSTATE on the rejection cause chain), which also carries the AC-5 to AC-13 ticks, SCR-1 and the state promotion; a commit cannot name its own SHA, so it is identified by subject.`
 - **Pull Request Evidence**: `N/A - no pull request was opened for this branch; work is reviewed on the local branch (human-confirmed at m04215)`
 - **Release Evidence**: `N/A - no release, tag, or deployment action is in scope`

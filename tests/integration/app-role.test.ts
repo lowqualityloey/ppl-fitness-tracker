@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Client } from 'pg';
 import { pgErrorCode, pgErrorMessage } from './pg-error.js';
-import { requireRow } from './test-helpers.js';
+import { appRoleConnectionString, requireRow } from './test-helpers.js';
 
 /*
  * Catalog/aggregate reads have no Drizzle table to infer from, so their shapes
@@ -105,10 +105,7 @@ describe('M1-04: app_authenticated role attributes and security posture', () => 
     it('should fail when trying to call auth.uid() directly', async () => {
       // Connect as app_authenticated to test direct access
       const appClient = new Client({
-        connectionString: process.env.MIGRATION_DATABASE_URL?.replace(
-          'postgres:postgres',
-          'app_authenticated:Wd7EmwRWWqY9s7jMVD3kVqnt+OaW5PowxNIxCY5Ful0='
-        ),
+        connectionString: appRoleConnectionString(),
       });
 
       try {
@@ -129,10 +126,7 @@ describe('M1-04: app_authenticated role attributes and security posture', () => 
 
     it('should fail when trying to access auth.users table directly', async () => {
       const appClient = new Client({
-        connectionString: process.env.MIGRATION_DATABASE_URL?.replace(
-          'postgres:postgres',
-          'app_authenticated:Wd7EmwRWWqY9s7jMVD3kVqnt+OaW5PowxNIxCY5Ful0='
-        ),
+        connectionString: appRoleConnectionString(),
       });
 
       try {
@@ -153,10 +147,7 @@ describe('M1-04: app_authenticated role attributes and security posture', () => 
 
     it('should fail when trying to access other auth schema objects', async () => {
       const appClient = new Client({
-        connectionString: process.env.MIGRATION_DATABASE_URL?.replace(
-          'postgres:postgres',
-          'app_authenticated:Wd7EmwRWWqY9s7jMVD3kVqnt+OaW5PowxNIxCY5Ful0='
-        ),
+        connectionString: appRoleConnectionString(),
       });
 
       try {
@@ -199,42 +190,46 @@ describe('M1-04: app_authenticated role attributes and security posture', () => 
 
   describe('Scenario 4: Drift detection capability', () => {
     it('should detect if role is manually altered to BYPASSRLS', async () => {
-      // First verify current state
-      let result = await client.query<RoleBypassRow>(`
-        SELECT rolbypassrls FROM pg_roles WHERE rolname = 'app_authenticated'
-      `);
-      expect(requireRow(result.rows, 'role bypass state').rolbypassrls).toBe(false);
-
-      // Simulate drift by manually altering the role (this should fail on Supabase)
-      try {
-        await client.query(`ALTER ROLE app_authenticated BYPASSRLS`);
-        
-        // If it succeeded (local dev), verify we can detect the drift
-        result = await client.query<RoleBypassRow>(`
+      const readBypassState = async (description: string): Promise<boolean> => {
+        const result = await client.query<RoleBypassRow>(`
           SELECT rolbypassrls FROM pg_roles WHERE rolname = 'app_authenticated'
         `);
-        
-        if (requireRow(result.rows, 'role bypass state after ALTER').rolbypassrls === true) {
-          // Drift detected - restore proper state for other tests
+        return requireRow(result.rows, description).rolbypassrls;
+      };
+
+      expect(await readBypassState('role bypass state')).toBe(false);
+
+      // Simulate drift by manually altering the role (this should fail on Supabase).
+      // The finally block restores the role even when an assertion fails.
+      let altered = false;
+      let alterBlocked = false;
+      try {
+        try {
+          await client.query(`ALTER ROLE app_authenticated BYPASSRLS`);
+          altered = true;
+        } catch (err) {
+          if (pgErrorCode(err) === '42501') {
+            expect(pgErrorMessage(err)).toMatch(/permission denied|superuser/i);
+            alterBlocked = true;
+          } else {
+            throw err;
+          }
+        }
+
+        if (altered) {
+          expect(await readBypassState('role bypass state after ALTER')).toBe(true);
+          console.log('LOCAL DEV: Role alteration succeeded; drift detected');
+        }
+      } finally {
+        if (altered) {
           await client.query(`ALTER ROLE app_authenticated NOBYPASSRLS`);
-          
-          // In local dev, we can alter the role - this is expected
-          // In production/Supabase, this ALTER would fail with 42501
-          console.log('LOCAL DEV: Role alteration succeeded and drift was detected and fixed');
-          expect(true).toBe(true); // Test passes - we detected and fixed the drift
-        } else {
-          throw new Error('ALTER succeeded but role state unchanged - unexpected behavior');
         }
-      } catch (err) {
-        // Expected on Supabase: 42501 permission denied
-        if (pgErrorCode(err) === '42501') {
-          // This is the expected behavior - can't alter superuser attributes
-          expect(pgErrorMessage(err)).toMatch(/permission denied|superuser/i);
-          console.log('PRODUCTION: Role alteration blocked by database security');
-        } else {
-          // Re-throw if it's an unexpected error
-          throw err;
-        }
+      }
+
+      if (altered) {
+        expect(await readBypassState('role bypass state after restore')).toBe(false);
+      } else {
+        expect(alterBlocked).toBe(true);
       }
     });
   });

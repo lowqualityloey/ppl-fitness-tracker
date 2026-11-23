@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { Client } from 'pg';
 import type { InferSelectModel } from 'drizzle-orm';
 import type * as schema from '../../db/schema/index.js';
-import { requireRow } from './test-helpers.js';
+import { appRoleConnectionString, requireRow } from './test-helpers.js';
 import { pgErrorMessage } from './pg-error.js';
 
 // Local Supabase credentials (shared defaults, safe to inline)
@@ -135,10 +135,7 @@ describe('M1-05: RLS on content tables', () => {
     params: unknown[] = []
   ): Promise<import('pg').QueryResult<Row>> {
     const userClient = new Client({
-      connectionString: process.env.MIGRATION_DATABASE_URL?.replace(
-        'postgres:postgres',
-        'app_authenticated:Wd7EmwRWWqY9s7jMVD3kVqnt+OaW5PowxNIxCY5Ful0='
-      ),
+      connectionString: appRoleConnectionString(),
     });
 
     try {

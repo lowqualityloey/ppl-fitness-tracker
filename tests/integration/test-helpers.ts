@@ -6,7 +6,19 @@ export interface CountRow {
 }
 
 /**
- * Returns the only row a query was expected to produce, or throws.
+ * The app-role connection for tests that must connect as `app_authenticated`.
+ * Credentials are environment-only; there is no inline fallback.
+ */
+export function appRoleConnectionString(): string {
+  const url = process.env.DATABASE_URL;
+  if (!url) {
+    throw new Error('DATABASE_URL (app-role connection) is required for this test');
+  }
+  return url;
+}
+
+/**
+ * Returns the first row a query produced, or throws when there is none.
  *
  * `noUncheckedIndexedAccess` makes `rows[0]` possibly undefined, and a non-null
  * assertion would silence that without checking. This narrows explicitly and
@@ -17,6 +29,18 @@ export function requireRow<T>(rows: readonly T[], description: string): T {
   const row = rows[0];
   if (row === undefined) {
     throw new Error(`Expected one row for ${description}, got none`);
+  }
+  return row;
+}
+
+/**
+ * Returns the row at `index`, or throws with the index and total row count.
+ * Use after an exact-length assertion when reading a non-first row.
+ */
+export function requireRowAt<T>(rows: readonly T[], index: number, description: string): T {
+  const row = rows[index];
+  if (row === undefined) {
+    throw new Error(`Expected row ${index} for ${description}, got ${rows.length} row(s)`);
   }
   return row;
 }

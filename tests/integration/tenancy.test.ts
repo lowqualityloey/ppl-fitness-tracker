@@ -3,7 +3,7 @@ import { Client, Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { eq, sql } from 'drizzle-orm';
 import * as schema from '../../db/schema/index.js';
-import { expectSqlState, requireRow } from './test-helpers.js';
+import { expectSqlState, requireRow, requireRowAt } from './test-helpers.js';
 
 /**
  * M1-08: Tenancy integration gate - THE merge gate.
@@ -205,8 +205,9 @@ describe('M1-08: Tenancy integration gate (THE MERGE GATE)', () => {
        ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name
        RETURNING id`
     );
-    const rdPushId = requireRow(rdResult.rows, 'seeded routine day').id;
-    const rdPullId = rdResult.rows[1]?.id ?? rdPushId;
+    expect(rdResult.rows).toHaveLength(2);
+    const rdPushId = requireRow(rdResult.rows, 'seeded push routine day').id;
+    const rdPullId = requireRowAt(rdResult.rows, 1, 'seeded pull routine day').id;
 
     // Ensure at least one exercise exists to satisfy session_sets' FK —
     // the exercises table may be empty on a fresh database (M1-09 seed not applied)

@@ -1,0 +1,7 @@
+# This file too, or autocrlf can turn its own rules into CRLF on checkout.
+.gitattributes text eol=lf
+
+# Shell scripts are authored and executed with LF. Without this, a Windows
+# worktree with core.autocrlf=true turns them into CRLF, so every tracked script
+# reads as modified for a reason unrelated to the change being made.
+*.sh text eol=lf

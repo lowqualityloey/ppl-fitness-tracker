@@ -89,13 +89,21 @@ export default async function setup(): Promise<() => Promise<void>> {
    * teardown failure after the whole suite has already run against the new file.
    */
   const tsconfigBefore = readTrackedTsconfig();
+  /*
+   * The last snapshot known to match the tracked content. Replaced the moment
+   * readiness answers; the teardown compares against it, so a rewrite that
+   * happens after startup (a lazy route compile, say) is still caught.
+   */
+  let tsconfigAfterReady = tsconfigBefore;
 
   truncateFile(SHARED_LOG_PATH);
   const server = await spawnNextDev({ port: API_TEST_PORT, logPath: SHARED_LOG_PATH });
   const removeSignalCleanup = installSignalCleanup(server, { clearManifest: true });
   try {
     await waitForReady(apiOrigin, server.child, SHARED_LOG_PATH, 30_000);
-    assertTrackedTsconfigUnchanged(tsconfigBefore, readTrackedTsconfig());
+    const tsconfigAtReady = readTrackedTsconfig();
+    assertTrackedTsconfigUnchanged(tsconfigBefore, tsconfigAtReady);
+    tsconfigAfterReady = tsconfigAtReady;
   } catch (error) {
     removeSignalCleanup();
     await server.stop();
@@ -144,5 +152,18 @@ export default async function setup(): Promise<() => Promise<void>> {
     removeSignalCleanup();
     await server.stop();
     removeServerManifest();
+    /*
+     * D6, late-write half: the readiness check cannot see a rewrite that lands
+     * after the server answered, so compare the file against the post-readiness
+     * snapshot once the child has stopped. Printed before the throw for the same
+     * reason as setup: Vitest 5.0.5's reporter mangles errors thrown from global
+     * setup/teardown. Still no restore - a silent revert would hide the change.
+     */
+    try {
+      assertTrackedTsconfigUnchanged(tsconfigAfterReady, readTrackedTsconfig());
+    } catch (error) {
+      console.error(`\nAPI suite teardown: ${error instanceof Error ? error.message : String(error)}\n`);
+      throw error;
+    }
   };
 }

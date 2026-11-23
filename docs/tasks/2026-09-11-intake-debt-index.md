@@ -268,8 +268,10 @@ what Next wants. What was missing was proof and a guard. `global-setup.ts` now s
 tracked file before the `next dev` spawn, and `assertTrackedTsconfigUnchanged`
 (`server-process.ts`) checks it the moment readiness answers, so a rewrite fails setup in
 seconds instead of after the whole suite — without restoring, so a Next bump that wants a new
-entry must be committed deliberately rather than reverted into invisibility. The assertion
-takes both snapshots, so the unit test never writes the tracked file. Two unit cases cover
+entry must be committed deliberately rather than reverted into invisibility. The teardown
+then compares the file against that post-readiness snapshot, so a rewrite that lands after
+startup - during a lazy route compile, say - still fails the run. The assertion takes both
+snapshots, so the unit test never writes the tracked file. Two unit cases cover
 accept, and detect-and-leave-on-disk.
 
 Evidence, this host, 2026-11-23: the harness's own command

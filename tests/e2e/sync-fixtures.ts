@@ -40,12 +40,21 @@ export function syncResponseBody(data: SyncResponseData): string {
  * live route rather than taking on faith. The mock this replaces used `'ILLEGAL_TRANSITION'`, a
  * label no server code path has ever emitted: the same species of invention as the deleted
  * `state` key, corrected in the same change.
+ *
+ * #77 added `message` beside the code, and the sentence below is the one that gate really throws
+ * — copied from `transition-table.ts`, not paraphrased. The browser spec asserts the runner
+ * renders *this* text, so a fixture that invented a friendlier sentence would pass while the
+ * real server's words went unrendered.
  */
 export function refusedSyncResponseBody(mutationId: string, serverSeq = 1): string {
   return syncResponseBody({
     serverSeq,
     applied: [],
-    rejected: [{ mutationId, reason: 'CONFLICT' }],
+    rejected: [{
+      mutationId,
+      reason: 'CONFLICT',
+      message: 'Sets can only be changed during the main workout.',
+    }],
     clockSkewMs: 0,
   });
 }

@@ -168,9 +168,21 @@ describe('M2-04: POST /api/sync', () => {
     expect(parsed.success).toBe(true);
     if (!parsed.success || !parsed.data.ok) return;
     expect(parsed.data.data.applied).toEqual([batch.setMutation.mutationId, batch.taskMutation.mutationId]);
+    // #77: the code stays the machine truth and the sentence rides beside it. Both sentences
+    // below are the ones the domain really throws — `assertPhaseAdvance` for the self-advance,
+    // `assertFinishAllowed` for the finish — so this is the server's own words, not a table
+    // the client keeps in parallel.
     expect(parsed.data.data.rejected).toEqual([
-      { mutationId: batch.phaseMutation.mutationId, reason: 'INVALID_MUTATION' },
-      { mutationId: batch.finishMutation.mutationId, reason: 'CONFLICT' },
+      {
+        mutationId: batch.phaseMutation.mutationId,
+        reason: 'INVALID_MUTATION',
+        message: 'Cannot advance from exercise to exercise.',
+      },
+      {
+        mutationId: batch.finishMutation.mutationId,
+        reason: 'CONFLICT',
+        message: 'A session can only finish from post-workout.',
+      },
     ]);
     expect(parsed.data.data.serverSeq).toBe(2);
     expect(parsed.data.data.clockSkewMs).toEqual(expect.any(Number));
@@ -375,7 +387,11 @@ describe('M2-04: POST /api/sync', () => {
     expect(wireFields(body)).toEqual(SYNC_WIRE_FIELDS);
     const data = SyncResponseDataSchema.parse((body as { data: unknown }).data);
     expect(data.applied).toEqual([warmUp.mutationId, startMainWorkout.mutationId, loggedSet.mutationId]);
-    expect(data.rejected).toEqual([{ mutationId: beyondThePlan.mutationId, reason: 'INVALID_MUTATION' }]);
+    expect(data.rejected).toEqual([{
+      mutationId: beyondThePlan.mutationId,
+      reason: 'INVALID_MUTATION',
+      message: 'Set index exceeds the routine target set count.',
+    }]);
     expect(data.serverSeq).toBe(3);
 
     // And the state the deleted field used to hand back is readable, correct, and arrives from the
@@ -467,7 +483,11 @@ describe('M2-04: POST /api/sync', () => {
     const data = SyncResponseDataSchema.parse((body as { data: unknown }).data);
     expectedApplied.push(logged.mutationId);
     expect(data.applied).toEqual(expectedApplied);
-    expect(data.rejected).toEqual([{ mutationId: refused.mutationId, reason: 'INVALID_MUTATION' }]);
+    expect(data.rejected).toEqual([{
+      mutationId: refused.mutationId,
+      reason: 'INVALID_MUTATION',
+      message: 'Set index exceeds the routine target set count.',
+    }]);
 
     // The camelCase call-site key arrives snake_cased: `wireKey` is the only
     // place the mapping happens, and the assertion spelling is the wire's.
@@ -477,6 +497,9 @@ describe('M2-04: POST /api/sync', () => {
     expect(rejection).toMatchObject({
       level: 'warn',
       reason: 'INVALID_MUTATION',
+      // #77: the trail carries the sentence too, so an operator reading the log does not have
+      // to hold the code table in their head either.
+      message: 'Set index exceeds the routine target set count.',
       user_id: owner.userId,
       session_id: sessionId,
     });

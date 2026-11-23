@@ -19,6 +19,7 @@ import {
   SessionFinishMutationSchema,
   SetUpsertMutationSchema,
   SyncMutationSchema,
+  SyncRejectionSchema,
   SyncRequestSchema,
   SyncResponseDataSchema,
   SyncResponseSchema,
@@ -202,6 +203,34 @@ describe('sync contracts', () => {
       ...narrowed,
       state: { session: { ...mapperOutput(), sets: [], tasks: [] } },
     }).success).toBe(false);
+  });
+
+  /*
+   * #77 — the rejection item carries the sentence, not only the code.
+   *
+   * `reason` stays the machine truth: tests, metrics and any retry policy switch on it, and the
+   * assertion below that a rejection *without* a code is refused is what keeps this additive
+   * rather than a replacement. `message` is the domain error's own sentence, which the server
+   * has always produced one call site away and used to discard.
+   *
+   * Required, not optional. The spec's §4.1 sketch wrote `max(200).optional()`; every server
+   * rejection path has a sentence in hand, so an optional field would only put a fallback branch
+   * back in the UI — the branch #77 exists to delete. The 200 cap is the sketch's, kept.
+   */
+  it('carries a sentence beside the rejection code, and refuses one that cannot explain itself', () => {
+    const rejection = {
+      mutationId: ids.mutation,
+      reason: 'CONFLICT',
+      message: 'Sets can only be changed during the main workout.',
+    };
+    expect(SyncRejectionSchema.safeParse(rejection).success).toBe(true);
+    // Additive: the code is still required, so a sentence alone is not a rejection.
+    expect(SyncRejectionSchema.safeParse({ mutationId: ids.mutation, message: rejection.message }).success).toBe(false);
+    // And the sentence is required too — a code alone is the shape #77 was filed about.
+    expect(SyncRejectionSchema.safeParse({ mutationId: ids.mutation, reason: 'CONFLICT' }).success).toBe(false);
+    expect(SyncRejectionSchema.safeParse({ ...rejection, message: '' }).success).toBe(false);
+    expect(SyncRejectionSchema.safeParse({ ...rejection, message: 'x'.repeat(201) }).success).toBe(false);
+    expect(SyncRejectionSchema.safeParse({ ...rejection, message: 'x'.repeat(200) }).success).toBe(true);
   });
 });
 

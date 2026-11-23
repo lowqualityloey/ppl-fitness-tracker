@@ -100,7 +100,7 @@ function engineHarness(
  */
 function okResponse(
   serverSeq = 1,
-  overrides: { applied?: string[]; rejected?: { mutationId: string; reason: string }[] } = {},
+  overrides: { applied?: string[]; rejected?: { mutationId: string; reason: string; message: string }[] } = {},
 ): SendOutcome {
   return {
     kind: 'ok',
@@ -171,7 +171,11 @@ describe('SyncEngine — §4.3 one in-flight batch', () => {
     const harness = engineHarness(() =>
       okResponse(5, {
         applied: [id(1)],
-        rejected: [{ mutationId: id(2), reason: 'INVALID_MUTATION' }],
+        rejected: [{
+          mutationId: id(2),
+          reason: 'INVALID_MUTATION',
+          message: 'Set index exceeds the routine target set count.',
+        }],
       }),
     );
 
@@ -199,7 +203,14 @@ describe('SyncEngine — §4.3 one in-flight batch', () => {
     // not spend the rest of the workout being refused again.
     const harness = engineHarness((callIndex) =>
       callIndex === 0
-        ? okResponse(1, { applied: [], rejected: [{ mutationId: id(1), reason: 'ILLEGAL_TRANSITION' }] })
+        ? okResponse(1, {
+          applied: [],
+          rejected: [{
+            mutationId: id(1),
+            reason: 'ILLEGAL_TRANSITION',
+            message: 'The warm-up task must be completed before starting the main workout.',
+          }],
+        })
         : okResponse(2, { applied: [id(2)] }),
     );
     await harness.storage.put(stored(0, setMutation(1, 0)));
@@ -362,7 +373,13 @@ describe('SyncEngine — what the screen subscribes to', () => {
 
   it('surfaces rejections through the snapshot and clears them on dismissal', async () => {
     const harness = engineHarness(() =>
-      okResponse(1, { rejected: [{ mutationId: id(1), reason: 'SESSION_FINISHED' }] }),
+      okResponse(1, {
+        rejected: [{
+          mutationId: id(1),
+          reason: 'SESSION_FINISHED',
+          message: 'A session can only finish from post-workout.',
+        }],
+      }),
     );
     await harness.storage.put(stored(0, setMutation(1, 0)));
     await harness.engine.drain();
@@ -501,7 +518,11 @@ describe('an outbox written before #105, drained against the narrowed contract',
       narrowedAnswer({
         serverSeq: 3,
         applied: [id(2)],
-        rejected: [{ mutationId: id(1), reason: 'CONFLICT' }],
+        rejected: [{
+          mutationId: id(1),
+          reason: 'CONFLICT',
+          message: 'Sets can only be changed during the main workout.',
+        }],
         clockSkewMs: 0,
       }),
     );

@@ -16,13 +16,23 @@ import type { StoredMutation } from './outbox';
 /** Why one local change could not be shown as applied. */
 export interface VisibleRejection {
   mutationId: string;
+  /** The machine code. Tests, metrics and retry policy switch on this; the screen does not. */
   reason: string;
   /**
+   * The server's own sentence for the refusal (#77), rendered as-is.
+   *
+   * Before #77 this screen had only `reason`, so it showed an athlete `Set 3 — CONFLICT` and
+   * the runner kept a local copy of the lifecycle rules to say anything more useful. The
+   * sentence now arrives from the layer that decided the refusal, which is the only layer
+   * that knows why. A locally-refused mutation (one the server never saw) carries its own
+   * sentence here, so the field is never empty and the row never needs a fallback branch.
+   */
+  message: string;
+  /**
    * A human-readable handle on *what* was refused, derived from the mutation while it
-   * is still in hand. The server's `reason` is a code (`INVALID_MUTATION`,
-   * `ILLEGAL_TRANSITION`) — true, and useless to someone holding a phone with chalk on
-   * their hands. And because a refused mutation leaves the queue, a screen that tried to
-   * recover this label later would be looking for a record that is gone.
+   * is still in hand. The label says *what*, `message` says *why* — and because a refused
+   * mutation leaves the queue, a screen that tried to recover this label later would be
+   * looking for a record that is gone.
    */
   label: string;
 }
@@ -188,9 +198,13 @@ export function projectPending(
 
     const target = byRow.get(rowKey({ exerciseId: mutation.exerciseId, setIndex: mutation.setIndex }));
     if (target === undefined) {
+      // A local refusal: the server never saw this mutation, so there is no server
+      // sentence to carry. It carries its own, and `reason` keeps the same text it has
+      // always had — this path has no code table to be stable against.
       unprojectable.push({
         mutationId: stored.mutationId,
         reason: 'That set is not part of this day’s plan.',
+        message: 'That set is not part of this day’s plan.',
         label: describeMutation(stored.payload),
       });
       continue;
@@ -253,10 +267,15 @@ export interface ReconciliationOutcome {
 
 export function reconcile(
   sent: readonly StoredMutation[],
-  response: { applied: readonly string[]; rejected: readonly { mutationId: string; reason: string }[] },
+  response: {
+    applied: readonly string[];
+    rejected: readonly { mutationId: string; reason: string; message: string }[];
+  },
 ): ReconciliationOutcome {
   const appliedSet = new Set(response.applied);
-  const rejectedById = new Map(response.rejected.map((item) => [item.mutationId, item.reason]));
+  // #77: the whole item, not just its code — the sentence is what the row renders, and
+  // dropping it here is exactly how it would fail to reach the screen.
+  const rejectedById = new Map(response.rejected.map((item) => [item.mutationId, item]));
 
   const applied: string[] = [];
   let appliedUnprojectedOp = false;
@@ -269,11 +288,12 @@ export function reconcile(
   // that was never queued. (The server listing an unknown id is worth knowing about
   // — it is asserted against in an API test, not here.)
   for (const stored of sent) {
-    const reason = rejectedById.get(stored.mutationId);
-    if (reason !== undefined) {
+    const refusal = rejectedById.get(stored.mutationId);
+    if (refusal !== undefined) {
       rejected.push({
         mutationId: stored.mutationId,
-        reason,
+        reason: refusal.reason,
+        message: refusal.message,
         label: describeMutation(stored.payload),
       });
       continue;

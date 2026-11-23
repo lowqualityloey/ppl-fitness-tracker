@@ -254,8 +254,19 @@ test.describe('session runner', () => {
 
       const tick = firstTick(page);
       await tick.click();
-      await expect(page.getByTestId('rejection-line')).toContainText('CONFLICT');
+      // #77. This line used to assert the code `CONFLICT` — the server's machine truth, shown
+      // to someone holding a phone. The row now carries the domain's own sentence, and the
+      // assertion is that sentence verbatim: the fixture's message is the one
+      // `assertSetMutationAllowed` really throws, so a runner that re-derived its own wording
+      // from the code would fail here.
+      await expect(page.getByTestId('rejection-line')).toContainText(
+        'Sets can only be changed during the main workout.',
+      );
+      // The label still says *what* was refused; the message says *why*. Both are needed.
       await expect(page.getByTestId('rejection-line')).toContainText('Set 1');
+      // The code is not gone, it is just no longer the sentence: it stays on the object for
+      // tests, metrics and retry policy, and it must not leak into the athlete's row.
+      await expect(page.getByTestId('rejection-line')).not.toContainText('CONFLICT');
       // The tick is un-painted by the authoritative refetch rather than by a local
       // rollback: the screen shows what the server says, and §4.3 forbids surgery.
       await expectUnlogged(tick);

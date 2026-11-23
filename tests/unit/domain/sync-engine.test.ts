@@ -7,6 +7,7 @@ import {
   normalizeClientTimestamp,
   SyncEngine,
 } from '../../../lib/domain/sync/sync-engine';
+import { SessionConflictError } from '../../../lib/domain/sessions/types';
 import type {
   SyncEntityType,
   SyncEntityVersion,
@@ -188,7 +189,11 @@ describe('SyncEngine policy', () => {
     const result = await engine.apply(request([changed]));
 
     expect(result.applied).toEqual([]);
-    expect(result.rejected).toEqual([{ mutationId: changed.mutationId, reason: 'MUTATION_ID_REUSE' }]);
+    expect(result.rejected).toEqual([{
+      mutationId: changed.mutationId,
+      reason: 'MUTATION_ID_REUSE',
+      message: 'This change was already sent with different contents.',
+    }]);
     expect(store.appliedMutations).toHaveLength(1);
   });
 
@@ -207,8 +212,76 @@ describe('SyncEngine policy', () => {
     const oldMutation = mutation({ clientTs: '2026-09-08T11:00:00.000Z' });
     const result = await new SyncEngine(store).apply(request([oldMutation]));
 
-    expect(result.rejected).toEqual([{ mutationId: oldMutation.mutationId, reason: 'STALE_CONFLICT' }]);
+    expect(result.rejected).toEqual([{
+      mutationId: oldMutation.mutationId,
+      reason: 'STALE_CONFLICT',
+      message: 'A newer change to this set already reached the server.',
+    }]);
     expect(store.appliedMutations).toEqual([]);
     expect(store.records.get(oldMutation.mutationId)?.status).toBe('rejected');
+  });
+
+  /*
+   * #77 — the sentence the domain already wrote, carried instead of discarded.
+   *
+   * `rejectionReason` maps the error *type* to a code and drops `error.message` on the floor;
+   * the runner then had to reconstruct the rule locally to say anything a person could act on.
+   * The sentence below is the one `assertSetMutationAllowed` really throws, and the assertion
+   * is that it arrives verbatim — not paraphrased, not re-derived from the code.
+   */
+  it('carries the domain error’s own sentence beside the code it maps to', async () => {
+    class RefusingStore extends FakeSyncStore {
+      readonly refusal: Error;
+
+      constructor(refusal: Error) {
+        super();
+        this.refusal = refusal;
+      }
+
+      override async applyMutation(): Promise<void> {
+        throw this.refusal;
+      }
+    }
+
+    const sentence = 'Sets can only be changed during the main workout.';
+    const store = new RefusingStore(new SessionConflictError(sentence));
+    const result = await new SyncEngine(store).apply(request([mutation()]));
+
+    expect(result.rejected).toEqual([{
+      mutationId: mutation().mutationId,
+      reason: 'CONFLICT',
+      message: sentence,
+    }]);
+    // The code is what the row stores, and #77 adds no migration: the column keeps the code.
+    expect(store.records.get(mutation().mutationId)?.rejectionReason).toBe('CONFLICT');
+  });
+
+  /*
+   * #77 — a replayed refusal still explains itself.
+   *
+   * `sync_mutations.rejection_reason` stores the code and nothing else, and #77 deliberately
+   * added no migration, so a replay has no stored sentence to hand back. It reconstructs one
+   * from the code instead. The assertion is that the replay is *not* silent: a client that
+   * retried a refused mutation must still get a sentence it can render, even though the
+   * original domain error is long gone.
+   */
+  it('gives a replayed refusal a sentence, because the column stores only the code', async () => {
+    class RefusingStore extends FakeSyncStore {
+      override async applyMutation(): Promise<void> {
+        throw new SessionConflictError('Sets can only be changed during the main workout.');
+      }
+    }
+
+    const store = new RefusingStore();
+    const engine = new SyncEngine(store);
+    const input = request([mutation()]);
+    await engine.apply(input);
+    const replay = await engine.apply(input);
+
+    expect(replay.rejected).toEqual([{
+      mutationId: mutation().mutationId,
+      reason: 'CONFLICT',
+      message: 'The session changed since this change was queued.',
+    }]);
   });
 });

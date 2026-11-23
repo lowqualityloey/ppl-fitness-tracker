@@ -1,5 +1,10 @@
 import { expect } from 'vitest';
 
+/** A `count(*)::text` aggregate row. */
+export interface CountRow {
+  count: string;
+}
+
 /**
  * Returns the only row a query was expected to produce, or throws.
  *

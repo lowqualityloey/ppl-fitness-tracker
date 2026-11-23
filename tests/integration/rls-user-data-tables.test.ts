@@ -161,11 +161,7 @@ async function queryOne<T extends Record<string, unknown>>(
   values: readonly unknown[],
 ): Promise<T> {
   const result = await ownerClient.query<T>(query, [...values]);
-  const row = result.rows[0];
-  if (!row) {
-    throw new Error(`Expected owner seed query to return one row: ${query}`);
-  }
-  return row;
+  return requireRow(result.rows, `owner seed query: ${query}`);
 }
 
 async function cleanupTestUsers(): Promise<void> {

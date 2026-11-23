@@ -3,7 +3,7 @@ import { Client } from 'pg';
 import type { InferSelectModel } from 'drizzle-orm';
 import type * as schema from '../../db/schema/index.js';
 import { pgErrorCode, pgErrorMessage } from './pg-error.js';
-import { requireRow } from './test-helpers.js';
+import { requireRow, type CountRow } from './test-helpers.js';
 
 /*
  * Catalog/aggregate reads have no Drizzle table to infer from, so their shapes
@@ -34,10 +34,6 @@ type ExerciseIdRow = Pick<InferSelectModel<typeof schema.exercises>, 'id'>;
 interface SessionSetUpsertRow {
   weight_kg: string;
   reps: number;
-}
-
-interface CountRow {
-  count: string;
 }
 
 describe('M1-03: Schema Constraints & Verification', () => {

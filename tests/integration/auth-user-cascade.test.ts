@@ -36,7 +36,7 @@ const TEST_PASSWORD = 'auth-cascade-test-password-123';
 
 const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 
-interface CountRow {
+interface NumericCountRow {
   n: string | number;
 }
 interface ConstraintRow {
@@ -146,14 +146,14 @@ async function countUserRows(owner: Client, userId: string): Promise<Record<stri
   };
   const counts: Record<string, number> = {};
   for (const [table, column] of Object.entries(perTable)) {
-    const result = await owner.query<CountRow>(
+    const result = await owner.query<NumericCountRow>(
       `SELECT count(*)::int AS n FROM public.${table} WHERE ${column} = $1`,
       [userId],
     );
     counts[table] = Number(requireRow(result.rows, `${table} row count`).n);
   }
   // session_tasks hangs off the session, not the user directly.
-  const tasks = await owner.query<CountRow>(
+  const tasks = await owner.query<NumericCountRow>(
     `SELECT count(*)::int AS n FROM public.session_tasks t
        WHERE t.session_id IN (SELECT id FROM public.workout_sessions WHERE user_id = $1)`,
     [userId],
@@ -175,7 +175,7 @@ describe('M4-00 (#89): auth user deletion cascades to profiles and everything be
     // Production-path cleanup where possible; owner SQL as the net for anything whose auth
     // parent is already gone (that deletion IS the cascade being tested).
     for (const id of createdUserIds) {
-      const exists = await owner.query<CountRow>('SELECT count(*)::int AS n FROM auth.users WHERE id = $1', [id]);
+      const exists = await owner.query<NumericCountRow>('SELECT count(*)::int AS n FROM auth.users WHERE id = $1', [id]);
       if (Number(requireRow(exists.rows, 'auth user existence check').n) > 0) {
         await deleteGoTrueUser(id).catch(() => undefined);
       }
@@ -229,7 +229,7 @@ describe('M4-00 (#89): auth user deletion cascades to profiles and everything be
 
     // The on_auth_user_created trigger gives the user a real profile row — the FK parent
     // exists, so this is the world as the app knows it.
-    const profileBefore = await owner.query<CountRow>(
+    const profileBefore = await owner.query<NumericCountRow>(
       'SELECT count(*)::int AS n FROM public.profiles WHERE id = $1',
       [userId],
     );
@@ -247,7 +247,7 @@ describe('M4-00 (#89): auth user deletion cascades to profiles and everything be
     // measurement of that claim (see ADR-0006; do not call it proven elsewhere).
     await deleteGoTrueUser(userId);
 
-    const auth = await owner.query<CountRow>('SELECT count(*)::int AS n FROM auth.users WHERE id = $1', [userId]);
+    const auth = await owner.query<NumericCountRow>('SELECT count(*)::int AS n FROM auth.users WHERE id = $1', [userId]);
     expect(Number(requireRow(auth.rows, 'auth user after GoTrue deletion').n)).toBe(0);
     const after = await countUserRows(owner, userId);
     for (const [table, n] of Object.entries(after)) {
@@ -321,7 +321,7 @@ describe('M4-00 (#89): auth user deletion cascades to profiles and everything be
     // And the same deletion WITH the constraint now removes the profile — the control
     // only means something paired with the fix firing.
     await owner.query('DELETE FROM auth.users WHERE id = $1', [userId]);
-    const gone = await owner.query<CountRow>(
+    const gone = await owner.query<NumericCountRow>(
       'SELECT count(*)::int AS n FROM public.profiles WHERE id = $1',
       [userId],
     );

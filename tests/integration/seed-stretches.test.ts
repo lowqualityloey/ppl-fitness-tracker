@@ -2,13 +2,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Client } from 'pg';
 import { seedExercises, exerciseSeedRows } from '../../db/seed/exercises';
 import { seedStretches, stretchSeedRows } from '../../db/seed/stretches';
-import { requireRow } from './test-helpers.js';
+import { requireRow, type CountRow } from './test-helpers.js';
 
 const connectionString = process.env.MIGRATION_DATABASE_URL;
-
-interface CountRow {
-  count: string;
-}
 
 const expectedByDay = {
   push: [

@@ -232,15 +232,16 @@ describe('M1-05: RLS on content tables', () => {
       `, [requireRow(routineDay.rows, 'system routine day id').id, requireRow(exercise.rows, 'system exercise id').id]);
 
       // Both users should be able to read the association
+      const associationId = requireRow(association.rows, 'system routine exercise id').id;
       const userAResult = await executeAsUser<RoutineExerciseIdRow>(userA,
         `SELECT id FROM routine_exercises WHERE id = $1`,
-        [requireRow(association.rows, 'system routine exercise id').id]
+        [associationId]
       );
       expect(userAResult.rows).toHaveLength(1);
 
       const userBResult = await executeAsUser<RoutineExerciseIdRow>(userB,
         `SELECT id FROM routine_exercises WHERE id = $1`, 
-        [requireRow(association.rows, 'system routine exercise id').id]
+        [associationId]
       );
       expect(userBResult.rows).toHaveLength(1);
     });
@@ -380,16 +381,19 @@ describe('M1-05: RLS on content tables', () => {
         RETURNING id
       `);
 
+      const routineDayId = requireRow(routineDay.rows, 'read-only routine day id').id;
+      const exerciseId = requireRow(exercise.rows, 'read-only exercise id').id;
       const association = await ownerClient.query<RoutineExerciseIdRow>(`
         INSERT INTO routine_exercises (routine_day_id, exercise_id, order_index, target_sets, target_reps)
         VALUES ($1, $2, 0, 3, 8)
         RETURNING id
-      `, [requireRow(routineDay.rows, 'read-only routine day id').id, requireRow(exercise.rows, 'read-only exercise id').id]);
+      `, [routineDayId, exerciseId]);
+      const associationId = requireRow(association.rows, 'read-only routine exercise id').id;
 
       // User A attempts to update (should affect 0 rows)
       const updateResult = await executeAsUser<NoRows>(userA,
         `UPDATE routine_exercises SET target_sets = 5 WHERE id = $1`,
-        [requireRow(association.rows, 'read-only routine exercise id').id]
+        [associationId]
       );
       expect(updateResult.rowCount).toBe(0);
 
@@ -398,7 +402,7 @@ describe('M1-05: RLS on content tables', () => {
         await executeAsUser<NoRows>(userA, `
           INSERT INTO routine_exercises (routine_day_id, exercise_id, order_index, target_sets, target_reps)
           VALUES ($1, $2, 1, 4, 6)
-        `, [requireRow(routineDay.rows, 'read-only routine day id').id, requireRow(exercise.rows, 'read-only exercise id').id]);
+        `, [routineDayId, exerciseId]);
         throw new Error('Should have failed due to RLS policy');
       } catch (err) {
         expect(pgErrorMessage(err)).toContain('new row violates row-level security policy');

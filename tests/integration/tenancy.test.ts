@@ -205,9 +205,8 @@ describe('M1-08: Tenancy integration gate (THE MERGE GATE)', () => {
        ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name
        RETURNING id`
     );
-    const rdIds = rdResult.rows.map((r) => r.id);
-    const rdPushId = requireRow(rdIds, 'seeded routine day ids');
-    const rdPullId = rdIds[1] ?? rdPushId;
+    const rdPushId = requireRow(rdResult.rows, 'seeded routine day').id;
+    const rdPullId = rdResult.rows[1]?.id ?? rdPushId;
 
     // Ensure at least one exercise exists to satisfy session_sets' FK —
     // the exercises table may be empty on a fresh database (M1-09 seed not applied)

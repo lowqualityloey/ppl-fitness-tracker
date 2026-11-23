@@ -9,7 +9,7 @@ import { LegacyImporter } from '../../../lib/domain/import/legacy-import-service
 import { LegacyImportNothingWrittenError, type LegacyImportedCounts } from '../../../lib/domain/import/types.js';
 import { buildImportReport, planLegacyImport } from '../../../lib/domain/import/legacy-importer.js';
 import { LegacyImportRepository } from '../../../lib/repositories/legacy-import-repository.js';
-import { requireRow } from '../test-helpers.js';
+import { requireRow, type CountRow } from '../test-helpers.js';
 
 /**
  * M2-05 persistence layer, against the real database and the real seeded
@@ -29,10 +29,6 @@ const OWNER_URL = process.env.MIGRATION_DATABASE_URL;
 const APP_URL = process.env.DATABASE_URL;
 const TEST_PASSWORD = 'm2-legacy-import-test-password';
 const IMPORTED_AT = new Date('2026-09-11T12:00:00.000Z');
-
-interface CountRow {
-  count: string;
-}
 
 interface StoredReportRow {
   report: string;

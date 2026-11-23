@@ -19,7 +19,7 @@ credential that had been faking a code regression, and two structural findings (
 | D3 phantom E2E config | **doc-closed** | `PROMPTKIT.md` §2/§3 now state E2E does not exist; `tests/e2e/` to be created with its first spec in M3/M4 |
 | D4 migration journal gap | **CLOSED** — #89 (M4-00), ADR-0006 | hand-authoring recorded as the model; `db:generate`/`db:migrate` retired, `supabase/migrations/meta/` deleted, `tests/unit/migration-authority.test.ts` gates every re-introduction (watched RED ×4) |
 | D5 route suites outside CI | **CLOSED** — merged in PR #48 | API step + preflight + declared-pending registry + anti-rot guard + env guard; `main` CI runs the gate green |
-| D6 test run rewrites tracked `tsconfig.json` | open (new) | below |
+| D6 test run rewrites tracked `tsconfig.json` | **CLOSED** — 2026-11-23 | below |
 | D7 integration suites read `pg` results as inferred `any` | open (new) | below |
 
 Branch and PR names, deliberately **no commit SHAs**: this table was first written with hashes,
@@ -261,6 +261,24 @@ Scenario: A test run leaves the tree clean
 or restore the file after the run in `afterAll`/the CI step (`git checkout -- tsconfig.json`
 is wrong-shaped for a library; prefer pinning the entry in the repo). Reverted manually in
 this session; no decision recorded yet.
+
+**Closed 2026-11-23** — the first fix shape had already landed: `0aa95fb` (2026-09-13)
+committed the include entries Next 16 asks for, so the checked-in file no longer differs from
+what Next wants. What was missing was proof and a guard. `global-setup.ts` now snapshots the
+tracked file before the `next dev` spawn, and `assertTrackedTsconfigUnchanged`
+(`server-process.ts`) checks it the moment readiness answers, so a rewrite fails setup in
+seconds instead of after the whole suite — without restoring, so a Next bump that wants a new
+entry must be committed deliberately rather than reverted into invisibility. The assertion
+takes both snapshots, so the unit test never writes the tracked file. Two unit cases cover
+accept, and detect-and-leave-on-disk.
+
+Evidence, this host, 2026-11-23: the harness's own command
+(`npx --no-install next dev --port 3199`) left the committed `tsconfig.json` byte-identical
+(sha256 `98daab82…` before and after). Negative control: the same file with
+`.next/dev/types/**/*.ts` removed was rewritten by Next (the entry re-added) and the guard
+threw `The API suite rewrote the tracked tsconfig.json…`; the file was then restored from
+HEAD. A full `npm run test:api` cannot execute on win32 because the harness refuses that
+platform by design (S4), so CI is the end-to-end executor of the readiness check.
 
 ---
 

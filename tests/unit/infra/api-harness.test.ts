@@ -8,6 +8,7 @@ import {
   answersReadiness,
   apiOrigin,
   assertSupportedPlatform,
+  assertTrackedTsconfigUnchanged,
   confirmSurvived,
   describeExit,
   fileSize,
@@ -16,6 +17,7 @@ import {
   parseServerManifest,
   pruneStaleOwnedLogs,
   readPort,
+  readTrackedTsconfig,
   removeServerManifest,
   resolveSpawnEnv,
   signalApiServer,
@@ -147,6 +149,28 @@ describe('fileSize (S9)', () => {
       return;
     }
     expect(() => fileSize(underFile)).toThrow(/ENOTDIR/);
+  });
+});
+
+describe('tracked tsconfig (D6)', () => {
+  it('accepts a boot that wrote nothing', () => {
+    // What the setup sees when the readiness snapshot matches the pre-spawn one.
+    const snapshot = readTrackedTsconfig();
+    expect(() => assertTrackedTsconfigUnchanged(snapshot, readTrackedTsconfig())).not.toThrow();
+  });
+
+  it('names the rewrite it is given and writes nothing back', () => {
+    // Both buffers are supplied, so the failure path is exercised without
+    // writing to the tracked file: this case never touches tsconfig.json.
+    const original = readTrackedTsconfig();
+    const rewritten = Buffer.concat([original, Buffer.from('\n')]);
+    expect(() => assertTrackedTsconfigUnchanged(original, rewritten)).toThrow(
+      /rewrote the tracked tsconfig\.json/,
+    );
+    // The assertion compares and throws; it neither restores nor writes. A
+    // silent revert would hide a Next bump that now wants a new entry, and the
+    // next reader would meet the same dirty tree with no explanation.
+    expect(readTrackedTsconfig().equals(original)).toBe(true);
   });
 });
 

@@ -2,12 +2,14 @@ import {
   API_TEST_PORT,
   answersReadiness,
   apiOrigin,
+  assertTrackedTsconfigUnchanged,
   confirmSurvived,
   describeExit,
   installSignalCleanup,
   logTail,
   pruneStaleOwnedLogs,
   readServerManifest,
+  readTrackedTsconfig,
   removeServerManifest,
   SHARED_LOG_PATH,
   spawnNextDev,
@@ -78,11 +80,22 @@ export default async function setup(): Promise<() => Promise<void>> {
     );
   }
 
+  /*
+   * D6 guard: Next.js rewrites `tsconfig.json` in place when it wants entries
+   * the checked-in file does not have. Those entries are committed now, so the
+   * check below asserts the boot did not write the file. The snapshot is taken
+   * before the spawn because Next writes during startup, and it is compared the
+   * moment readiness answers: a rewrite is a setup failure in seconds, not a
+   * teardown failure after the whole suite has already run against the new file.
+   */
+  const tsconfigBefore = readTrackedTsconfig();
+
   truncateFile(SHARED_LOG_PATH);
   const server = await spawnNextDev({ port: API_TEST_PORT, logPath: SHARED_LOG_PATH });
   const removeSignalCleanup = installSignalCleanup(server, { clearManifest: true });
   try {
     await waitForReady(apiOrigin, server.child, SHARED_LOG_PATH, 30_000);
+    assertTrackedTsconfigUnchanged(tsconfigBefore, readTrackedTsconfig());
   } catch (error) {
     removeSignalCleanup();
     await server.stop();

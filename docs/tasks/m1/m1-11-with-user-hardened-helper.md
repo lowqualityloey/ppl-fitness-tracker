@@ -68,6 +68,6 @@ The spec's `withUser` as originally written only sets `request.jwt.claims`. The 
 
 ## Automated Verification Command
 ```bash
-npx vitest run tests/unit/with-user.test.ts
+npx vitest run tests/integration/with-user.test.ts   # moved out of tests/unit/ when D2 closed (2026-11-24)
 grep -rn "set_config.*,\s*false\s*)" lib/ app/ --include="*.ts" --include="*.tsx" || echo "OK: no is_local=false in application code"
 ```

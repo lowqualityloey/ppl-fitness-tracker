@@ -154,11 +154,34 @@ including the two owner claims later measured false, are preserved in
 
 ### Technical debt still open
 
-- **D2** — `tests/unit/with-user.test.ts` is an integration test sitting in the unit layer.
 - Cards: `docs/tasks/2026-09-11-intake-debt-index.md`. Full risk narratives:
   [`STATE-ARCHIVE.md#s5`](STATE-ARCHIVE.md#s5).
 
-**Closed technical debt:** **D7** — integration/security suites no longer read query results
+**Closed technical debt:** **D2** — the unit layer is hermetic again and stays that way by
+construction. `tests/unit/with-user.test.ts` moved to `tests/integration/with-user.test.ts`
+(`git mv`, one specifier changed: `../integration/test-helpers.js` → `./test-helpers.js`;
+all 6 cases and the `M1-11` describe intact, and `vitest.config.ts` is untouched because
+`npm test` excludes only `tests/integration/api/**`). A new structural guard,
+`tests/unit/infra/hermetic-unit-layer.test.ts`, reads every `tests/unit/**/*.test.ts` from
+`git ls-files` and fails on any module specifier that opens a socket — `pg`,
+`drizzle-orm/node-postgres`, `net`/`tls`/`http(s)`, `undici`, `ws`, `redis`, the SQL
+clients, `@supabase/supabase-js` — and follows relative specifiers up to 4 hops, but only
+when they land inside `tests/`: a fixture may not reach infrastructure, while application
+modules (`lib/`, `db/`) legitimately import `pg` without connecting, so
+`tests/unit/db/client.test.ts` stays legal. The guard was watched red before it was trusted:
+copying the moved file back to `tests/unit/` made it report `imports 'pg' (opens a socket)`
+and `imports 'drizzle-orm/node-postgres' (opens a socket)`, and a synthetic probe importing
+`tests/integration/api/fixtures.js` was reported as `... [via ...]`, proving the chain rule;
+both probes were reverted. It also self-checks non-vacuity (scans itself, requires >20 files,
+asserts the D2 path is gone) and runs five legal probes that must stay silent. Measured on
+this host: with `DATABASE_URL`, `MIGRATION_DATABASE_URL` and both `NEXT_PUBLIC_SUPABASE_*`
+stripped, `vitest run tests/unit` is 53 files / 545 passed (before the change the same
+command failed one file — the D2 file — on a missing `DATABASE_URL`); with the stack up and
+the local-dev credentials supplied, `npm test` is 69 files / 683 passed against a baseline of
+68 files / 680 passed at `ffb9bac`, the delta being the new guard file and its 3 tests. No
+test was dropped, rewritten or double-run. Note for reproducing: this worktree has no
+`.env.local`, so the env is passed inline on the command — shell env wins over
+`--env-file-if-exists`. **D7** — integration/security suites no longer read query results
 through inferred `any`. Every row-reading `Client.query()` declares a row shape, every
 single-row read is narrowed by `requireRow`, and no raw `rows[0]` dereference remains. The
 failure mode was watched: a typo'd column failed typecheck with TS2551, an unguarded `rows[0]`

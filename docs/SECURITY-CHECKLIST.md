@@ -77,8 +77,10 @@ For security-critical changes:
 ### 🔧 Enforcement Tools
 
 - **ESLint Rule**: `no-restricted-syntax` bans direct `set_config` calls
-- **Unit Tests**: `tests/unit/with-user.test.ts` - regression tests for GUC hazard
-- **Integration Tests**: `tests/integration/tenancy.test.ts` - multi-user isolation
+- **Integration Tests**: `tests/integration/with-user.test.ts` - regression tests for GUC hazard
+  (moved out of `tests/unit/` when D2 closed; the unit layer is hermetic and
+  `tests/unit/infra/hermetic-unit-layer.test.ts` enforces it), and
+  `tests/integration/tenancy.test.ts` - multi-user isolation
 
 ### 🆘 Incident Response
 

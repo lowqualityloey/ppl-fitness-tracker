@@ -131,15 +131,22 @@ those scripts' removal, not edited away.
   JS chunks under `.next/`, unlike the legacy `npm run build` this name belonged to before
   #104, which is verified to have emitted zero JavaScript
 - **Start (production)**: `npm run start` (port 3001)
-- **Test files that exist today** (re-counted 2026-10-23): **80 `.test.ts` files** —
-  51 under `tests/unit/`, 29 DB-backed under `tests/integration/` (13 at its root, 2 in `repository/`,
-  14 route-handler suites under `tests/integration/api/`, plus `fixtures.ts`, `test-server.ts` and
-  `gotrue-failure.ts` helpers) — plus **16 `.spec.ts` files** under `tests/e2e/`. `npm test` (unit + DB
-  integration, excluding the API directory) runs **66 files** **with the stack up** and fails
-  `ECONNREFUSED` without it. The per-test totals are **not re-measured** on this tree; run the suites
-  before quoting one. The unit-layer split includes `tests/unit/with-user.test.ts`, which opens a real
-  socket to Postgres — still an integration test filed in the unit layer (D2, unchanged, listed so the
-  failure mode stays recognizable).
+- **Test files that exist today** (re-counted 2026-11-24): **88 `.test.ts` files** —
+  **53 under `tests/unit/`**, **30 DB-backed under `tests/integration/`** (14 at its root, 2 in
+  `repository/`, 14 route-handler suites under `tests/integration/api/`, plus `fixtures.ts`,
+  `test-server.ts` and `gotrue-failure.ts` helpers), and 5 archived M0 spike tests under
+  `spikes/m0-drizzle-rls/tests/` — plus **16 `.spec.ts` files** under `tests/e2e/`. `npm test` (unit
+  + DB integration, excluding the API directory) runs **69 files / 683 passed** measured with the
+  stack up; run the suites before quoting a total, they drift with every card.
+  **The unit layer is hermetic (D2 closed 2026-11-24):** `vitest run tests/unit` is 53 files / 545
+  passed with `DATABASE_URL`, `MIGRATION_DATABASE_URL` and both `NEXT_PUBLIC_SUPABASE_*` stripped,
+  and `tests/unit/infra/hermetic-unit-layer.test.ts` keeps it that way — it fails on any unit test
+  importing a socket client (`pg`, `drizzle-orm/node-postgres`, `net`/`tls`/`http(s)`, `undici`,
+  `ws`, `redis`, the SQL clients, `@supabase/supabase-js`) directly or through a `tests/`-relative
+  chain. Application modules (`lib/`, `db/`) may still import `pg` without connecting, so a unit
+  test that exercises them stays legal. History, kept so the failure mode stays recognizable: the
+  unit layer used to contain `tests/unit/with-user.test.ts`, which opened a real Postgres socket and
+  failed offline by construction — that file now lives at `tests/integration/with-user.test.ts`.
 - **Unit + Integration Tests**: `npm test`
   (`vitest run --exclude 'tests/integration/api/**'`). **Requires the stack up**: run
   `npm run db:up` first, or every DB-touching file fails with `ECONNREFUSED`.

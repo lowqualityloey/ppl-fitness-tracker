@@ -63,8 +63,8 @@ assertion keeps its original predicate and expected value.
 `rows[0]` survives only inside `requireRow`, and the one `rows[1]` read in `tenancy.test.ts` is a
 typed optional fallback. D7 is retired in `docs/STATE.md` §5 with this card and #97.
 
-**Status:** the code is local at `main` @ `e889f24`; #97 remains open until this lands as a PR
-and its acceptance is reviewed. Nothing was pushed from this closeout.
+**Status:** the D7 closeout is on local branch `test/m4-08-typed-rows` at `a716d8b`; #97
+remains open until this lands as a PR and its acceptance is reviewed. Nothing was pushed.
 
 ## Automated Verification
 ```bash

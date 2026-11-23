@@ -4,7 +4,7 @@ import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { sql } from 'drizzle-orm';
 import { withUser, type JwtClaims } from '../../lib/db/with-user.js';
 import * as schema from '../../db/schema/index.js';
-import { appRoleDirectConnectionString } from '../integration/test-helpers.js';
+import { appRoleDirectConnectionString } from './test-helpers.js';
 
 type AppDb = NodePgDatabase<typeof schema> & { $client: Pool };
 

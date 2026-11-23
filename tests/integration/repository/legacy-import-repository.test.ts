@@ -9,6 +9,7 @@ import { LegacyImporter } from '../../../lib/domain/import/legacy-import-service
 import { LegacyImportNothingWrittenError, type LegacyImportedCounts } from '../../../lib/domain/import/types.js';
 import { buildImportReport, planLegacyImport } from '../../../lib/domain/import/legacy-importer.js';
 import { LegacyImportRepository } from '../../../lib/repositories/legacy-import-repository.js';
+import { requireRow } from '../test-helpers.js';
 
 /**
  * M2-05 persistence layer, against the real database and the real seeded
@@ -28,6 +29,24 @@ const OWNER_URL = process.env.MIGRATION_DATABASE_URL;
 const APP_URL = process.env.DATABASE_URL;
 const TEST_PASSWORD = 'm2-legacy-import-test-password';
 const IMPORTED_AT = new Date('2026-09-11T12:00:00.000Z');
+
+interface CountRow {
+  count: string;
+}
+
+interface StoredReportRow {
+  report: string;
+}
+
+interface SessionStateRow {
+  status: string;
+  phase: string;
+  server_seq: number;
+}
+
+interface LiveSessionRow extends SessionStateRow {
+  id: string;
+}
 
 function decodeJwtPayload(token: string): JwtClaims {
   const encoded = token.split('.')[1];
@@ -186,11 +205,11 @@ describe('LegacyImportRepository', () => {
     const pull = rows.filter((row) => row.day_slug === 'pull');
     expect(pull).toHaveLength(0); // aggregates cannot become rows without inventing identity
 
-    const batches = await owner.query<{ count: string }>(
+    const batches = await owner.query<CountRow>(
       'SELECT count(*)::text AS count FROM import_batches WHERE user_id = $1',
       [userId],
     );
-    expect(batches.rows[0]?.count).toBe('1');
+    expect(requireRow(batches.rows, 'import batch count after first import').count).toBe('1');
   });
 
   it('maps legacy exercise slots onto the seeded exercises with no off-by-one', async () => {
@@ -225,12 +244,12 @@ describe('LegacyImportRepository', () => {
     expect(replay.fingerprint).toBe(fingerprint);
     // The AC is "returns the original report", so compare against the stored
     // bytes rather than recomputing what the response would look like.
-    const stored = await owner.query<{ report: string }>(
+    const stored = await owner.query<StoredReportRow>(
       'SELECT report FROM import_batches WHERE user_id = $1 AND source_fingerprint = $2',
       [userId, fingerprint],
     );
     expect(stored.rows).toHaveLength(1);
-    expect(replay.report).toEqual(JSON.parse(stored.rows[0]!.report) as unknown);
+    expect(replay.report).toEqual(JSON.parse(requireRow(stored.rows, 'stored import report').report) as unknown);
     expect(replay.report.sessionsCreated).toBe(3);
     expect(replay.report.setsRecovered).toBe(4);
     expect(await setRowsByExercise(owner, userId)).toHaveLength(before.length);
@@ -264,11 +283,11 @@ describe('LegacyImportRepository', () => {
       })),
     ).rejects.toBeInstanceOf(LegacyImportNothingWrittenError);
 
-    const batches = await owner.query<{ count: string }>(
+    const batches = await owner.query<CountRow>(
       'SELECT count(*)::text AS count FROM import_batches WHERE user_id = $1 AND source_fingerprint = $2',
       [userId, fingerprint],
     );
-    expect(batches.rows[0]?.count).toBe('0');
+    expect(requireRow(batches.rows, 'import batch count after aborted write').count).toBe('0');
     expect(await repository.findStoredReport(userId, fingerprint)).toBeNull();
   });
 
@@ -279,7 +298,7 @@ describe('LegacyImportRepository', () => {
     );
     const fingerprint = 'e'.repeat(64);
 
-    const sessionsBefore = await owner.query<{ count: string }>(
+    const sessionsBefore = await owner.query<CountRow>(
       'SELECT count(*)::text AS count FROM workout_sessions WHERE user_id = $1',
       [userId],
     );
@@ -296,11 +315,12 @@ describe('LegacyImportRepository', () => {
       })),
     ).rejects.toThrow();
 
-    const sessionsAfter = await owner.query<{ count: string }>(
+    const sessionsAfter = await owner.query<CountRow>(
       'SELECT count(*)::text AS count FROM workout_sessions WHERE user_id = $1',
       [userId],
     );
-    expect(sessionsAfter.rows[0]?.count).toBe(sessionsBefore.rows[0]?.count);
+    expect(requireRow(sessionsAfter.rows, 'sessions after rollback').count)
+      .toBe(requireRow(sessionsBefore.rows, 'sessions before rollback').count);
     expect(await repository.findStoredReport(userId, fingerprint)).toBeNull();
   });
 
@@ -308,7 +328,7 @@ describe('LegacyImportRepository', () => {
     // "Preserve raw keys until acknowledged" is the client's job, but the server
     // path has to be provably non-destructive too: importing legacy history must
     // not clear, archive, or bump the sequence of a live session.
-    const live = await owner.query<{ id: string; status: string; phase: string; server_seq: number }>(
+    const live = await owner.query<LiveSessionRow>(
       `INSERT INTO workout_sessions (
            user_id, routine_day_id, client_id, local_date, status, phase, source, server_seq, started_at
          )
@@ -321,8 +341,7 @@ describe('LegacyImportRepository', () => {
          RETURNING id, status, phase, server_seq`,
       [userId],
     );
-    const liveRow = live.rows[0];
-    if (!liveRow) throw new Error('Could not create a live session to protect.');
+    const liveRow = requireRow(live.rows, 'live session before import');
 
     const raw: LegacyImportRequest = {
       pushWorkoutProgress: JSON.stringify({
@@ -334,11 +353,11 @@ describe('LegacyImportRepository', () => {
     await new LegacyImporter(new LegacyImportRepository(app.db, claims), () => IMPORTED_AT)
       .import(userId, raw);
 
-    const after = await owner.query<{ status: string; phase: string; server_seq: number }>(
+    const after = await owner.query<SessionStateRow>(
       'SELECT status, phase, server_seq FROM workout_sessions WHERE id = $1',
       [liveRow.id],
     );
-    expect(after.rows[0]).toEqual({
+    expect(requireRow(after.rows, 'live session after import')).toEqual({
       status: liveRow.status,
       phase: liveRow.phase,
       server_seq: liveRow.server_seq,
@@ -380,12 +399,12 @@ describe('LegacyImportRepository', () => {
       ),
     ]);
 
-    const sessions = await owner.query<{ count: string }>(
+    const sessions = await owner.query<CountRow>(
       `SELECT count(*)::text AS count FROM workout_sessions
         WHERE user_id = $1 AND source = 'legacy_import' AND local_date = '2026-08-05'`,
       [userId],
     );
-    expect(sessions.rows[0]?.count).toBe('1');
+    expect(requireRow(sessions.rows, 'legacy import session count').count).toBe('1');
     expect([first.replayed, second.replayed].filter(Boolean)).toHaveLength(1);
     expect(first.report.setsRecovered).toBe(1);
     expect(second.report.setsRecovered).toBe(1);

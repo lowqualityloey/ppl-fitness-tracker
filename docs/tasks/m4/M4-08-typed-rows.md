@@ -80,9 +80,12 @@ routine-day rows and reads the second through `requireRowAt`. Focused checks: `n
 | `npm run test:api` | 14 passed (14) files; 84 passed (84), Linux `node:24-bookworm-slim`; 93.35s; exit 0 |
 | `npm run test:mutation` | 6/6 mutations caught; 6/6 restores passed; final 6/6 passed; exit 0 |
 
-**Status:** the D7 closeout is on local branch `test/m4-08-typed-rows` at `a716d8b`; post-audit
-hardening is on top. #97 remains open until this lands as a PR and its acceptance is reviewed.
-Nothing was pushed.
+**Status:** the D7 closeout and post-audit hardening are on `test/m4-08-typed-rows` at
+`9fa8523bafa8`, open as **PR #186** against `main`. PR #186 is green on all four checks — `test`
+6m51s including the API route-handler suites, `governance` 20s, and Vercel — so CI has executed the
+changed `measurements.test.ts`, which the win32 host cannot. #97 remains open until PR #186 merges;
+the branch is pushed and tracks `origin/test/m4-08-typed-rows`.
+
 
 ## Automated Verification
 ```bash

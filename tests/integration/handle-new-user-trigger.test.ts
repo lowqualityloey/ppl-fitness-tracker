@@ -1,6 +1,34 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Client } from 'pg';
+import type { InferSelectModel } from 'drizzle-orm';
+import type * as schema from '../../db/schema/index.js';
 import { pgErrorCode } from './pg-error.js';
+import { requireRow } from './test-helpers.js';
+
+/*
+ * auth.users has no Drizzle table, so its shape is declared locally. Profile
+ * rows come from the schema, and every present-row read goes through `requireRow`.
+ */
+interface AuthUserRow {
+  id: string;
+  email: string | null;
+}
+
+type ProfileRow = Pick<InferSelectModel<typeof schema.profiles>, 'id' | 'email'>;
+
+interface FunctionInfoRow {
+  is_security_definer: boolean;
+  config_settings: string[] | null;
+}
+
+interface FunctionOwnerRow {
+  owner_name: string;
+}
+
+interface TriggerInfoRow {
+  trigger_name: string;
+  trigger_definition: string;
+}
 
 // Local Supabase credentials (shared defaults, safe to inline)
 const SUPABASE_API_URL = 'http://127.0.0.1:54321';
@@ -76,21 +104,22 @@ describe('M1-04: handle_new_user trigger functionality', () => {
       const { id: userId } = await createUserViaGoTrue(email);
 
       // Verify the user was created in auth.users
-      const authUser = await client.query(
+      const authUser = await client.query<AuthUserRow>(
         `SELECT id, email FROM auth.users WHERE id = $1`,
         [userId]
       );
       expect(authUser.rows).toHaveLength(1);
-      expect(authUser.rows[0].email).toBe(email);
+      expect(requireRow(authUser.rows, 'auth user after signup').email).toBe(email);
 
       // Verify the trigger created a profile
-      const profile = await client.query(
+      const profile = await client.query<ProfileRow>(
         `SELECT id, email FROM public.profiles WHERE id = $1`,
         [userId]
       );
       expect(profile.rows).toHaveLength(1);
-      expect(profile.rows[0].id).toBe(userId);
-      expect(profile.rows[0].email).toBe(email);
+      const profileRow = requireRow(profile.rows, 'profile after signup');
+      expect(profileRow.id).toBe(userId);
+      expect(profileRow.email).toBe(email);
     });
 
     it('should handle duplicate auth.users INSERTs gracefully', async () => {
@@ -98,7 +127,7 @@ describe('M1-04: handle_new_user trigger functionality', () => {
       const { id: userId } = await createUserViaGoTrue(email);
 
       // First insert should work normally
-      let profile = await client.query(
+      let profile = await client.query<ProfileRow>(
         `SELECT id, email FROM public.profiles WHERE id = $1`,
         [userId]
       );
@@ -115,7 +144,7 @@ describe('M1-04: handle_new_user trigger functionality', () => {
         
         // If this succeeds (shouldn't on Supabase but might locally), 
         // verify only one profile exists
-        profile = await client.query(
+        profile = await client.query<ProfileRow>(
           `SELECT id, email FROM public.profiles WHERE id = $1`,
           [userId]
         );
@@ -130,7 +159,7 @@ describe('M1-04: handle_new_user trigger functionality', () => {
   describe('Scenario 2: Trigger security attributes', () => {
     it('should run as SECURITY DEFINER with correct search_path', async () => {
       // Verify the function has the correct security attributes
-      const funcInfo = await client.query(`
+      const funcInfo = await client.query<FunctionInfoRow>(`
         SELECT 
           prosecdef as is_security_definer,
           proconfig as config_settings
@@ -140,10 +169,11 @@ describe('M1-04: handle_new_user trigger functionality', () => {
       `);
 
       expect(funcInfo.rows).toHaveLength(1);
-      expect(funcInfo.rows[0].is_security_definer).toBe(true);
-      
+      const func = requireRow(funcInfo.rows, 'handle_new_user function metadata');
+      expect(func.is_security_definer).toBe(true);
+
       // Verify SET search_path = '' is configured
-      const config = funcInfo.rows[0].config_settings || [];
+      const config = func.config_settings || [];
       const searchPathSetting = config.find((setting: string) => 
         setting.includes('search_path=')
       );
@@ -151,7 +181,7 @@ describe('M1-04: handle_new_user trigger functionality', () => {
     });
 
     it('should be owned by postgres/owner, not app_authenticated', async () => {
-      const funcOwner = await client.query(`
+      const funcOwner = await client.query<FunctionOwnerRow>(`
         SELECT pg_get_userbyid(proowner) as owner_name
         FROM pg_proc 
         WHERE proname = 'handle_new_user'
@@ -159,13 +189,13 @@ describe('M1-04: handle_new_user trigger functionality', () => {
       `);
 
       expect(funcOwner.rows).toHaveLength(1);
-      expect(funcOwner.rows[0].owner_name).toBe('postgres');
+      expect(requireRow(funcOwner.rows, 'handle_new_user function owner').owner_name).toBe('postgres');
     });
   });
 
   describe('Scenario 3: Trigger installation', () => {
     it('should be installed on auth.users AFTER INSERT FOR EACH ROW', async () => {
-      const triggerInfo = await client.query(`
+      const triggerInfo = await client.query<TriggerInfoRow>(`
         SELECT 
           tgname as trigger_name,
           pg_get_triggerdef(oid) as trigger_definition
@@ -176,7 +206,7 @@ describe('M1-04: handle_new_user trigger functionality', () => {
 
       expect(triggerInfo.rows).toHaveLength(1);
       
-      const triggerDef = triggerInfo.rows[0].trigger_definition;
+      const triggerDef = requireRow(triggerInfo.rows, 'on_auth_user_created trigger definition').trigger_definition;
       expect(triggerDef).toContain('AFTER INSERT');
       expect(triggerDef).toContain('FOR EACH ROW');
       expect(triggerDef).toContain('handle_new_user()');

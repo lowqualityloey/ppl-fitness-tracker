@@ -15,7 +15,7 @@ credential that had been faking a code regression, and two structural findings (
 | Item | State | Where |
 | :--- | :--- | :--- |
 | D1 lint red, unenforced | **CLOSED** — merged in PR #48 | 22 casts → typed helpers, 2 unused bindings dropped, `--max-warnings=0`, CI `Lint` step; `main` lint exit 0 |
-| D2 non-hermetic unit layer | open | unchanged; see the correction under D2 — it passes with a working environment, so the defect is classification, not correctness |
+| D2 non-hermetic unit layer | **CLOSED** — 2026-11-24 | file moved to `tests/integration/with-user.test.ts` (`vitest.config.ts` untouched — it was never the reason the file was in scope) plus `tests/unit/infra/hermetic-unit-layer.test.ts`, a socket-import guard watched RED before it was trusted; `vitest run tests/unit` is 53 files / 545 passed with the DB URLs stripped |
 | D3 phantom E2E config | **CLOSED** — 2026-11-23 | `tests/e2e/` holds **16 specs** and `.github/workflows/test.yml:219` runs them against the production build; `PROMPTKIT.md` §2/§3 describe that suite, and the old “E2E does not exist” wording is gone. Card updated below |
 | D4 migration journal gap | **CLOSED** — #89 (M4-00), ADR-0006 | hand-authoring recorded as the model; `db:generate`/`db:migrate` retired, `supabase/migrations/meta/` deleted, `tests/unit/migration-authority.test.ts` gates every re-introduction (watched RED ×4) |
 | D5 route suites outside CI | **CLOSED** — merged in PR #48 | API step + preflight + declared-pending registry + anti-rot guard + env guard; `main` CI runs the gate green |
@@ -82,7 +82,26 @@ non-database throws) rather than by typing a fake error, which would have let a 
 
 ---
 
-## D2 — The "unit" layer is not hermetic: `tests/unit/with-user.test.ts` opens a socket
+## D2 — The "unit" layer is not hermetic: `tests/unit/with-user.test.ts` opens a socket (**CLOSED** 2026-11-24)
+
+> **CLOSED 2026-11-24 — closed by construction, not by cleanup.** The file moved to
+> `tests/integration/with-user.test.ts` and now lives where its dependency already matched.
+> `vitest.config.ts` was **not** edited: it includes `tests/**/*.test.ts` and `npm test` excludes
+> only `tests/integration/api/**`, so the file stays in default scope with the move alone — the
+> card's "adjust include/exclude" leg was unnecessary, measured rather than assumed. Recurrence is
+> now gated: `tests/unit/infra/hermetic-unit-layer.test.ts` scans every `tests/unit/**/*.test.ts`
+> from `git ls-files` and fails on a socket client import (`pg`, `drizzle-orm/node-postgres`,
+> `net`/`tls`/`http(s)`, `undici`, `ws`, `redis`, the SQL clients, `@supabase/supabase-js`),
+> following relative specifiers up to 4 hops but only inside `tests/` — a fixture may not reach
+> infrastructure, while `lib/` and `db/` may import `pg` without connecting (which is why
+> `tests/unit/db/client.test.ts` stays legal). Watched RED, twice: the moved file copied back to
+> `tests/unit/` reported `imports 'pg' (opens a socket)` and
+> `imports 'drizzle-orm/node-postgres' (opens a socket)`, and a synthetic probe importing
+> `tests/integration/api/fixtures.js` was reported with a `[via …]` chain. Both probes reverted.
+> Offline now: 53 files / 545 passed with `DATABASE_URL`, `MIGRATION_DATABASE_URL` and both
+> `NEXT_PUBLIC_SUPABASE_*` stripped (before: 1 failed file, that one). With the stack up:
+> `npm test` 69 files / 683 passed against 68 / 680 at `ffb9bac` — the delta is the new guard.
+> Evidence: `docs/tasks/m4/M4-09-hermetic-unit.md`.
 
 **Severity**: Medium (false signal for the fastest feedback loop) · **Priority**: `#priority/p2` · **Est**: 30m
 

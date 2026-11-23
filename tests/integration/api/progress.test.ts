@@ -6,6 +6,7 @@ import { AppEnvelopeSchema } from '../../../lib/contracts/envelope.js';
 import { ExerciseProgressResponseSchema } from '../../../lib/contracts/progress.js';
 import { authHeaders, createTestSession, type TestSession } from './fixtures.js';
 import { apiRequest, responseBody, startApiServer, stopApiServer } from './test-server.js';
+import { requireRow } from '../test-helpers.js';
 
 /**
  * M2-06 (#42): `GET /api/progress/:exerciseSlug`.
@@ -28,7 +29,7 @@ async function seedLoggedSets(client: Client, userId: string, sessionDate: strin
      RETURNING id`,
     [userId, sessionDate, `${sessionDate}T12:00:00Z`],
   );
-  const sessionId = session.rows[0]!.id;
+  const sessionId = requireRow(session.rows, 'progress fixture session').id;
   for (const [index, loaded] of sets.entries()) {
     const stampedAt = `${sessionDate}T12:0${index}:00.000Z`;
     await client.query(

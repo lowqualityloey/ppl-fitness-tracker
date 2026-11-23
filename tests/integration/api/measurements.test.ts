@@ -9,6 +9,7 @@ import {
 import type { Measurement } from '../../../lib/contracts/measurements.js';
 import { authHeaders, createTestSession, type TestSession } from './fixtures.js';
 import { apiRequest, jsonRequest, responseBody, startApiServer, stopApiServer } from './test-server.js';
+import { requireRow } from '../test-helpers.js';
 
 /**
  * M4-20 (#109): `POST`/`GET /api/measurements`.
@@ -30,6 +31,11 @@ import { apiRequest, jsonRequest, responseBody, startApiServer, stopApiServer } 
  */
 
 const OWNER_URL = process.env.MIGRATION_DATABASE_URL;
+
+interface MeasurementVisibilityRow {
+  mine: number;
+  everything: number;
+}
 
 const get = (path: string, session?: TestSession) =>
   apiRequest(path, session ? { headers: authHeaders(session) } : {});
@@ -146,13 +152,14 @@ describe('/api/measurements', () => {
         `SELECT set_config('request.jwt.claims', $1, false)`,
         [JSON.stringify({ sub: other.userId })],
       );
-      const asOther = await app.query(
+      const asOther = await app.query<MeasurementVisibilityRow>(
         `SELECT count(*)::int AS mine,
                 (SELECT count(*) FROM public.body_measurements)::int AS everything
            FROM public.body_measurements`,
       );
-      expect(asOther.rows[0]!.mine).toBe(1); // B's own body_weight row
-      expect(asOther.rows[0]!.everything).toBe(1); // A's rows invisible to B's claims
+      const visibility = requireRow(asOther.rows, 'measurement visibility counts');
+      expect(visibility.mine).toBe(1); // B's own body_weight row
+      expect(visibility.everything).toBe(1); // A's rows invisible to B's claims
       const forged = await app.query(
         `INSERT INTO public.body_measurements (user_id, measured_on, kind, value)
          VALUES ($1, '2026-09-17', 'body_weight', 99.9)`,

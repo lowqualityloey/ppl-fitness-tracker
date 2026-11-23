@@ -11,6 +11,7 @@ import {
   startApiServer,
   stopApiServer,
 } from './test-server.js';
+import { requireRow, type CountRow } from '../test-helpers.js';
 
 /**
  * M2-05 (#40): the acceptance harness for `POST /api/import/legacy`, run for real
@@ -89,21 +90,21 @@ async function importRows(owner: TestSession): Promise<{ sessions: number; sets:
   const client = new Client({ connectionString: OWNER_URL });
   await client.connect();
   try {
-    const sessions = await client.query<{ count: string }>(
+    const sessions = await client.query<CountRow>(
       `SELECT count(*)::text AS count FROM workout_sessions
         WHERE user_id = $1 AND routine_day_id IN (
           SELECT id FROM routine_days WHERE slug IN ('push', 'legs', 'pull'))`,
       [owner.userId],
     );
-    const sets = await client.query<{ count: string }>(
+    const sets = await client.query<CountRow>(
       `SELECT count(*)::text AS count FROM session_sets ss
         JOIN workout_sessions s ON s.id = ss.session_id
         WHERE s.user_id = $1 AND s.source = 'legacy_import'`,
       [owner.userId],
     );
     return {
-      sessions: Number(sessions.rows[0]?.count ?? -1),
-      sets: Number(sets.rows[0]?.count ?? -1),
+      sessions: Number(requireRow(sessions.rows, 'imported session count').count),
+      sets: Number(requireRow(sets.rows, 'imported set count').count),
     };
   } finally {
     await client.end();

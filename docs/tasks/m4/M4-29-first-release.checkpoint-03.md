@@ -4,6 +4,8 @@
 **Identity chain**: M4-29 (release) → M4-30 (#173, health) → M4-31 (#174, startup env) → M4-32 (#175, seed) →
 M4-34 (#177, Vercel env) → M4-35 (#178, hosting decision) · **Predecessor**: `M4-29-first-release.checkpoint-02.md`
 
+> **Board superseded — 2026-11-23**: milestone #4 re-read is **open 12 / closed 30 of 42** issue-only (GraphQL; REST reads `closed=31` because it counts one milestone-tagged PR). The `open 13 / closed 29` in Phase 1 is preserved as this checkpoint's 2026-10-23 snapshot.
+
 ## Phase 1 — Workspace delta audit (executed this turn, not recalled)
 
 | Check | Value |
@@ -14,7 +16,7 @@ M4-34 (#177, Vercel env) → M4-35 (#178, hosting decision) · **Predecessor**: 
 | `.env.local` | **2,438 bytes** — 1,623 baseline **+ the 7 `HOSTED_*` keys added during hosted provisioning**; still ignored (`.gitignore:18`), no `VERCEL_OIDC_TOKEN` regression |
 | CLI footprint | `.vercel/` absent, throwaway env-pull file absent |
 | Debug probes | `0` in `src/` and `lib/` |
-| Milestone #4 | **open 13 / closed 29** (42 total, 69%) |
+| Milestone #4 | **open 13 / closed 29** (42 total, 69%) — *2026-10-23 snapshot; superseded 2026-11-23 by 12 / 30 of 42 (see note above)* |
 | Newest CI run | `35563333673` on `6203057` — `failure`, job `test`, `steps: 0` |
 
 ## Phase 2 — State synthesis

@@ -67,10 +67,18 @@ guarded by an exact two-row assertion and `requireRowAt`. D7 is retired in `docs
 this card and #97.
 
 **Post-audit hardening (2026-11-23):** app-role test connections now require `DATABASE_URL`
-with no inline fallback; the BYPASSRLS test restores in `finally` and asserts the role is false
-after restore; the tenancy seed asserts exactly two routine-day rows and reads the second through
-`requireRowAt`. Focused checks: `npm run typecheck`, `npm run lint`, and 3 files / 53 tests passed.
-No production code changed.
+with no inline fallback; the BYPASSRLS test replaced the vacuous `expect(true).toBe(true)` with
+real true/false assertions and restores in `finally`; the tenancy seed asserts exactly two
+routine-day rows and reads the second through `requireRowAt`. Focused checks: `npm run typecheck`,
+`npm run lint`, and 3 files / 53 tests passed. No production code changed.
+
+**Full gate at `23b180b`** (code HEAD; this note was uncommitted during the run):
+
+| Command | Result |
+| :--- | :--- |
+| `npm test` | 67 passed (67) files; 673 passed, 3 skipped (676); 55.68s; exit 0 |
+| `npm run test:api` | 14 passed (14) files; 84 passed (84), Linux `node:24-bookworm-slim`; 93.35s; exit 0 |
+| `npm run test:mutation` | 6/6 mutations caught; 6/6 restores passed; final 6/6 passed; exit 0 |
 
 **Status:** the D7 closeout is on local branch `test/m4-08-typed-rows` at `a716d8b`; post-audit
 hardening is on top. #97 remains open until this lands as a PR and its acceptance is reviewed.

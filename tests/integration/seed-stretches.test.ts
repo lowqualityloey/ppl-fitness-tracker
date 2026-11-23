@@ -2,8 +2,13 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Client } from 'pg';
 import { seedExercises, exerciseSeedRows } from '../../db/seed/exercises';
 import { seedStretches, stretchSeedRows } from '../../db/seed/stretches';
+import { requireRow } from './test-helpers.js';
 
 const connectionString = process.env.MIGRATION_DATABASE_URL;
+
+interface CountRow {
+  count: string;
+}
 
 const expectedByDay = {
   push: [
@@ -155,7 +160,7 @@ describe('M1-10: legacy stretch seed', () => {
   });
 
   it('seeds exactly 13 unique system stretch rows', async () => {
-    const result = await client.query<{ count: string }>(
+    const result = await client.query<CountRow>(
       `SELECT count(*)::text AS count
        FROM exercises
        WHERE owner_user_id IS NULL
@@ -163,7 +168,7 @@ describe('M1-10: legacy stretch seed', () => {
          AND slug = ANY($1::text[])`,
       [stretchSeedRows.map((stretch) => stretch.slug)],
     );
-    expect(result.rows[0]?.count).toBe('13');
+    expect(requireRow(result.rows, 'stretch seed count').count).toBe('13');
 
     const rows = await client.query<{
       slug: string;
@@ -238,14 +243,14 @@ describe('M1-10: legacy stretch seed', () => {
     expect(new Set(shared.rows.filter((row) => row.slug === 'cat-cow-stretch').map((row) => row.id)).size).toBe(1);
     expect(new Set(shared.rows.filter((row) => row.slug === 'childs-pose').map((row) => row.id)).size).toBe(1);
 
-    const total = await client.query<{ count: string }>(
+    const total = await client.query<CountRow>(
       `SELECT count(*)::text AS count
        FROM routine_exercises re
        JOIN exercises e ON e.id = re.exercise_id
        WHERE e.slug = ANY($1::text[])`,
       [stretchSeedRows.map((stretch) => stretch.slug)],
     );
-    expect(total.rows[0]?.count).toBe('15');
+    expect(requireRow(total.rows, 'stretch routine association count').count).toBe('15');
 
     const combined = await client.query<{ kind: string; count: string }>(
       `SELECT e.kind, count(*)::text AS count

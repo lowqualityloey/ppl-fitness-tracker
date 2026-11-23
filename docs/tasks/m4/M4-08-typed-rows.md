@@ -29,6 +29,43 @@ Scenario: Nothing weakened
   Then lint/typecheck/test/test:api/mutation are all green with the same or higher test counts, and no assertion was deleted to silence a type
 ```
 
+## Implementation record (2026-11-23 — measured on this host)
+
+**Delivered:** ten commits, `99b1cba..e889f24`, type every row-reading `Client.query()` in
+`tests/integration/**` and narrow every single-row read through `requireRow`. Row shapes are
+derived from `db/schema/index.ts` where the selected alias matches and declared locally for
+catalog, aggregate and trigger probes. SQL, thresholds, counts and assertion semantics are
+unchanged: the branch adds or removes zero `it(` / `test(` cases, and every transformed
+assertion keeps its original predicate and expected value.
+
+**Negative controls (fresh, 2026-11-23)** — both injected into
+`tests/integration/app-role.test.ts`, captured, then restored byte-for-byte:
+
+| Criterion | Injection | Observed |
+| :--- | :--- | :--- |
+| **AC-1** typo'd column | `void role.rolcanlogi;` after the typed `requireRow` | `npm run typecheck` exit **2**: `app-role.test.ts(63,11): error TS2551: Property 'rolcanlogi' does not exist on type 'AppRoleRow'. Did you mean 'rolcanlogin'?` |
+| **AC-2** missing row | `void result.rows[0].rolcanlogin;` at the same read | `npm run typecheck` exit **2**: `app-role.test.ts(63,6): error TS2532: Object is possibly 'undefined'.` |
+
+`cmp` confirms both restores were byte-identical, `git diff` was clean, and post-restore
+`npm run typecheck` exited 0.
+
+**Full gate at `e889f24`**:
+
+| Command | Result |
+| :--- | :--- |
+| `npm run typecheck` | exit 0 |
+| `npm run lint` | exit 0 |
+| `npm test` | 67 passed (67) files; 673 passed, 3 skipped (676) |
+| `npm run test:api` | 14 passed (14) files; 84 passed (84), Linux `node:24-bookworm-slim` runner |
+| `npm run test:mutation` | all 6 mutations caught; restore 6/6 passed |
+
+**Definition of done:** every row-reading `.query(` call carries a declared result shape;
+`rows[0]` survives only inside `requireRow`, and the one `rows[1]` read in `tenancy.test.ts` is a
+typed optional fallback. D7 is retired in `docs/STATE.md` §5 with this card and #97.
+
+**Status:** the code is local at `main` @ `e889f24`; #97 remains open until this lands as a PR
+and its acceptance is reviewed. Nothing was pushed from this closeout.
+
 ## Automated Verification
 ```bash
 npm run typecheck && npm run lint && npm test && npm run test:api && npm run test:mutation

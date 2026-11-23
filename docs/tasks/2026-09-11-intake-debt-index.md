@@ -328,6 +328,16 @@ Scenario: A missing row is impossible to ignore
 `tests/`, and adopt it file by file. Sequence it before M2-06's "security negative
 controls", since typed rows are what make those controls hard to write wrong.
 
+**Closed 2026-11-23** — every row-reading `Client.query()` in `tests/integration/**` now declares
+its row shape, and every single-row read is narrowed by `requireRow`; no raw `rows[0]`
+dereference remains. The failure mode was watched: a typo'd column failed `npm run typecheck`
+with TS2551 and an unguarded `rows[0]` failed with TS2532, then both were restored
+byte-for-byte. Full gate at `e889f24`: typecheck and lint exit 0; `npm test` 67 files /
+673 passed + 3 skipped; `test:api` 14 files / 84 passed; `test:mutation` 6/6 caught and
+6/6 restored. No test case was added or removed, and every transformed assertion keeps its
+original predicate. Card:
+`docs/tasks/m4/M4-08-typed-rows.md`; #97 remains open for the PR and merge.
+
 ---
 
 ## Closed during follow-through (not debt cards — incidents)

@@ -5,6 +5,7 @@ import { readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pgErrorCode } from './pg-error.js';
+import { requireRow } from './test-helpers.js';
 
 /**
  * M4-00 (#89): the auth→profiles cascade — executed, not trusted.
@@ -149,8 +150,7 @@ async function countUserRows(owner: Client, userId: string): Promise<Record<stri
       `SELECT count(*)::int AS n FROM public.${table} WHERE ${column} = $1`,
       [userId],
     );
-    const row = result.rows[0];
-    counts[table] = row ? Number(row.n) : -1;
+    counts[table] = Number(requireRow(result.rows, `${table} row count`).n);
   }
   // session_tasks hangs off the session, not the user directly.
   const tasks = await owner.query<CountRow>(
@@ -158,7 +158,7 @@ async function countUserRows(owner: Client, userId: string): Promise<Record<stri
        WHERE t.session_id IN (SELECT id FROM public.workout_sessions WHERE user_id = $1)`,
     [userId],
   );
-  counts['session_tasks'] = Number(tasks.rows[0]?.n ?? -1);
+  counts['session_tasks'] = Number(requireRow(tasks.rows, 'session_tasks row count').n);
   return counts;
 }
 
@@ -176,7 +176,7 @@ describe('M4-00 (#89): auth user deletion cascades to profiles and everything be
     // parent is already gone (that deletion IS the cascade being tested).
     for (const id of createdUserIds) {
       const exists = await owner.query<CountRow>('SELECT count(*)::int AS n FROM auth.users WHERE id = $1', [id]);
-      if (Number(exists.rows[0]?.n ?? 0) > 0) {
+      if (Number(requireRow(exists.rows, 'auth user existence check').n) > 0) {
         await deleteGoTrueUser(id).catch(() => undefined);
       }
       await owner.query('DELETE FROM public.profiles WHERE id = $1', [id]);
@@ -198,7 +198,7 @@ describe('M4-00 (#89): auth user deletion cascades to profiles and everything be
          AND con.conname = 'profiles_id_auth_users_fkey'
     `);
     expect(result.rows).toHaveLength(1);
-    const fk = result.rows[0]!;
+    const fk = requireRow(result.rows, 'profiles auth FK constraint');
     expect(fk.referenced).toBe('auth.users');
     expect(fk.convalidated).toBe(true); // validated, not a NOT VALID half-truth
     expect(fk.confdeltype).toBe('c'); // 'c' = CASCADE (vs 'a' NO ACTION, 'r' RESTRICT)
@@ -233,7 +233,7 @@ describe('M4-00 (#89): auth user deletion cascades to profiles and everything be
       'SELECT count(*)::int AS n FROM public.profiles WHERE id = $1',
       [userId],
     );
-    expect(Number(profileBefore.rows[0]?.n ?? 0)).toBe(1);
+    expect(Number(requireRow(profileBefore.rows, 'profile before cascade').n)).toBe(1);
 
     await seedOwnershipChain(owner, userId);
     const seeded = await countUserRows(owner, userId);
@@ -248,7 +248,7 @@ describe('M4-00 (#89): auth user deletion cascades to profiles and everything be
     await deleteGoTrueUser(userId);
 
     const auth = await owner.query<CountRow>('SELECT count(*)::int AS n FROM auth.users WHERE id = $1', [userId]);
-    expect(Number(auth.rows[0]?.n ?? 0)).toBe(0);
+    expect(Number(requireRow(auth.rows, 'auth user after GoTrue deletion').n)).toBe(0);
     const after = await countUserRows(owner, userId);
     for (const [table, n] of Object.entries(after)) {
       expect(n, `cascade failed to remove rows from ${table}`).toBe(0);
@@ -270,7 +270,7 @@ describe('M4-00 (#89): auth user deletion cascades to profiles and everything be
     await owner.query(
       `INSERT INTO workout_sessions (user_id, routine_day_id, client_id, local_date, started_at)
        VALUES ($1, $2, $3, CURRENT_DATE, NOW())`,
-      [userId, day.rows[0]!.id, randomUUID()],
+      [userId, requireRow(day.rows, 'owner-path routine day insert').id, randomUUID()],
     );
     const before = await countUserRows(owner, userId);
     expect(before.workout_sessions).toBe(1);
@@ -325,7 +325,7 @@ describe('M4-00 (#89): auth user deletion cascades to profiles and everything be
       'SELECT count(*)::int AS n FROM public.profiles WHERE id = $1',
       [userId],
     );
-    expect(Number(gone.rows[0]?.n ?? 0)).toBe(0);
+    expect(Number(requireRow(gone.rows, 'profile after constrained deletion').n)).toBe(0);
   });
 
   it('every migration file on disk is recorded as applied by the Supabase CLI (drift-safe)', async () => {

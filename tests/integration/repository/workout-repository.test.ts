@@ -743,7 +743,11 @@ describe('WorkoutRepository', () => {
     });
     expect(rejected).toMatchObject({
       applied: [],
-      rejected: [{ mutationId: newMutation.mutationId, reason: 'CONFLICT' }],
+      rejected: [{
+        mutationId: newMutation.mutationId,
+        reason: 'CONFLICT',
+        message: 'Only in-progress sessions can be mutated.',
+      }],
     });
     /*
      * #105 deleted `state` from both answers above, and each of them asserted
@@ -773,7 +777,11 @@ describe('WorkoutRepository', () => {
       deviceId: randomUUID(), sinceSeq: 0, mutations: [stale],
     });
 
-    expect(result.rejected).toEqual([{ mutationId: stale.mutationId, reason: 'STALE_CONFLICT' }]);
+    expect(result.rejected).toEqual([{
+      mutationId: stale.mutationId,
+      reason: 'STALE_CONFLICT',
+      message: 'A newer change to this set already reached the server.',
+    }]);
     expect((await repository.findSession(userId, sessionId))?.sets[0]).toMatchObject({ weightKg: 80, reps: 8 });
     const version = await owner.query(
       'SELECT 1 FROM sync_entity_versions WHERE session_id = $1 AND entity_key = $2',
@@ -803,7 +811,12 @@ describe('WorkoutRepository', () => {
     const result = await repository.applySync(userId, {
       deviceId: randomUUID(), sinceSeq: 0, mutations: [{ ...foreignMutation, sessionId: (await beginExerciseSession('2028-03-17')).id }],
     });
-    expect(result.rejected).toEqual([{ mutationId: foreignMutation.mutationId, reason: 'MUTATION_REJECTED' }]);
+    // The sentence is deliberately generic: it must not confirm that the id exists elsewhere.
+    expect(result.rejected).toEqual([{
+      mutationId: foreignMutation.mutationId,
+      reason: 'MUTATION_REJECTED',
+      message: 'The server refused this change.',
+    }]);
   });
 
   it('rejects a mixed-session batch at the contract boundary', async () => {
@@ -836,7 +849,15 @@ describe('WorkoutRepository', () => {
     await repository.applySync(userId, { deviceId, sinceSeq: 0, mutations: [winning] });
     const result = await repository.applySync(userId, { deviceId, sinceSeq: 1, mutations: [stale] });
 
-    expect(result).toMatchObject({ serverSeq: 1, applied: [], rejected: [{ mutationId: stale.mutationId, reason: 'STALE_CONFLICT' }] });
+    expect(result).toMatchObject({
+      serverSeq: 1,
+      applied: [],
+      rejected: [{
+        mutationId: stale.mutationId,
+        reason: 'STALE_CONFLICT',
+        message: 'A newer change to this set already reached the server.',
+      }],
+    });
     expect((await repository.findSession(userId, sessionId))?.sets[0]).toMatchObject({ weightKg: 80, reps: 8 });
     expect(await repository.findPersonalRecord(userId, exerciseId)).toMatchObject({ bestE1rm: 101.33, sessionId });
   });
@@ -858,7 +879,13 @@ describe('WorkoutRepository', () => {
 
     expect(result.serverSeq).toBe(1);
     expect(result.applied).toEqual([task.mutationId]);
-    expect(result.rejected).toEqual([{ mutationId: invalidPhase.mutationId, reason: 'CONFLICT' }]);
+    // The main-workout task is done but no set is, so the gate that refuses this advance is
+    // `assertMainWorkoutComplete` — and its sentence is what the client now gets to show.
+    expect(result.rejected).toEqual([{
+      mutationId: invalidPhase.mutationId,
+      reason: 'CONFLICT',
+      message: 'All required main-workout sets must be completed first.',
+    }]);
     /*
      * #105 deleted `result.state`, and the two claims it carried are still worth making — about
      * stored state, read from where stored state is authoritative. The spec below already checks

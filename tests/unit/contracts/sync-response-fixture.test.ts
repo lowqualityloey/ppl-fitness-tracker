@@ -54,10 +54,24 @@ describe('the e2e sync-response fixture is the contract, not a description of it
   });
 
   it('refuses an invented reason carrier instead of letting a mock rename a field', () => {
+    // #77 made `message` a real field of the rejection item, so the carrier this test used to
+    // invent is now a legitimate one — and the body below is refused for the *other* reason it
+    // always should have been: a rejection with no `reason` is not a rejection. The invented key
+    // moves to one the contract has never described, which is what this test was always about.
     expect(() => syncResponseBody({
       serverSeq: 1,
       applied: [],
       rejected: [{ mutationId: '33333333-3333-4333-8333-333333333333', message: 'nope' }],
+      clockSkewMs: 0,
+    } as never)).toThrow();
+    expect(() => syncResponseBody({
+      serverSeq: 1,
+      applied: [],
+      rejected: [{
+        mutationId: '33333333-3333-4333-8333-333333333333',
+        reason: 'CONFLICT',
+        detail: 'nope',
+      }],
       clockSkewMs: 0,
     } as never)).toThrow();
   });
@@ -69,7 +83,11 @@ describe('the e2e sync-response fixture is the contract, not a description of it
     expect(parsed.data).toEqual({
       serverSeq: 1,
       applied: [],
-      rejected: [{ mutationId, reason: 'CONFLICT' }],
+      rejected: [{
+        mutationId,
+        reason: 'CONFLICT',
+        message: 'Sets can only be changed during the main workout.',
+      }],
       clockSkewMs: 0,
     });
   });

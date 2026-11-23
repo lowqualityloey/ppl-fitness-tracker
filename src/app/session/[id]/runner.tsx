@@ -1187,10 +1187,20 @@ function Banner(props: { tone: 'info' | 'error'; children: React.ReactNode }) {
   );
 }
 
+/*
+ * #77. This row used to read `Set 3 — CONFLICT.` — the server's machine code, shown to
+ * someone holding a phone with chalk on their hands. It now renders the sentence the domain
+ * layer wrote when it refused the change, which is the only layer that knows why.
+ *
+ * `reason` is still on the object and still the machine truth; it is simply not the sentence.
+ * The label stays because it answers a different question: the message says *why* the change
+ * was refused, the label says *what* was refused, and after the mutation leaves the queue
+ * neither is derivable from the other.
+ */
 function RejectionLine(props: { rejection: VisibleRejection }) {
   return (
     <span data-testid="rejection-line">
-      {props.rejection.label} — {props.rejection.reason}. Reload to see the server&apos;s state.
+      {props.rejection.label} — {props.rejection.message} Reload to see the server&apos;s state.
     </span>
   );
 }

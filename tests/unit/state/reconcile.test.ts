@@ -16,14 +16,26 @@ describe('reconcile — a batch is not a transaction (§8.2)', () => {
 
     const outcome = reconcile(sent, {
       applied: [id(2)],
-      rejected: [{ mutationId: id(1), reason: 'INVALID_MUTATION' }],
+      rejected: [{
+        mutationId: id(1),
+        reason: 'INVALID_MUTATION',
+        message: 'Set index exceeds the routine target set count.',
+      }],
     });
 
     expect(outcome.applied).toEqual([id(2)]);
     // The label is part of the contract now: a refused mutation leaves the queue, so
     // this is the only moment anything knows which set the user is being told about.
+    // #77: the server's own sentence rides along beside the code, and the label stays —
+    // the label says *what* was refused, the message says *why*, and neither is derivable
+    // from the other once the mutation has left the queue.
     expect(outcome.rejected).toEqual([
-      { mutationId: id(1), reason: 'INVALID_MUTATION', label: 'Set 1' },
+      {
+        mutationId: id(1),
+        reason: 'INVALID_MUTATION',
+        message: 'Set index exceeds the routine target set count.',
+        label: 'Set 1',
+      },
     ]);
     expect(outcome.stillPending).toEqual([]);
     // FIFO ordered the sends; it did not make them a transaction.
@@ -34,7 +46,11 @@ describe('reconcile — a batch is not a transaction (§8.2)', () => {
     const sent = [stored(0, setMutation(1, 0)), stored(1, setMutation(2, 1))];
     const outcome = reconcile(sent, {
       applied: [id(1)],
-      rejected: [{ mutationId: id(2), reason: 'SESSION_FINISHED' }],
+      rejected: [{
+        mutationId: id(2),
+        reason: 'SESSION_FINISHED',
+        message: 'A session can only finish from post-workout.',
+      }],
     });
 
     // Surgical rollback of one item is not attempted: it is how a client ends up
@@ -63,7 +79,11 @@ describe('reconcile — a batch is not a transaction (§8.2)', () => {
     const sent = [stored(0, setMutation(1, 0))];
     const outcome = reconcile(sent, {
       applied: [],
-      rejected: [{ mutationId: id(999), reason: 'INVALID_MUTATION' }],
+      rejected: [{
+        mutationId: id(999),
+        reason: 'INVALID_MUTATION',
+        message: 'Set index exceeds the routine target set count.',
+      }],
     });
     // Surfacing it would render a phantom row carrying a server reason, sending
     // someone to look for a set that was never queued.
@@ -141,10 +161,13 @@ describe('projectPending — what the user sees before confirmation', () => {
     const { sets, unprojectable } = projectPending(serverView(), [stored(0, setMutation(1, 9))]);
 
     expect(sets).toHaveLength(3);
+    // A local refusal has no server sentence to carry, so it carries its own: the same
+    // sentence it has always shown, now in the field the screen reads (#77).
     expect(unprojectable).toEqual([
       {
         mutationId: id(1),
         reason: 'That set is not part of this day’s plan.',
+        message: 'That set is not part of this day’s plan.',
         label: 'Set 10',
       },
     ]);

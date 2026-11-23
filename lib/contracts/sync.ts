@@ -71,9 +71,29 @@ export const SyncRequestSchema = z.object({
   }
 });
 
+/**
+ * One refused mutation: the stable code, and the sentence a person can act on.
+ *
+ * **#77 added `message` beside `reason`, additively.** `reason` stays the machine truth — tests,
+ * metrics and any retry policy switch on it, and it is what `sync_mutations.rejection_reason`
+ * stores — so nothing about it moved. What was missing is the other half: the domain layer has
+ * always written a specific sentence (`"Sets can only be changed during the main workout."`,
+ * `"A session can only finish from post-workout."`) and `rejectionReason` threw it away, leaving
+ * the client to reconstruct the rule locally and show an athlete `Set 3 — CONFLICT`.
+ *
+ * `message` is **required**, not optional. The spec's §4.1 sketch wrote `max(200).optional()`;
+ * every server rejection path has a sentence in hand (the caught domain error, or a fixed one
+ * for the paths that never reach the domain), so an optional field would only put a fallback
+ * branch back in the UI — the branch this change exists to delete. The 200 cap is the sketch's,
+ * kept: a rejection is a sentence, not a stack trace, and the cap is what keeps a future
+ * `error.message` from a library from arriving as a paragraph.
+ *
+ * No migration: the column keeps the code, and the sentence is derived at response time.
+ */
 export const SyncRejectionSchema = z.object({
   mutationId: UuidSchema,
   reason: z.string().min(1),
+  message: z.string().min(1).max(200),
 }).strict();
 
 /**
@@ -110,6 +130,7 @@ export type PhaseAdvanceMutation = z.infer<typeof PhaseAdvanceMutationSchema>;
 export type SessionFinishMutation = z.infer<typeof SessionFinishMutationSchema>;
 export type SyncMutation = z.infer<typeof SyncMutationSchema>;
 export type SyncRequest = z.infer<typeof SyncRequestSchema>;
+export type SyncRejection = z.infer<typeof SyncRejectionSchema>;
 export type SyncResponseData = z.infer<typeof SyncResponseDataSchema>;
 export type WeightKg = z.infer<typeof WeightKgSchema>;
 export type Reps = z.infer<typeof RepsSchema>;

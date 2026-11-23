@@ -13,6 +13,7 @@ import {
   type TestSession,
 } from './fixtures.js';
 import { jsonRequest, responseBody, startApiServer, stopApiServer } from './test-server.js';
+import { requireRow } from '../test-helpers.js';
 
 /**
  * M2-06 (#42) scenario 3: the reliability and performance gate.
@@ -61,7 +62,7 @@ describe('M2-06: route hardening — POST /api/sync', () => {
 
   const count = async (sql: string, params: unknown[] = []): Promise<number> => {
     const result = await client.query<{ n: string }>(sql, [owner.userId, ...params]);
-    return Number(result.rows[0]!.n);
+    return Number(requireRow(result.rows, 'route-hardening row count').n);
   };
 
   const post = (body: unknown) =>

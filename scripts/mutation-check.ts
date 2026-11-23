@@ -8,6 +8,7 @@
  * Implements the mutation testing pattern from M0 spike for M1-07 merge gate.
  */
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { Client } from 'pg';
 
 interface Mutation {
@@ -118,9 +119,14 @@ const MUTATIONS: Mutation[] = [
   },
 ];
 
+// Spawn the project's Vitest CLI directly: `npx` is not executable through
+// spawnSync on Windows. Resolve it from this file, not the caller's cwd.
+const VITEST_ENTRYPOINT = fileURLToPath(
+  new URL('../node_modules/vitest/vitest.mjs', import.meta.url),
+);
+
 function runVitest(testFile: string): { status: number; output: string } {
-  const result = spawnSync('npx', ['vitest', 'run', testFile], {
-    cwd: process.cwd(),
+  const result = spawnSync(process.execPath, [VITEST_ENTRYPOINT, 'run', testFile], {
     encoding: 'utf8',
     stdio: 'pipe',
   });

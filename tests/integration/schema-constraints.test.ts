@@ -1,6 +1,40 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Client } from 'pg';
+import type { InferSelectModel } from 'drizzle-orm';
+import type * as schema from '../../db/schema/index.js';
 import { pgErrorCode, pgErrorMessage } from './pg-error.js';
+import { requireRow, type CountRow } from './test-helpers.js';
+
+/*
+ * Catalog/aggregate reads have no Drizzle table to infer from, so their shapes
+ * are declared locally; row ids come from the schema. Every row dereference
+ * goes through `requireRow`.
+ */
+interface TableNameRow {
+  table_name: string;
+}
+
+interface EnumNameRow {
+  typname: string;
+}
+
+interface CheckConstraintRow {
+  conname: string;
+  definition: string;
+}
+
+interface IndexDefinitionRow {
+  index_name: string;
+  index_definition: string;
+}
+
+type SessionIdRow = Pick<InferSelectModel<typeof schema.workoutSessions>, 'id'>;
+type ExerciseIdRow = Pick<InferSelectModel<typeof schema.exercises>, 'id'>;
+
+interface SessionSetUpsertRow {
+  weight_kg: string;
+  reps: number;
+}
 
 describe('M1-03: Schema Constraints & Verification', () => {
   let client: Client;
@@ -56,7 +90,7 @@ describe('M1-03: Schema Constraints & Verification', () => {
 
   describe('Scenario 1: Schema objects exist and are correctly configured', () => {
     it('should have all 9 tables created', async () => {
-      const result = await client.query(`
+      const result = await client.query<TableNameRow>(`
         SELECT table_name 
         FROM information_schema.tables 
         WHERE table_schema = 'public' 
@@ -85,7 +119,7 @@ describe('M1-03: Schema Constraints & Verification', () => {
     });
 
     it('should have all 5 enum types', async () => {
-      const result = await client.query(`
+      const result = await client.query<EnumNameRow>(`
         SELECT typname 
         FROM pg_type 
         WHERE typnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public')
@@ -108,7 +142,7 @@ describe('M1-03: Schema Constraints & Verification', () => {
     });
 
     it('should have weight_sane and reps_sane check constraints on session_sets', async () => {
-      const result = await client.query(`
+      const result = await client.query<CheckConstraintRow>(`
         SELECT con.conname, pg_get_constraintdef(con.oid) as definition
         FROM pg_constraint con
         JOIN pg_class rel ON rel.oid = con.conrelid
@@ -136,7 +170,7 @@ describe('M1-03: Schema Constraints & Verification', () => {
     });
 
     it('should have one_active_session_per_day partial unique index', async () => {
-      const result = await client.query(`
+      const result = await client.query<IndexDefinitionRow>(`
         SELECT 
           i.relname as index_name,
           pg_get_indexdef(i.oid) as index_definition
@@ -150,7 +184,7 @@ describe('M1-03: Schema Constraints & Verification', () => {
       `);
 
       expect(result.rows).toHaveLength(1);
-      const indexDef = result.rows[0].index_definition;
+      const indexDef = requireRow(result.rows, 'one_active_session_per_day index definition').index_definition;
       expect(indexDef).toContain('user_id');
       expect(indexDef).toContain('routine_day_id'); 
       expect(indexDef).toContain('local_date');
@@ -174,7 +208,7 @@ describe('M1-03: Schema Constraints & Verification', () => {
       `);
 
       // First insert a valid workout session and exercise to reference
-      const sessionResult = await client.query(`
+      const sessionResult = await client.query<SessionIdRow>(`
         INSERT INTO workout_sessions 
         (user_id, routine_day_id, client_id, local_date, started_at) 
         VALUES 
@@ -185,14 +219,14 @@ describe('M1-03: Schema Constraints & Verification', () => {
          NOW())
         RETURNING id
       `);
-      const sessionId = sessionResult.rows[0].id;
+      const sessionId = requireRow(sessionResult.rows, 'workout session insert').id;
 
-      const exerciseResult = await client.query(`
+      const exerciseResult = await client.query<ExerciseIdRow>(`
         INSERT INTO exercises (slug, name, muscle_groups)
         VALUES ('test-bench-press', 'Test Bench Press', '{"chest"}')
         RETURNING id
       `);
-      const exerciseId = exerciseResult.rows[0].id;
+      const exerciseId = requireRow(exerciseResult.rows, 'exercise insert').id;
 
       // Test: weight too high should fail
       try {
@@ -234,7 +268,7 @@ describe('M1-03: Schema Constraints & Verification', () => {
 
     it('should enforce reps 0–1000 constraint', async () => {
       // Setup session and exercise
-      const sessionResult = await client.query(`
+      const sessionResult = await client.query<SessionIdRow>(`
         INSERT INTO workout_sessions 
         (user_id, routine_day_id, client_id, local_date, started_at) 
         VALUES 
@@ -245,14 +279,14 @@ describe('M1-03: Schema Constraints & Verification', () => {
          NOW())
         RETURNING id
       `);
-      const sessionId = sessionResult.rows[0].id;
+      const sessionId = requireRow(sessionResult.rows, 'workout session insert').id;
 
-      const exerciseResult = await client.query(`
+      const exerciseResult = await client.query<ExerciseIdRow>(`
         INSERT INTO exercises (slug, name, muscle_groups)
         VALUES ('test-squats', 'Test Squats', '{"legs"}')
         RETURNING id
       `);
-      const exerciseId = exerciseResult.rows[0].id;
+      const exerciseId = requireRow(exerciseResult.rows, 'exercise insert').id;
 
       // Test: reps too high should fail
       try {
@@ -300,7 +334,7 @@ describe('M1-03: Schema Constraints & Verification', () => {
       const localDate = '2024-01-15';
 
       // First session should succeed
-      const firstSession = await client.query(`
+      const firstSession = await client.query<SessionIdRow>(`
         INSERT INTO workout_sessions 
         (user_id, routine_day_id, client_id, status, local_date, started_at)
         VALUES ($1::uuid, $2::uuid, $3::uuid, 'in_progress', $4, NOW())
@@ -322,7 +356,7 @@ describe('M1-03: Schema Constraints & Verification', () => {
       }
 
       // But a completed session should be allowed (partial index only on 'in_progress')
-      const completedSession = await client.query(`
+      const completedSession = await client.query<SessionIdRow>(`
         INSERT INTO workout_sessions 
         (user_id, routine_day_id, client_id, status, local_date, started_at, completed_at)
         VALUES ($1::uuid, $2::uuid, $3::uuid, 'completed', $4, NOW(), NOW())
@@ -333,7 +367,7 @@ describe('M1-03: Schema Constraints & Verification', () => {
 
       // Cleanup
       await client.query('DELETE FROM workout_sessions WHERE id = ANY($1)', [
-        [firstSession.rows[0].id, completedSession.rows[0].id]
+        [requireRow(firstSession.rows, 'first session insert').id, requireRow(completedSession.rows, 'completed session insert').id]
       ]);
     });
   });
@@ -341,7 +375,7 @@ describe('M1-03: Schema Constraints & Verification', () => {
   describe('Scenario 4: Natural key enables idempotent upserts', () => {
     it('should allow ON CONFLICT on natural key for session_sets', async () => {
       // Setup session and exercise
-      const sessionResult = await client.query(`
+      const sessionResult = await client.query<SessionIdRow>(`
         INSERT INTO workout_sessions 
         (user_id, routine_day_id, client_id, local_date, started_at) 
         VALUES 
@@ -352,14 +386,14 @@ describe('M1-03: Schema Constraints & Verification', () => {
          NOW())
         RETURNING id
       `);
-      const sessionId = sessionResult.rows[0].id;
+      const sessionId = requireRow(sessionResult.rows, 'workout session insert').id;
 
-      const exerciseResult = await client.query(`
+      const exerciseResult = await client.query<ExerciseIdRow>(`
         INSERT INTO exercises (slug, name, muscle_groups)
         VALUES ('test-deadlift', 'Test Deadlift', '{"back"}')
         RETURNING id
       `);
-      const exerciseId = exerciseResult.rows[0].id;
+      const exerciseId = requireRow(exerciseResult.rows, 'exercise insert').id;
 
       // First insert
       await client.query(`
@@ -372,7 +406,7 @@ describe('M1-03: Schema Constraints & Verification', () => {
 
       // Second insert with same natural key (session_id, exercise_id, set_index)
       // should be possible with ON CONFLICT DO UPDATE
-      const result = await client.query(`
+      const result = await client.query<SessionSetUpsertRow>(`
         INSERT INTO session_sets 
         (user_id, session_id, exercise_id, set_index, weight_kg, reps, client_ts)
         VALUES 
@@ -387,15 +421,16 @@ describe('M1-03: Schema Constraints & Verification', () => {
       `, [sessionId, exerciseId]);
 
       expect(result.rows).toHaveLength(1);
-      expect(Number(result.rows[0].weight_kg)).toBe(110.0);
-      expect(result.rows[0].reps).toBe(6);
+      const upserted = requireRow(result.rows, 'session_set upsert result');
+      expect(Number(upserted.weight_kg)).toBe(110.0);
+      expect(upserted.reps).toBe(6);
 
       // Verify only one row exists
-      const countResult = await client.query(
+      const countResult = await client.query<CountRow>(
         'SELECT COUNT(*) FROM session_sets WHERE session_id = $1 AND exercise_id = $2 AND set_index = 0',
         [sessionId, exerciseId]
       );
-      expect(Number(countResult.rows[0].count)).toBe(1);
+      expect(Number(requireRow(countResult.rows, 'session_sets count').count)).toBe(1);
 
       // Cleanup
       await client.query('DELETE FROM session_sets WHERE session_id = $1', [sessionId]);

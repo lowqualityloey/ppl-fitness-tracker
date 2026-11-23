@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Client } from 'pg';
 import { exerciseSeedRows, seedExercises } from '../../db/seed/exercises';
+import { requireRow, type CountRow } from './test-helpers.js';
 
 const connectionString = process.env.MIGRATION_DATABASE_URL;
 
@@ -76,7 +77,7 @@ describe('M1-09: legacy exercise seed', () => {
   });
 
   it('seeds exactly the 18 canonical system exercises', async () => {
-    const result = await client.query<{ count: string }>(
+    const result = await client.query<CountRow>(
       `SELECT count(*)::text AS count
        FROM exercises
        WHERE owner_user_id IS NULL
@@ -84,7 +85,7 @@ describe('M1-09: legacy exercise seed', () => {
       [exerciseSeedRows.map((exercise) => exercise.slug)],
     );
 
-    expect(result.rows[0]?.count).toBe('18');
+    expect(requireRow(result.rows, 'canonical exercise count').count).toBe('18');
 
     const rows = await client.query<{ slug: string; name: string }>(
       `SELECT slug, name
@@ -140,7 +141,7 @@ describe('M1-09: legacy exercise seed', () => {
        FROM exercises
        WHERE slug = 'bench-press'`,
     );
-    expect(pushRows.rows[0]).toMatchObject({
+    expect(requireRow(pushRows.rows, 'bench press seed metadata')).toMatchObject({
       equipment: null,
       alternatives: [],
       form_tips: "Keep feet flat on floor, controlled movement, don't bounce off chest",
@@ -155,7 +156,7 @@ describe('M1-09: legacy exercise seed', () => {
        FROM exercises
        WHERE slug = 'lat-pulldown'`,
     );
-    expect(pullRows.rows[0]).toMatchObject({
+    expect(requireRow(pullRows.rows, 'lat pulldown seed metadata')).toMatchObject({
       equipment: 'Cable Machine with Lat Bar',
       beginner_notes: 'Start light, focus on pulling with your back muscles, not just arms',
       alternatives: [
@@ -207,7 +208,7 @@ describe('M1-09: legacy exercise seed', () => {
     );
     expect(repaired.rows).toEqual([{ order_index: 0 }]);
 
-    const associationCount = await client.query<{ count: string }>(
+    const associationCount = await client.query<CountRow>(
       `SELECT count(*)::text AS count
        FROM routine_exercises re
        JOIN routine_days rd ON rd.id = re.routine_day_id
@@ -216,6 +217,6 @@ describe('M1-09: legacy exercise seed', () => {
          AND e.kind = 'strength'`,
       [['push', 'legs', 'pull']],
     );
-    expect(associationCount.rows[0]?.count).toBe('18');
+    expect(requireRow(associationCount.rows, 'exercise association count').count).toBe('18');
   });
 });

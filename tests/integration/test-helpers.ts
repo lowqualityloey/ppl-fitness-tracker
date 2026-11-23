@@ -1,5 +1,64 @@
 import { expect } from 'vitest';
 
+/** A `count(*)::text` aggregate row. */
+export interface CountRow {
+  count: string;
+}
+
+/**
+ * The app-role connection for tests that must connect as `app_authenticated`.
+ * Credentials are environment-only; there is no inline fallback.
+ */
+export function appRoleConnectionString(): string {
+  const url = process.env.DATABASE_URL;
+  if (!url) {
+    throw new Error('DATABASE_URL (app-role connection) is required for this test');
+  }
+  return url;
+}
+
+/**
+ * The direct (54322) app-role connection for tests that need session-scoped
+ * behavior. Derived from DATABASE_URL so no password is copied into test source.
+ */
+export function appRoleDirectConnectionString(): string {
+  const url = new URL(appRoleConnectionString());
+  url.hostname = '127.0.0.1';
+  url.port = '54322';
+  const [role] = url.username.split('.');
+  if (!role) throw new Error('DATABASE_URL has no app-role username');
+  url.username = role;
+  return url.toString();
+}
+
+/**
+ * Returns the first row a query produced, or throws when there is none.
+ *
+ * `noUncheckedIndexedAccess` makes `rows[0]` possibly undefined, and a non-null
+ * assertion would silence that without checking. This narrows explicitly and
+ * names the read that came back empty, so a missing row fails as a test error
+ * rather than as a `TypeError` two lines later.
+ */
+export function requireRow<T>(rows: readonly T[], description: string): T {
+  const row = rows[0];
+  if (row === undefined) {
+    throw new Error(`Expected one row for ${description}, got none`);
+  }
+  return row;
+}
+
+/**
+ * Returns the row at `index`, or throws with the index and total row count.
+ * Use after an exact-length assertion when reading a non-first row.
+ */
+export function requireRowAt<T>(rows: readonly T[], index: number, description: string): T {
+  const row = rows[index];
+  if (row === undefined) {
+    throw new Error(`Expected row ${index} for ${description}, got ${rows.length} row(s)`);
+  }
+  return row;
+}
+
 /**
  * Assert that a query rejected with the Postgres SQLSTATE `sqlState`.
  *

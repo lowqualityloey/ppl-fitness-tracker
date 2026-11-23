@@ -4,6 +4,7 @@ import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { sql } from 'drizzle-orm';
 import { withUser, type JwtClaims } from '../../lib/db/with-user.js';
 import * as schema from '../../db/schema/index.js';
+import { appRoleDirectConnectionString } from '../integration/test-helpers.js';
 
 type AppDb = NodePgDatabase<typeof schema> & { $client: Pool };
 
@@ -26,9 +27,7 @@ type AppDb = NodePgDatabase<typeof schema> & { $client: Pool };
  * seeding request.jwt.claims, removing the legacy path entirely.
  */
 
-const APP_ROLE = 'app_authenticated';
-const APP_PASSWORD = 'Wd7EmwRWWqY9s7jMVD3kVqnt+OaW5PowxNIxCY5Ful0=';
-const APP_DIRECT_URL = `postgresql://${APP_ROLE}:${APP_PASSWORD}@127.0.0.1:54322/postgres`;
+const APP_DIRECT_URL = appRoleDirectConnectionString();
 
 // Test user claims
 const userAClaims: JwtClaims = {

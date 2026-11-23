@@ -10,6 +10,7 @@ import { ProgressionValidationError } from '../../../lib/domain/progression/type
 import { canonicalMutationHash } from '../../../lib/domain/sync/sync-engine.js';
 import { SessionEngine } from '../../../lib/domain/sessions/session-engine.js';
 import { WorkoutRepository } from '../../../lib/repositories/workout-repository.js';
+import { requireRow } from '../test-helpers.js';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'http://127.0.0.1:54321';
 const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
@@ -104,7 +105,7 @@ describe('WorkoutRepository', () => {
        RETURNING id`,
       [`m2-repository-${randomUUID()}`],
     );
-    routineDayId = routineDay.rows[0]!.id;
+    routineDayId = requireRow(routineDay.rows, 'repository test routine day').id;
 
     const exercise = await owner.query<{ id: string }>(
       `INSERT INTO exercises (
@@ -115,7 +116,7 @@ describe('WorkoutRepository', () => {
        RETURNING id`,
       [`m2-repository-${randomUUID()}`],
     );
-    exerciseId = exercise.rows[0]!.id;
+    exerciseId = requireRow(exercise.rows, 'repository test exercise').id;
 
     await owner.query(
       `INSERT INTO routine_exercises (
@@ -1063,7 +1064,7 @@ describe('WorkoutRepository', () => {
          (user_id, session_id, exercise_id, set_index, is_completed, weight_kg, reps,
           client_ts, updated_at)
        VALUES ($1, $2, $3, 0, true, 200, 5, '2028-04-08T12:00:00.000Z', now())`,
-      [userId, archived.rows[0]!.id, exerciseId],
+      [userId, requireRow(archived.rows, 'archived session fixture').id, exerciseId],
     );
 
     // A legacy import without per-set rows is coverage, not volume.
@@ -1089,7 +1090,7 @@ describe('WorkoutRepository', () => {
          (user_id, session_id, exercise_id, set_index, is_completed, weight_kg, reps,
           client_ts, updated_at)
        VALUES ($1, $2, $3, 3, true, NULL, 10, '2028-04-10T12:03:00.000Z', now())`,
-      [userId, finished.rows[0]!.id, exerciseId],
+      [userId, requireRow(finished.rows, 'finished session fixture').id, exerciseId],
     );
 
     // Every number below is a hand-computed literal from the rows above — the aggregate

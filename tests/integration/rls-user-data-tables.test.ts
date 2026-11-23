@@ -5,7 +5,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { eq, sql } from 'drizzle-orm';
 import * as schema from '../../db/schema/index.js';
 import { withUser, type JwtClaims } from '../../lib/db/with-user.js';
-import { expectSqlState } from './test-helpers.js';
+import { appRoleDirectConnectionString, expectSqlState, requireRow } from './test-helpers.js';
 
 /**
  * M1-06: RLS on user-data tables.
@@ -25,9 +25,8 @@ const ANON_KEY =
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0';
 const APP_ROLE = 'app_authenticated';
-const APP_PASSWORD = 'Wd7EmwRWWqY9s7jMVD3kVqnt+OaW5PowxNIxCY5Ful0=';
 const OWNER_URL = process.env.MIGRATION_DATABASE_URL ?? 'postgresql://postgres:postgres@127.0.0.1:54322/postgres';
-const APP_URL = `postgresql://${APP_ROLE}:${APP_PASSWORD}@127.0.0.1:54322/postgres`;
+const APP_URL = appRoleDirectConnectionString();
 const PASSWORD = 'm1-06-rls-test-password';
 const ROUTINE_SLUG = 'm1-06-rls-routine';
 const EXERCISE_SLUG = 'm1-06-rls-exercise';
@@ -161,11 +160,7 @@ async function queryOne<T extends Record<string, unknown>>(
   values: readonly unknown[],
 ): Promise<T> {
   const result = await ownerClient.query<T>(query, [...values]);
-  const row = result.rows[0];
-  if (!row) {
-    throw new Error(`Expected owner seed query to return one row: ${query}`);
-  }
-  return row;
+  return requireRow(result.rows, `owner seed query: ${query}`);
 }
 
 async function cleanupTestUsers(): Promise<void> {
@@ -296,7 +291,7 @@ beforeAll(async () => {
     'SELECT count(*)::text AS count FROM public.profiles WHERE id = ANY($1::uuid[])',
     [[userA.id, userB.id, profileCycleUser.id]],
   );
-  expect(profileCount.rows[0]?.count).toBe('3');
+  expect(requireRow(profileCount.rows, 'profile count after signup').count).toBe('3');
   fixtures = await seedFixtures();
 });
 
@@ -817,7 +812,7 @@ describe('M1-06: RLS on all user-data tables', () => {
         ownRows.importBatch.id,
       ],
     );
-    expect(unchanged.rows[0]).toMatchObject({
+    expect(requireRow(unchanged.rows, 'row ownership after rejected writes')).toMatchObject({
       session_user_id: userA.id,
       set_user_id: userA.id,
       task_session_id: ownRows.session.id,

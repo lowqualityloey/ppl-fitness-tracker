@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { Client } from 'pg';
+import type { InferSelectModel } from 'drizzle-orm';
+import type * as schema from '../../db/schema/index.js';
+import { appRoleConnectionString, requireRow } from './test-helpers.js';
 import { pgErrorMessage } from './pg-error.js';
 
 // Local Supabase credentials (shared defaults, safe to inline)
@@ -16,6 +19,21 @@ interface TestUser {
   accessToken: string;
   claims: { sub: string; role: string; email: string };
 }
+
+/*
+ * Row shapes derived from the Drizzle schema, so a renamed column fails
+ * `npm run typecheck` here instead of reading as `undefined` in an assertion.
+ */
+type ExerciseRow = Pick<InferSelectModel<typeof schema.exercises>, 'id' | 'slug' | 'name'>;
+type ExerciseIdRow = Pick<InferSelectModel<typeof schema.exercises>, 'id'>;
+type ExerciseOverrideRow = Pick<InferSelectModel<typeof schema.exercises>, 'id' | 'slug'>;
+type ExerciseSlugRow = Pick<InferSelectModel<typeof schema.exercises>, 'slug'>;
+type ExerciseNameRow = Pick<InferSelectModel<typeof schema.exercises>, 'name'>;
+type RoutineDayRow = Pick<InferSelectModel<typeof schema.routineDays>, 'id' | 'slug' | 'name'>;
+type RoutineDayIdRow = Pick<InferSelectModel<typeof schema.routineDays>, 'id'>;
+type RoutineExerciseIdRow = Pick<InferSelectModel<typeof schema.routineExercises>, 'id'>;
+/** Writes that assert only on `rowCount`: Postgres returns no rows. */
+type NoRows = Record<string, never>;
 
 describe('M1-05: RLS on content tables', () => {
   let ownerClient: Client;
@@ -108,17 +126,16 @@ describe('M1-05: RLS on content tables', () => {
     return JSON.parse(json);
   }
 
-  // Return type deliberately inferred: node-postgres' default generic already yields
-  // `QueryResult<any>`, and ~20 call sites below read `result.rows[0].<column>`. Naming a
-  // strict row type here would force an "a row must exist" guard at every one of them —
-  // worth doing, but as its own typed-rows pass over these suites, not smuggled inside a
-  // lint fix. Tracked as D7 in docs/tasks/2026-09-11-intake-debt-index.md.
-  async function executeAsUser(user: TestUser, query: string, params: unknown[] = []) {
+  // Rows are declared by the caller: node-postgres' default generic is
+  // `QueryResult<any>`, which is how a renamed column used to read as
+  // `undefined`. Every read below names its shape and goes through `requireRow`.
+  async function executeAsUser<Row extends Record<string, unknown>>(
+    user: TestUser,
+    query: string,
+    params: unknown[] = []
+  ): Promise<import('pg').QueryResult<Row>> {
     const userClient = new Client({
-      connectionString: process.env.MIGRATION_DATABASE_URL?.replace(
-        'postgres:postgres',
-        'app_authenticated:Wd7EmwRWWqY9s7jMVD3kVqnt+OaW5PowxNIxCY5Ful0='
-      ),
+      connectionString: appRoleConnectionString(),
     });
 
     try {
@@ -131,7 +148,7 @@ describe('M1-05: RLS on content tables', () => {
         JSON.stringify(user.claims)
       ]);
 
-      const result = await userClient.query(query, params);
+      const result = await userClient.query<Row>(query, params);
       await userClient.query('COMMIT');
       return result;
     } catch (error) {
@@ -145,46 +162,46 @@ describe('M1-05: RLS on content tables', () => {
   describe('Scenario 1: System rows are universally readable', () => {
     it('should allow all users to read system exercises with owner_user_id IS NULL', async () => {
       // Create a system exercise (owner_user_id IS NULL)
-      const systemExercise = await ownerClient.query(`
+      const systemExercise = await ownerClient.query<ExerciseRow>(`
         INSERT INTO exercises (slug, name, muscle_groups, owner_user_id)
         VALUES ('test-bench-press-system', 'System Bench Press', '{"chest"}', NULL)
         RETURNING id, slug, name
       `);
-      const exerciseId = systemExercise.rows[0].id;
+      const exerciseId = requireRow(systemExercise.rows, 'system exercise insert').id;
 
       // Both users should be able to read the system exercise
-      const userAResult = await executeAsUser(userA, 
-        `SELECT id, slug, name FROM exercises WHERE id = $1`, 
+      const userAResult = await executeAsUser<ExerciseRow>(userA,
+        `SELECT id, slug, name FROM exercises WHERE id = $1`,
         [exerciseId]
       );
       expect(userAResult.rows).toHaveLength(1);
-      expect(userAResult.rows[0].slug).toBe('test-bench-press-system');
+      expect(requireRow(userAResult.rows, 'user A reading system exercise').slug).toBe('test-bench-press-system');
 
-      const userBResult = await executeAsUser(userB,
+      const userBResult = await executeAsUser<ExerciseRow>(userB,
         `SELECT id, slug, name FROM exercises WHERE id = $1`,
         [exerciseId]
       );
       expect(userBResult.rows).toHaveLength(1);
-      expect(userBResult.rows[0].slug).toBe('test-bench-press-system');
+      expect(requireRow(userBResult.rows, 'user B reading system exercise').slug).toBe('test-bench-press-system');
     });
 
     it('should allow all users to read system routine_days', async () => {
       // Create a system routine day
-      const systemDay = await ownerClient.query(`
+      const systemDay = await ownerClient.query<RoutineDayRow>(`
         INSERT INTO routine_days (slug, name, owner_user_id)
         VALUES ('test-push-system', 'Test Push Day', NULL)
         RETURNING id, slug, name
       `);
-      const dayId = systemDay.rows[0].id;
+      const dayId = requireRow(systemDay.rows, 'system routine day insert').id;
 
       // Both users should be able to read the system routine day
-      const userAResult = await executeAsUser(userA,
+      const userAResult = await executeAsUser<RoutineDayRow>(userA,
         `SELECT id, slug, name FROM routine_days WHERE id = $1`,
         [dayId]
       );
       expect(userAResult.rows).toHaveLength(1);
 
-      const userBResult = await executeAsUser(userB,
+      const userBResult = await executeAsUser<RoutineDayRow>(userB,
         `SELECT id, slug, name FROM routine_days WHERE id = $1`,
         [dayId]
       );
@@ -193,34 +210,35 @@ describe('M1-05: RLS on content tables', () => {
 
     it('should allow all users to read routine_exercises associations', async () => {
       // Create system exercise and routine day
-      const exercise = await ownerClient.query(`
+      const exercise = await ownerClient.query<ExerciseIdRow>(`
         INSERT INTO exercises (slug, name, muscle_groups, owner_user_id)
         VALUES ('test-squat-system', 'System Squat', '{"legs"}', NULL)
         RETURNING id
       `);
       
-      const routineDay = await ownerClient.query(`
+      const routineDay = await ownerClient.query<RoutineDayIdRow>(`
         INSERT INTO routine_days (slug, name, owner_user_id) 
         VALUES ('test-legs-system', 'Test Legs Day', NULL)
         RETURNING id
       `);
 
-      const association = await ownerClient.query(`
+      const association = await ownerClient.query<RoutineExerciseIdRow>(`
         INSERT INTO routine_exercises (routine_day_id, exercise_id, order_index, target_sets, target_reps)
         VALUES ($1, $2, 0, 3, 10)
         RETURNING id
-      `, [routineDay.rows[0].id, exercise.rows[0].id]);
+      `, [requireRow(routineDay.rows, 'system routine day id').id, requireRow(exercise.rows, 'system exercise id').id]);
 
       // Both users should be able to read the association
-      const userAResult = await executeAsUser(userA,
+      const associationId = requireRow(association.rows, 'system routine exercise id').id;
+      const userAResult = await executeAsUser<RoutineExerciseIdRow>(userA,
         `SELECT id FROM routine_exercises WHERE id = $1`,
-        [association.rows[0].id]
+        [associationId]
       );
       expect(userAResult.rows).toHaveLength(1);
 
-      const userBResult = await executeAsUser(userB,
+      const userBResult = await executeAsUser<RoutineExerciseIdRow>(userB,
         `SELECT id FROM routine_exercises WHERE id = $1`, 
-        [association.rows[0].id]
+        [associationId]
       );
       expect(userBResult.rows).toHaveLength(1);
     });
@@ -229,24 +247,24 @@ describe('M1-05: RLS on content tables', () => {
   describe('Scenario 2: User overrides are owner-scoped', () => {
     it('should allow users to read only their own exercise overrides', async () => {
       // User A creates an exercise override
-      const userAOverride = await executeAsUser(userA, `
+      const userAOverride = await executeAsUser<ExerciseOverrideRow>(userA, `
         INSERT INTO exercises (slug, name, muscle_groups, owner_user_id)
         VALUES ('test-bench-press-user-a', 'User A Bench Press', '{"chest"}', $1)
         RETURNING id, slug
       `, [userA.id]);
 
-      const overrideId = userAOverride.rows[0].id;
+      const overrideId = requireRow(userAOverride.rows, 'user A exercise override insert').id;
 
       // User A should see their override
-      const userARead = await executeAsUser(userA,
+      const userARead = await executeAsUser<ExerciseOverrideRow>(userA,
         `SELECT id, slug FROM exercises WHERE id = $1`,
         [overrideId]
       );
       expect(userARead.rows).toHaveLength(1);
-      expect(userARead.rows[0].slug).toBe('test-bench-press-user-a');
+      expect(requireRow(userARead.rows, 'user A reading own override').slug).toBe('test-bench-press-user-a');
 
       // User B should NOT see User A's override
-      const userBRead = await executeAsUser(userB,
+      const userBRead = await executeAsUser<ExerciseOverrideRow>(userB,
         `SELECT id, slug FROM exercises WHERE id = $1`,
         [overrideId]
       );
@@ -257,56 +275,56 @@ describe('M1-05: RLS on content tables', () => {
   describe('Scenario 3: Cannot write to system rows or other users overrides', () => {
     it('should prevent users from updating system exercises', async () => {
       // Create system exercise
-      const systemExercise = await ownerClient.query(`
+      const systemExercise = await ownerClient.query<ExerciseIdRow>(`
         INSERT INTO exercises (slug, name, muscle_groups, owner_user_id)
         VALUES ('test-deadlift-system', 'System Deadlift', '{"back"}', NULL)
         RETURNING id
       `);
-      const exerciseId = systemExercise.rows[0].id;
+      const exerciseId = requireRow(systemExercise.rows, 'system deadlift insert').id;
 
       // User A attempts to update system exercise (should affect 0 rows)
-      const updateResult = await executeAsUser(userA,
+      const updateResult = await executeAsUser<NoRows>(userA,
         `UPDATE exercises SET name = 'Hacked Deadlift' WHERE id = $1`,
         [exerciseId]
       );
       expect(updateResult.rowCount).toBe(0);
 
       // Verify the system exercise was not modified
-      const verification = await ownerClient.query(
+      const verification = await ownerClient.query<ExerciseNameRow>(
         `SELECT name FROM exercises WHERE id = $1`,
         [exerciseId]
       );
-      expect(verification.rows[0].name).toBe('System Deadlift');
+      expect(requireRow(verification.rows, 'system exercise after update').name).toBe('System Deadlift');
     });
 
     it('should prevent users from updating other users exercise overrides', async () => {
       // User A creates an override
-      const userAOverride = await executeAsUser(userA, `
+      const userAOverride = await executeAsUser<ExerciseIdRow>(userA, `
         INSERT INTO exercises (slug, name, muscle_groups, owner_user_id)
         VALUES ('test-squat-user-a', 'User A Squat', '{"legs"}', $1)
         RETURNING id
       `, [userA.id]);
-      const overrideId = userAOverride.rows[0].id;
+      const overrideId = requireRow(userAOverride.rows, 'user A squat override insert').id;
 
       // User B attempts to update User A's override (should affect 0 rows)
-      const updateResult = await executeAsUser(userB,
+      const updateResult = await executeAsUser<NoRows>(userB,
         `UPDATE exercises SET name = 'Hacked by User B' WHERE id = $1`,
         [overrideId]
       );
       expect(updateResult.rowCount).toBe(0);
 
       // Verify User A's override was not modified
-      const verification = await executeAsUser(userA,
+      const verification = await executeAsUser<ExerciseNameRow>(userA,
         `SELECT name FROM exercises WHERE id = $1`,
         [overrideId]
       );
-      expect(verification.rows[0].name).toBe('User A Squat');
+      expect(requireRow(verification.rows, 'user A override after cross-user update').name).toBe('User A Squat');
     });
 
     it('should prevent users from inserting system exercises (owner_user_id IS NULL)', async () => {
       // User A attempts to create a system exercise (should fail)
       try {
-        await executeAsUser(userA, `
+        await executeAsUser<NoRows>(userA, `
           INSERT INTO exercises (slug, name, muscle_groups, owner_user_id)
           VALUES ('test-hack-system', 'Hacked System Exercise', '{"chest"}', NULL)
         `);
@@ -320,15 +338,15 @@ describe('M1-05: RLS on content tables', () => {
 
     it('should prevent users from modifying routine_days (read-only in v1)', async () => {
       // Create system routine day
-      const routineDay = await ownerClient.query(`
+      const routineDay = await ownerClient.query<RoutineDayIdRow>(`
         INSERT INTO routine_days (slug, name, owner_user_id)
         VALUES ('test-push-readonly', 'Test Push (Read Only)', NULL)
         RETURNING id
       `);
-      const dayId = routineDay.rows[0].id;
+      const dayId = requireRow(routineDay.rows, 'read-only routine day insert').id;
 
       // User A attempts to update (should affect 0 rows due to USING (false))
-      const updateResult = await executeAsUser(userA,
+      const updateResult = await executeAsUser<NoRows>(userA,
         `UPDATE routine_days SET name = 'Hacked Push Day' WHERE id = $1`,
         [dayId]
       );
@@ -336,7 +354,7 @@ describe('M1-05: RLS on content tables', () => {
 
       // User A attempts to insert (should fail due to WITH CHECK (false))
       try {
-        await executeAsUser(userA, `
+        await executeAsUser<NoRows>(userA, `
           INSERT INTO routine_days (slug, name, owner_user_id)
           VALUES ('test-user-day', 'User Day', $1)
         `, [userA.id]);
@@ -348,37 +366,40 @@ describe('M1-05: RLS on content tables', () => {
 
     it('should prevent users from modifying routine_exercises (read-only in v1)', async () => {
       // Create system data
-      const exercise = await ownerClient.query(`
+      const exercise = await ownerClient.query<ExerciseIdRow>(`
         INSERT INTO exercises (slug, name, muscle_groups, owner_user_id)
         VALUES ('test-press-readonly', 'Test Press', '{"chest"}', NULL)
         RETURNING id
       `);
 
-      const routineDay = await ownerClient.query(`
+      const routineDay = await ownerClient.query<RoutineDayIdRow>(`
         INSERT INTO routine_days (slug, name, owner_user_id)
         VALUES ('test-push-readonly2', 'Test Push 2', NULL)
         RETURNING id
       `);
 
-      const association = await ownerClient.query(`
+      const routineDayId = requireRow(routineDay.rows, 'read-only routine day id').id;
+      const exerciseId = requireRow(exercise.rows, 'read-only exercise id').id;
+      const association = await ownerClient.query<RoutineExerciseIdRow>(`
         INSERT INTO routine_exercises (routine_day_id, exercise_id, order_index, target_sets, target_reps)
         VALUES ($1, $2, 0, 3, 8)
         RETURNING id
-      `, [routineDay.rows[0].id, exercise.rows[0].id]);
+      `, [routineDayId, exerciseId]);
+      const associationId = requireRow(association.rows, 'read-only routine exercise id').id;
 
       // User A attempts to update (should affect 0 rows)
-      const updateResult = await executeAsUser(userA,
+      const updateResult = await executeAsUser<NoRows>(userA,
         `UPDATE routine_exercises SET target_sets = 5 WHERE id = $1`,
-        [association.rows[0].id]
+        [associationId]
       );
       expect(updateResult.rowCount).toBe(0);
 
       // User A attempts to insert (should fail)
       try {
-        await executeAsUser(userA, `
+        await executeAsUser<NoRows>(userA, `
           INSERT INTO routine_exercises (routine_day_id, exercise_id, order_index, target_sets, target_reps)
           VALUES ($1, $2, 1, 4, 6)
-        `, [routineDay.rows[0].id, exercise.rows[0].id]);
+        `, [routineDayId, exerciseId]);
         throw new Error('Should have failed due to RLS policy');
       } catch (err) {
         expect(pgErrorMessage(err)).toContain('new row violates row-level security policy');
@@ -390,34 +411,34 @@ describe('M1-05: RLS on content tables', () => {
     it('should return filtered results, not permission denied errors', async () => {
       // Create mixed data: system exercise + user A override. The returned ids are not
       // used — this scenario asserts on visibility, so only the rows' existence matters.
-      await ownerClient.query(`
+      await ownerClient.query<ExerciseIdRow>(`
         INSERT INTO exercises (slug, name, muscle_groups, owner_user_id)
         VALUES ('test-system-grant-check', 'System Exercise', '{"chest"}', NULL)
         RETURNING id
       `);
 
-      await executeAsUser(userA, `
+      await executeAsUser<ExerciseIdRow>(userA, `
         INSERT INTO exercises (slug, name, muscle_groups, owner_user_id)
         VALUES ('test-user-a-grant-check', 'User A Exercise', '{"back"}', $1)
         RETURNING id
       `, [userA.id]);
 
       // User A should see both (system + their override)
-      const userAResult = await executeAsUser(userA,
+      const userAResult = await executeAsUser<ExerciseSlugRow>(userA,
         `SELECT slug FROM exercises WHERE slug LIKE '%-grant-check' ORDER BY slug`
       );
       expect(userAResult.rows).toHaveLength(2);
-      expect(userAResult.rows.map((r: { slug: string }) => r.slug)).toEqual([
+      expect(userAResult.rows.map((r) => r.slug)).toEqual([
         'test-system-grant-check',
         'test-user-a-grant-check'
       ]);
 
       // User B should see only system exercise (filtered, not permission denied)
-      const userBResult = await executeAsUser(userB,
+      const userBResult = await executeAsUser<ExerciseSlugRow>(userB,
         `SELECT slug FROM exercises WHERE slug LIKE '%-grant-check' ORDER BY slug`
       );
       expect(userBResult.rows).toHaveLength(1);
-      expect(userBResult.rows[0].slug).toBe('test-system-grant-check');
+      expect(requireRow(userBResult.rows, 'user B grant-check rows').slug).toBe('test-system-grant-check');
 
       // This should be a successful query returning filtered results,
       // NOT a "permission denied for table exercises" error

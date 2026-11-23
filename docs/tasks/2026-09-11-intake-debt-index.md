@@ -20,7 +20,7 @@ credential that had been faking a code regression, and two structural findings (
 | D4 migration journal gap | **CLOSED** — #89 (M4-00), ADR-0006 | hand-authoring recorded as the model; `db:generate`/`db:migrate` retired, `supabase/migrations/meta/` deleted, `tests/unit/migration-authority.test.ts` gates every re-introduction (watched RED ×4) |
 | D5 route suites outside CI | **CLOSED** — merged in PR #48 | API step + preflight + declared-pending registry + anti-rot guard + env guard; `main` CI runs the gate green |
 | D6 test run rewrites tracked `tsconfig.json` | **CLOSED** — 2026-11-23 | below |
-| D7 integration suites read `pg` results as inferred `any` | open (new) | below |
+| D7 integration suites read `pg` results as inferred `any` | **CLOSED** — 2026-11-23 (PR #186, `0b70190`) | below |
 
 Branch and PR names, deliberately **no commit SHAs**: this table was first written with hashes,
 and two events invalidated them inside an hour — a branch was rebased to drop an

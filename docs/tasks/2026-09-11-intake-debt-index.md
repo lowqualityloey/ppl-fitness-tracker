@@ -266,9 +266,11 @@ this session; no decision recorded yet.
 committed the include entries Next 16 asks for, so the checked-in file no longer differs from
 what Next wants. What was missing was proof and a guard. `global-setup.ts` now snapshots the
 tracked file before the `next dev` spawn, and `assertTrackedTsconfigUnchanged`
-(`server-process.ts`) fails teardown if a boot changed it — without restoring, so a Next bump
-that wants a new entry must be committed deliberately rather than reverted into invisibility.
-Two unit cases cover accept, and detect-and-leave-on-disk.
+(`server-process.ts`) checks it the moment readiness answers, so a rewrite fails setup in
+seconds instead of after the whole suite — without restoring, so a Next bump that wants a new
+entry must be committed deliberately rather than reverted into invisibility. The assertion
+takes both snapshots, so the unit test never writes the tracked file. Two unit cases cover
+accept, and detect-and-leave-on-disk.
 
 Evidence, this host, 2026-11-23: the harness's own command
 (`npx --no-install next dev --port 3199`) left the committed `tsconfig.json` byte-identical
@@ -276,7 +278,7 @@ Evidence, this host, 2026-11-23: the harness's own command
 `.next/dev/types/**/*.ts` removed was rewritten by Next (the entry re-added) and the guard
 threw `The API suite rewrote the tracked tsconfig.json…`; the file was then restored from
 HEAD. A full `npm run test:api` cannot execute on win32 because the harness refuses that
-platform by design (S4), so CI is the end-to-end executor of the teardown check.
+platform by design (S4), so CI is the end-to-end executor of the readiness check.
 
 ---
 

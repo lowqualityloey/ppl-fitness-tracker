@@ -439,14 +439,17 @@ export function readTrackedTsconfig(): Buffer {
 /**
  * Fails the run when Next rewrote the tracked `tsconfig.json` during it.
  *
+ * Both snapshots are arguments rather than read here, so the comparison is pure:
+ * the setup can hand it the bytes it already took, and a unit test can exercise
+ * the failure without writing to the tracked file at all.
+ *
  * The file is deliberately **not** restored. Reverting it would hide a Next
  * version bump that now wants a new include entry, and the next reader would
  * meet the same dirty tree with no explanation of where it came from. Failing
  * loudly leaves the change on disk, where `git diff tsconfig.json` names it and
  * the operator commits it on purpose.
  */
-export function assertTrackedTsconfigUnchanged(before: Buffer): void {
-  const after = readTrackedTsconfig();
+export function assertTrackedTsconfigUnchanged(before: Buffer, after: Buffer): void {
   if (after.equals(before)) return;
   throw new Error(
     'The API suite rewrote the tracked tsconfig.json: Next.js adds the compiler options and ' +

@@ -153,25 +153,24 @@ describe('fileSize (S9)', () => {
 });
 
 describe('tracked tsconfig (D6)', () => {
-  it('accepts the file it just read', () => {
-    // What a boot that writes nothing looks like at teardown.
-    expect(() => assertTrackedTsconfigUnchanged(readTrackedTsconfig())).not.toThrow();
+  it('accepts a boot that wrote nothing', () => {
+    // What the setup sees when the readiness snapshot matches the pre-spawn one.
+    const snapshot = readTrackedTsconfig();
+    expect(() => assertTrackedTsconfigUnchanged(snapshot, readTrackedTsconfig())).not.toThrow();
   });
 
-  it('names the rewrite and leaves the change on disk instead of hiding it', () => {
+  it('names the rewrite it is given and writes nothing back', () => {
+    // Both buffers are supplied, so the failure path is exercised without
+    // writing to the tracked file: this case never touches tsconfig.json.
     const original = readTrackedTsconfig();
-    try {
-      writeFileSync('tsconfig.json', Buffer.concat([original, Buffer.from('\n')]));
-      expect(() => assertTrackedTsconfigUnchanged(original)).toThrow(
-        /rewrote the tracked tsconfig\.json/,
-      );
-      // Deliberately not restored: a silent revert would hide a Next bump that
-      // now wants a new entry, and the next reader would meet the same dirty
-      // tree with no explanation.
-      expect(readTrackedTsconfig().length).toBe(original.length + 1);
-    } finally {
-      writeFileSync('tsconfig.json', original);
-    }
+    const rewritten = Buffer.concat([original, Buffer.from('\n')]);
+    expect(() => assertTrackedTsconfigUnchanged(original, rewritten)).toThrow(
+      /rewrote the tracked tsconfig\.json/,
+    );
+    // The assertion compares and throws; it neither restores nor writes. A
+    // silent revert would hide a Next bump that now wants a new entry, and the
+    // next reader would meet the same dirty tree with no explanation.
+    expect(readTrackedTsconfig().equals(original)).toBe(true);
   });
 });
 

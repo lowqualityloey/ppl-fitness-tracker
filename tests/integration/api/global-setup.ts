@@ -83,8 +83,10 @@ export default async function setup(): Promise<() => Promise<void>> {
   /*
    * D6 guard: Next.js rewrites `tsconfig.json` in place when it wants entries
    * the checked-in file does not have. Those entries are committed now, so the
-   * teardown below asserts the boot did not write the file. The snapshot is
-   * taken before the spawn because Next writes during startup.
+   * check below asserts the boot did not write the file. The snapshot is taken
+   * before the spawn because Next writes during startup, and it is compared the
+   * moment readiness answers: a rewrite is a setup failure in seconds, not a
+   * teardown failure after the whole suite has already run against the new file.
    */
   const tsconfigBefore = readTrackedTsconfig();
 
@@ -93,6 +95,7 @@ export default async function setup(): Promise<() => Promise<void>> {
   const removeSignalCleanup = installSignalCleanup(server, { clearManifest: true });
   try {
     await waitForReady(apiOrigin, server.child, SHARED_LOG_PATH, 30_000);
+    assertTrackedTsconfigUnchanged(tsconfigBefore, readTrackedTsconfig());
   } catch (error) {
     removeSignalCleanup();
     await server.stop();
@@ -141,11 +144,5 @@ export default async function setup(): Promise<() => Promise<void>> {
     removeSignalCleanup();
     await server.stop();
     removeServerManifest();
-    try {
-      assertTrackedTsconfigUnchanged(tsconfigBefore);
-    } catch (error) {
-      console.error(`\nAPI suite teardown: ${error instanceof Error ? error.message : String(error)}\n`);
-      throw error;
-    }
   };
 }

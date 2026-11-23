@@ -336,8 +336,7 @@ byte-for-byte. Full gate at `e889f24`: typecheck and lint exit 0; `npm test` 67 
 673 passed + 3 skipped; `test:api` 14 files / 84 passed; `test:mutation` 6/6 caught and
 6/6 restored. No test case was added or removed, and every transformed assertion keeps its
 original predicate. Card:
-`docs/tasks/m4/M4-08-typed-rows.md`; PR #186 is open (code at `9fa8523`; state record `1986617`) and #97
-remains open until it merges.
+`docs/tasks/m4/M4-08-typed-rows.md`; PR #186 merged as `0b70190` and #97 is closed.
 
 ---
 

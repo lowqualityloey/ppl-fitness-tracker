@@ -48,7 +48,7 @@ implementation on 2026-09-15)
 | M4-23 | #112 | Realtime-vs-poll-margin decision + ADR | p2 |
 | M4-24 | #142 | CSP baseline on every document response — server-sent, nonce'd, Sentry-aware `connect-src` | p1 |
 | M4-25 | **#149** | Lighthouse gate runnable on a WSL dev box — Node API, not chrome-launcher | p2 |
-| M4-33 | **#77** | Rejection messages — the domain's own sentence on the wire | p2 |
+| M4-36 | **#77** | Rejection messages — the domain's own sentence on the wire | p2 |
 | parked | **#76** | no API path produces `archived` | p2 |
 | parked | **#78** | same-ms writes decided by random UUID | p2 |
 | parked | **#80** | one hardcoded fixture id set (M4-11's precondition) | p2 |
@@ -59,7 +59,7 @@ implementation on 2026-09-15)
 **No duplicates filed:** the six parked issues were re-milestoned and cross-referenced, not re-derived
 (handoff §3.5: "raise them, don't re-derive them"). M4-16 explicitly excludes #77's seam; M4-11 names
 #80 as its blocker rather than absorbing it. **#77 left the parked list on 2026-11-24** — it became
-M4-33, five parked issues remain.
+M4-36, five parked issues remain.
 
 ## Dependency map (arrows = must-land-first)
 
@@ -118,7 +118,7 @@ M4-33, five parked issues remain.
 
 **Wave 3 — product truth (mostly independent, owner decisions):**
 13. **#105** (state field + mock) — after #100 for a stable e2e base. Risk: touching it before #77
-    lands re-derives rejection plumbing; coordinate, don't duplicate. **#77 landed first** (M4-33,
+    lands re-derives rejection plumbing; coordinate, don't duplicate. **#77 landed first** (M4-36,
     2026-11-24), so #105's option A renders `message` where it renders a rejection.
 14. **#96** (outbox age), **#106** (stretch timers), **#107** (timer persistence, after #95),
     **#102** (contrast rows). Risk: #106 adds timer specs — land it *after* #100 or it grows the flake

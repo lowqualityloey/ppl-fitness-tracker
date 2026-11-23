@@ -81,7 +81,7 @@ routine-day rows and reads the second through `requireRowAt`. Focused checks: `n
 | `npm run test:mutation` | 6/6 mutations caught; 6/6 restores passed; final 6/6 passed; exit 0 |
 
 **Status:** the D7 closeout and post-audit hardening are on `test/m4-08-typed-rows` at
-`1986617f7693` (docs-only state commit on top of the `9fa8523` code revision), open as **PR #186**
+`9fa8523` (code; state record `1986617`, followed by docs-only commits), open as **PR #186**
 against `main`. PR #186 is green at both revisions — `test`
 6m51s at `9fa8523` and 6m57s at `1986617`, including the API route-handler suites, `governance`
 20s/21s, and Vercel — so CI has executed the

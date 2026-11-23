@@ -1,6 +1,40 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Client } from 'pg';
 import { pgErrorCode, pgErrorMessage } from './pg-error.js';
+import { requireRow } from './test-helpers.js';
+
+/*
+ * Catalog/aggregate reads have no Drizzle table to infer from, so their shapes
+ * are declared locally. Every row dereference goes through `requireRow`.
+ */
+interface AppRoleRow {
+  rolname: string;
+  rolbypassrls: boolean;
+  rolsuper: boolean;
+  rolcanlogin: boolean;
+  rolinherit: boolean;
+}
+
+interface GrantedRoleRow {
+  granted_role: string;
+}
+
+interface OwnedTableRow {
+  tablename: string;
+}
+
+interface SchemaUsageRow {
+  has_usage: boolean;
+}
+
+interface RoleBypassRow {
+  rolbypassrls: boolean;
+}
+
+interface SchemaPrivilegesRow {
+  has_public: boolean;
+  has_auth: boolean;
+}
 
 describe('M1-04: app_authenticated role attributes and security posture', () => {
   let client: Client;
@@ -18,14 +52,14 @@ describe('M1-04: app_authenticated role attributes and security posture', () => 
 
   describe('Scenario 1: Role attributes prevent RLS bypass', () => {
     it('should have NOBYPASSRLS, NOSUPERUSER, LOGIN attributes', async () => {
-      const result = await client.query(`
+      const result = await client.query<AppRoleRow>(`
         SELECT rolname, rolbypassrls, rolsuper, rolcanlogin, rolinherit
         FROM pg_roles 
         WHERE rolname = 'app_authenticated'
       `);
 
       expect(result.rows).toHaveLength(1);
-      const role = result.rows[0];
+      const role = requireRow(result.rows, 'app_authenticated role attributes');
       
       expect(role.rolbypassrls).toBe(false); // Cannot bypass RLS
       expect(role.rolsuper).toBe(false); // Not a superuser
@@ -35,7 +69,7 @@ describe('M1-04: app_authenticated role attributes and security posture', () => 
 
     it('should not inherit bypass privileges through any granted role', async () => {
       // Check if app_authenticated has been granted any role with BYPASSRLS or SUPERUSER
-      const result = await client.query(`
+      const result = await client.query<GrantedRoleRow>(`
         SELECT r.rolname AS granted_role
         FROM pg_auth_members m
         JOIN pg_roles r ON r.oid = m.roleid
@@ -49,7 +83,7 @@ describe('M1-04: app_authenticated role attributes and security posture', () => 
 
     it('should own no table in the public schema', async () => {
       // Table ownership is a second escape hatch - owners can bypass their own policies
-      const result = await client.query(`
+      const result = await client.query<OwnedTableRow>(`
         SELECT tablename 
         FROM pg_tables
         WHERE schemaname = 'public' AND tableowner = 'app_authenticated'
@@ -61,11 +95,11 @@ describe('M1-04: app_authenticated role attributes and security posture', () => 
 
   describe('Scenario 3: app role has no reach into auth schema', () => {
     it('should not have USAGE privilege on auth schema', async () => {
-      const result = await client.query(`
+      const result = await client.query<SchemaUsageRow>(`
         SELECT has_schema_privilege('app_authenticated', 'auth', 'USAGE') as has_usage
       `);
 
-      expect(result.rows[0].has_usage).toBe(false);
+      expect(requireRow(result.rows, 'auth schema usage').has_usage).toBe(false);
     });
 
     it('should fail when trying to call auth.uid() directly', async () => {
@@ -166,21 +200,21 @@ describe('M1-04: app_authenticated role attributes and security posture', () => 
   describe('Scenario 4: Drift detection capability', () => {
     it('should detect if role is manually altered to BYPASSRLS', async () => {
       // First verify current state
-      let result = await client.query(`
+      let result = await client.query<RoleBypassRow>(`
         SELECT rolbypassrls FROM pg_roles WHERE rolname = 'app_authenticated'
       `);
-      expect(result.rows[0].rolbypassrls).toBe(false);
+      expect(requireRow(result.rows, 'role bypass state').rolbypassrls).toBe(false);
 
       // Simulate drift by manually altering the role (this should fail on Supabase)
       try {
         await client.query(`ALTER ROLE app_authenticated BYPASSRLS`);
         
         // If it succeeded (local dev), verify we can detect the drift
-        result = await client.query(`
+        result = await client.query<RoleBypassRow>(`
           SELECT rolbypassrls FROM pg_roles WHERE rolname = 'app_authenticated'
         `);
         
-        if (result.rows[0].rolbypassrls === true) {
+        if (requireRow(result.rows, 'role bypass state after ALTER').rolbypassrls === true) {
           // Drift detected - restore proper state for other tests
           await client.query(`ALTER ROLE app_authenticated NOBYPASSRLS`);
           
@@ -207,14 +241,15 @@ describe('M1-04: app_authenticated role attributes and security posture', () => 
 
   describe('Schema grants verification', () => {
     it('should have USAGE on public schema only', async () => {
-      const result = await client.query(`
+      const result = await client.query<SchemaPrivilegesRow>(`
         SELECT 
           has_schema_privilege('app_authenticated', 'public', 'USAGE') as has_public,
           has_schema_privilege('app_authenticated', 'auth', 'USAGE') as has_auth
       `);
 
-      expect(result.rows[0].has_public).toBe(true);
-      expect(result.rows[0].has_auth).toBe(false);
+      const privileges = requireRow(result.rows, 'app_authenticated schema privileges');
+      expect(privileges.has_public).toBe(true);
+      expect(privileges.has_auth).toBe(false);
     });
   });
 });

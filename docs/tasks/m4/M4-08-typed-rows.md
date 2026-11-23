@@ -80,13 +80,11 @@ routine-day rows and reads the second through `requireRowAt`. Focused checks: `n
 | `npm run test:api` | 14 passed (14) files; 84 passed (84), Linux `node:24-bookworm-slim`; 93.35s; exit 0 |
 | `npm run test:mutation` | 6/6 mutations caught; 6/6 restores passed; final 6/6 passed; exit 0 |
 
-**Status:** the D7 closeout and post-audit hardening are on `test/m4-08-typed-rows` at
-`9fa8523` (code; state record `1986617`, followed by docs-only commits), open as **PR #186**
-against `main`. PR #186 is green at both revisions — `test`
-6m51s at `9fa8523` and 6m57s at `1986617`, including the API route-handler suites, `governance`
-20s/21s, and Vercel — so CI has executed the
-changed `measurements.test.ts`, which the win32 host cannot. #97 remains open until PR #186 merges;
-the branch is pushed and tracks `origin/test/m4-08-typed-rows`.
+**Status:** **merged.** PR #186 squash-merged into `main` as `0b70190` at 2026-11-23T13:44:40Z,
+with all four checks green — `test` 7m34s including the API route-handler suites, `governance` 23s,
+and Vercel. #97 closed at 13:45:35Z. The pre-merge code revision was `9fa8523` (state record
+`1986617`), and `test` was green at both revisions — 6m51s and 6m57s — so CI executed the changed
+`measurements.test.ts`, which the win32 host cannot. The D7 branch was deleted remotely.
 
 
 ## Automated Verification

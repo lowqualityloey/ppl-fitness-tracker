@@ -20,7 +20,7 @@ credential that had been faking a code regression, and two structural findings (
 | D4 migration journal gap | **CLOSED** — #89 (M4-00), ADR-0006 | hand-authoring recorded as the model; `db:generate`/`db:migrate` retired, `supabase/migrations/meta/` deleted, `tests/unit/migration-authority.test.ts` gates every re-introduction (watched RED ×4) |
 | D5 route suites outside CI | **CLOSED** — merged in PR #48 | API step + preflight + declared-pending registry + anti-rot guard + env guard; `main` CI runs the gate green |
 | D6 test run rewrites tracked `tsconfig.json` | **CLOSED** — 2026-11-23 | below |
-| D7 integration suites read `pg` results as inferred `any` | open (new) | below |
+| D7 integration suites read `pg` results as inferred `any` | **CLOSED** — 2026-11-23 (PR #186, `0b70190`) | below |
 
 Branch and PR names, deliberately **no commit SHAs**: this table was first written with hashes,
 and two events invalidated them inside an hour — a branch was rebased to drop an
@@ -336,8 +336,7 @@ byte-for-byte. Full gate at `e889f24`: typecheck and lint exit 0; `npm test` 67 
 673 passed + 3 skipped; `test:api` 14 files / 84 passed; `test:mutation` 6/6 caught and
 6/6 restored. No test case was added or removed, and every transformed assertion keeps its
 original predicate. Card:
-`docs/tasks/m4/M4-08-typed-rows.md`; PR #186 is open (code at `9fa8523`; state record `1986617`) and #97
-remains open until it merges.
+`docs/tasks/m4/M4-08-typed-rows.md`; PR #186 merged as `0b70190` and #97 is closed.
 
 ---
 

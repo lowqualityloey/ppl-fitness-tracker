@@ -20,6 +20,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:mutation": "node --env-file-if-exists=.env.local node_modules/tsx/dist/cli.mjs scripts/mutation-check.ts",
+    "security:hosted-rotation": "node --env-file-if-exists=.env.local node_modules/tsx/dist/cli.mjs scripts/check-hosted-rotation.ts",
     "perf:sync": "node --env-file-if-exists=.env.local node_modules/tsx/dist/cli.mjs scripts/perf-sync-load.ts",
     "perf:contention": "node --env-file-if-exists=.env.local node_modules/tsx/dist/cli.mjs scripts/perf-sync-contention.ts",
     "db:up": "supabase start -x realtime,storage-api,imgproxy,edge-runtime,logflare,vector",

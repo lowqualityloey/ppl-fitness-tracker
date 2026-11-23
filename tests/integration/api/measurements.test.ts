@@ -9,7 +9,7 @@ import {
 import type { Measurement } from '../../../lib/contracts/measurements.js';
 import { authHeaders, createTestSession, type TestSession } from './fixtures.js';
 import { apiRequest, jsonRequest, responseBody, startApiServer, stopApiServer } from './test-server.js';
-import { requireRow } from '../test-helpers.js';
+import { appRoleDirectConnectionString, requireRow } from '../test-helpers.js';
 
 /**
  * M4-20 (#109): `POST`/`GET /api/measurements`.
@@ -141,10 +141,10 @@ describe('/api/measurements', () => {
   });
 
   it('holds at the raw app-role layer too — AC-3\'s third wall is RLS, not politeness', async () => {
-    // Same credentials as tests/integration/tenancy.test.ts: a direct
-    // app_authenticated connection, claims set the way PostgREST would.
+    // Env-derived direct app-role connection; no credential is copied into
+    // test source. Claims are set the way PostgREST would.
     const app = new Client({
-      connectionString: 'postgresql://app_authenticated:Wd7EmwRWWqY9s7jMVD3kVqnt+OaW5PowxNIxCY5Ful0=@127.0.0.1:54322/postgres',
+      connectionString: appRoleDirectConnectionString(),
     });
     await app.connect();
     try {

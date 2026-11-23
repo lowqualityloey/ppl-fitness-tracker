@@ -1,5 +1,12 @@
 -- M1-04: Create app_authenticated role and handle_new_user trigger
--- 
+--
+-- SECURITY — PUBLIC LOCAL/CI FIXTURE
+-- The password below is committed so local Supabase and CI can create a
+-- deterministic role. It is not a production credential. A hosted deployment
+-- MUST rotate app_authenticated immediately after applying this migration;
+-- `npm run security:hosted-rotation` fails if a non-loopback DATABASE_URL still
+-- carries this literal. Keep the CI job env aligned with this file.
+--
 -- Ported from the verified M0 spike (spikes/m0-drizzle-rls/sql/001-setup.sql)
 -- with corrections from Amendment A1. This role is the target of all RLS
 -- policies (M1-05, M1-06) and the foundation of the two-layer auth strategy.

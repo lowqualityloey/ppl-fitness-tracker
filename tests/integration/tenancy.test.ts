@@ -3,7 +3,13 @@ import { Client, Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { eq, sql } from 'drizzle-orm';
 import * as schema from '../../db/schema/index.js';
-import { expectSqlState, requireRow, requireRowAt } from './test-helpers.js';
+import {
+  appRoleConnectionString,
+  appRoleDirectConnectionString,
+  expectSqlState,
+  requireRow,
+  requireRowAt,
+} from './test-helpers.js';
 
 /**
  * M1-08: Tenancy integration gate - THE merge gate.
@@ -27,11 +33,10 @@ const SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhY
 const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0';
 
 const APP_ROLE = 'app_authenticated';
-const APP_PASSWORD = 'Wd7EmwRWWqY9s7jMVD3kVqnt+OaW5PowxNIxCY5Ful0=';
 const OWNER_URL = 'postgresql://postgres:postgres@127.0.0.1:54322/postgres';
-const APP_DIRECT_URL = `postgresql://${APP_ROLE}:${APP_PASSWORD}@127.0.0.1:54322/postgres`;
+const APP_DIRECT_URL = appRoleDirectConnectionString();
 /** supavisor tenant is pooler-dev locally; role encoded as <role>.<tenant> */
-const APP_POOLER_URL = `postgresql://${APP_ROLE}.pooler-dev:${APP_PASSWORD}@127.0.0.1:54329/postgres`;
+const APP_POOLER_URL = appRoleConnectionString();
 
 const PASSWORD = 'tenancy-test-password-123';
 const EMAILS = ['tenancy-a@example.com', 'tenancy-b@example.com'] as const;

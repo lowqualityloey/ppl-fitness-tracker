@@ -18,6 +18,20 @@ export function appRoleConnectionString(): string {
 }
 
 /**
+ * The direct (54322) app-role connection for tests that need session-scoped
+ * behavior. Derived from DATABASE_URL so no password is copied into test source.
+ */
+export function appRoleDirectConnectionString(): string {
+  const url = new URL(appRoleConnectionString());
+  url.hostname = '127.0.0.1';
+  url.port = '54322';
+  const [role] = url.username.split('.');
+  if (!role) throw new Error('DATABASE_URL has no app-role username');
+  url.username = role;
+  return url.toString();
+}
+
+/**
  * Returns the first row a query produced, or throws when there is none.
  *
  * `noUncheckedIndexedAccess` makes `rows[0]` possibly undefined, and a non-null

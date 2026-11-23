@@ -5,7 +5,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { eq, sql } from 'drizzle-orm';
 import * as schema from '../../db/schema/index.js';
 import { withUser, type JwtClaims } from '../../lib/db/with-user.js';
-import { expectSqlState, requireRow } from './test-helpers.js';
+import { appRoleDirectConnectionString, expectSqlState, requireRow } from './test-helpers.js';
 
 /**
  * M1-06: RLS on user-data tables.
@@ -25,9 +25,8 @@ const ANON_KEY =
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0';
 const APP_ROLE = 'app_authenticated';
-const APP_PASSWORD = 'Wd7EmwRWWqY9s7jMVD3kVqnt+OaW5PowxNIxCY5Ful0=';
 const OWNER_URL = process.env.MIGRATION_DATABASE_URL ?? 'postgresql://postgres:postgres@127.0.0.1:54322/postgres';
-const APP_URL = `postgresql://${APP_ROLE}:${APP_PASSWORD}@127.0.0.1:54322/postgres`;
+const APP_URL = appRoleDirectConnectionString();
 const PASSWORD = 'm1-06-rls-test-password';
 const ROUTINE_SLUG = 'm1-06-rls-routine';
 const EXERCISE_SLUG = 'm1-06-rls-exercise';

@@ -71,9 +71,11 @@ jobs:
       #   MIGRATION_DATABASE_URL connects directly as owner (54322) — the
       #   pooler requires a tenant identifier that a bare owner connection
       #   does not carry, so migrations/seeds must bypass it.
-      # The app-role password is this repo's own literal from migration
-      # 0001_app_authenticated_role_trigger.sql, not a Supabase-generated one,
-      # so it must be kept in sync with that file. `test:api:preflight` asserts it.
+      # The app-role password is the PUBLIC local/CI fixture from migration
+      # 0001_app_authenticated_role_trigger.sql. It is intentionally committed,
+      # not a production credential, and must be kept in sync with that file.
+      # `test:api:preflight` checks it locally; a hosted deployment must rotate
+      # the role and run `npm run security:hosted-rotation` against DATABASE_URL.
       DATABASE_URL: postgresql://app_authenticated.pooler-dev:Wd7EmwRWWqY9s7jMVD3kVqnt+OaW5PowxNIxCY5Ful0=@127.0.0.1:54329/postgres
       MIGRATION_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
       # Well-known Supabase local-dev defaults (public by design, safe to

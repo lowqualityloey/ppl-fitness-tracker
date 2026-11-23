@@ -1,6 +1,22 @@
 import { expect } from 'vitest';
 
 /**
+ * Returns the only row a query was expected to produce, or throws.
+ *
+ * `noUncheckedIndexedAccess` makes `rows[0]` possibly undefined, and a non-null
+ * assertion would silence that without checking. This narrows explicitly and
+ * names the read that came back empty, so a missing row fails as a test error
+ * rather than as a `TypeError` two lines later.
+ */
+export function requireRow<T>(rows: readonly T[], description: string): T {
+  const row = rows[0];
+  if (row === undefined) {
+    throw new Error(`Expected one row for ${description}, got none`);
+  }
+  return row;
+}
+
+/**
  * Assert that a query rejected with the Postgres SQLSTATE `sqlState`.
  *
  * `drizzle-orm` 0.45 wraps the pg driver error in a `DrizzleQueryError`, so the

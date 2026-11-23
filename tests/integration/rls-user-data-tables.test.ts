@@ -5,7 +5,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { eq, sql } from 'drizzle-orm';
 import * as schema from '../../db/schema/index.js';
 import { withUser, type JwtClaims } from '../../lib/db/with-user.js';
-import { expectSqlState } from './test-helpers.js';
+import { expectSqlState, requireRow } from './test-helpers.js';
 
 /**
  * M1-06: RLS on user-data tables.
@@ -296,7 +296,7 @@ beforeAll(async () => {
     'SELECT count(*)::text AS count FROM public.profiles WHERE id = ANY($1::uuid[])',
     [[userA.id, userB.id, profileCycleUser.id]],
   );
-  expect(profileCount.rows[0]?.count).toBe('3');
+  expect(requireRow(profileCount.rows, 'profile count after signup').count).toBe('3');
   fixtures = await seedFixtures();
 });
 
@@ -817,7 +817,7 @@ describe('M1-06: RLS on all user-data tables', () => {
         ownRows.importBatch.id,
       ],
     );
-    expect(unchanged.rows[0]).toMatchObject({
+    expect(requireRow(unchanged.rows, 'row ownership after rejected writes')).toMatchObject({
       session_user_id: userA.id,
       set_user_id: userA.id,
       task_session_id: ownRows.session.id,

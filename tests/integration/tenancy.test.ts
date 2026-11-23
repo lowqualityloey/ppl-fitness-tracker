@@ -3,7 +3,7 @@ import { Client, Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { eq, sql } from 'drizzle-orm';
 import * as schema from '../../db/schema/index.js';
-import { expectSqlState } from './test-helpers.js';
+import { expectSqlState, requireRow } from './test-helpers.js';
 
 /**
  * M1-08: Tenancy integration gate - THE merge gate.
@@ -190,9 +190,10 @@ describe('M1-08: Tenancy integration gate (THE MERGE GATE)', () => {
       `SELECT count(*)::text AS count FROM public.profiles WHERE id = ANY($1::uuid[])`,
       [[a.id, b.id]]
     );
-    if (profileCount.rows[0]!.count !== '2') {
+    const profileCountRow = requireRow(profileCount.rows, 'profile count after signup');
+    if (profileCountRow.count !== '2') {
       throw new Error(
-        `handle_new_user trigger did not fire: expected 2 profiles, got ${profileCount.rows[0]!.count}`
+        `handle_new_user trigger did not fire: expected 2 profiles, got ${profileCountRow.count}`
       );
     }
 
@@ -205,7 +206,7 @@ describe('M1-08: Tenancy integration gate (THE MERGE GATE)', () => {
        RETURNING id`
     );
     const rdIds = rdResult.rows.map((r) => r.id);
-    const rdPushId = rdIds[0]!;
+    const rdPushId = requireRow(rdIds, 'seeded routine day ids');
     const rdPullId = rdIds[1] ?? rdPushId;
 
     // Ensure at least one exercise exists to satisfy session_sets' FK —
@@ -216,7 +217,7 @@ describe('M1-08: Tenancy integration gate (THE MERGE GATE)', () => {
        ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name
        RETURNING id`
     );
-    const exerciseId = exerciseResult.rows[0]!.id;
+    const exerciseId = requireRow(exerciseResult.rows, 'seeded exercise id').id;
 
     const sessionInserted = await ownerClient.query<{ id: string; user_id: string }>(
       `INSERT INTO public.workout_sessions (user_id, routine_day_id, client_id, local_date, started_at, status)
@@ -280,7 +281,7 @@ describe('M1-08: Tenancy integration gate (THE MERGE GATE)', () => {
           FROM pg_roles WHERE rolname = $1`, [APP_ROLE]);
 
       expect(rows.rows).toHaveLength(1);
-      expect(rows.rows[0]).toMatchObject({
+      expect(requireRow(rows.rows, 'app role attributes')).toMatchObject({
         rolbypassrls: false,
         rolsuper: false,
         rolcanlogin: true,
@@ -301,7 +302,7 @@ describe('M1-08: Tenancy integration gate (THE MERGE GATE)', () => {
         const r = await tx.execute<{ current_user: string; session_user: string }>(
           sql`SELECT current_user, session_user`,
         );
-        return r.rows[0]!;
+        return requireRow(r.rows, 'current role probe');
       });
 
       expect(seen.current_user).toBe(APP_ROLE);
@@ -314,7 +315,7 @@ describe('M1-08: Tenancy integration gate (THE MERGE GATE)', () => {
         const r = await tx.execute<{ sub: string | null }>(
           sql`SELECT nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub' AS sub`,
         );
-        return r.rows[0]!.sub;
+        return requireRow(r.rows, 'jwt claims probe').sub;
       });
 
       expect(sub).toBe(userA.id);
@@ -336,7 +337,7 @@ describe('M1-08: Tenancy integration gate (THE MERGE GATE)', () => {
         tx.select().from(schema.workoutSessions));
 
       expect(rows).toHaveLength(1);
-      expect(rows[0]!.userId).toBe(userA.id);
+      expect(requireRow(rows, 'visible row').userId).toBe(userA.id);
     });
 
     it('should return zero rows when explicitly querying for B workout sessions', async () => {
@@ -362,7 +363,7 @@ describe('M1-08: Tenancy integration gate (THE MERGE GATE)', () => {
         tx.select().from(schema.sessionSets));
 
       expect(rows).toHaveLength(1);
-      expect(rows[0]!.userId).toBe(userA.id);
+      expect(requireRow(rows, 'visible row').userId).toBe(userA.id);
     });
 
     it('should return zero rows when explicitly querying for B session sets', async () => {
@@ -395,7 +396,7 @@ describe('M1-08: Tenancy integration gate (THE MERGE GATE)', () => {
         tx.execute<{ n: string }>(sql`SELECT count(*)::text AS n FROM public.session_sets`),
       );
 
-      expect(r.rows[0]!.n).toBe('1');
+      expect(requireRow(r.rows, 'session_sets count').n).toBe('1');
     });
   });
 
@@ -481,14 +482,14 @@ describe('M1-08: Tenancy integration gate (THE MERGE GATE)', () => {
       );
 
       expect(sessionRows).toHaveLength(1);
-      expect(sessionRows[0]!.status).toBe('completed'); // Not changed to 'in_progress'
+      expect(requireRow(sessionRows, 'session row after writes').status).toBe('completed'); // Not changed to 'in_progress'
 
       const setRows = await withUserHardened(appDirect.db, userB.claims, (tx) =>
         tx.select().from(schema.sessionSets).where(eq(schema.sessionSets.id, userB.setId)),
       );
 
       expect(setRows).toHaveLength(1);
-      expect(setRows[0]!.reps).toBe(5); // Not changed to 999
+      expect(requireRow(setRows, 'set row after writes').reps).toBe(5); // Not changed to 999
     });
   });
 
@@ -517,25 +518,25 @@ describe('M1-08: Tenancy integration gate (THE MERGE GATE)', () => {
         const pidDuring = await withUserLeaky(leakyConn.db, userB.claims, async (tx) => {
           const rows = await tx.select().from(schema.sessionSets);
           expect(rows).toHaveLength(1);
-          expect(rows[0]!.userId).toBe(userB.id);
+          expect(requireRow(rows, 'visible row').userId).toBe(userB.id);
           const p = await tx.execute<{ pid: number }>(sql`SELECT pg_backend_pid() AS pid`);
-          return Number(p.rows[0]!.pid);
+          return Number(requireRow(p.rows, 'backend pid').pid);
         });
 
         // Simulates next HTTP request picking up same pooled connection without setting claims
         const pidAfter = await leakyConn.db.execute<{ pid: number }>(sql`SELECT pg_backend_pid() AS pid`);
-        expect(Number(pidAfter.rows[0]!.pid)).toBe(pidDuring);
+        expect(Number(requireRow(pidAfter.rows, 'backend pid after checkout').pid)).toBe(pidDuring);
 
         // Identity leaked at session scope
         const currentIdentity = await leakyConn.db.execute<{ sub: string | null }>(
           sql`SELECT nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub' AS sub`,
         );
-        expect(currentIdentity.rows[0]!.sub).toBe(userB.id);
+        expect(requireRow(currentIdentity.rows, 'jwt claims after checkout').sub).toBe(userB.id);
 
         // Claims-less query reads B's data - THE LEAK
         const leaked = await leakyConn.db.select().from(schema.sessionSets);
         expect(leaked).toHaveLength(1);
-        expect(leaked[0]!.userId).toBe(userB.id);
+        expect(requireRow(leaked, 'leaked rows').userId).toBe(userB.id);
       } finally {
         await leakyConn.close(); // Discard poisoned connection
       }
@@ -550,17 +551,17 @@ describe('M1-08: Tenancy integration gate (THE MERGE GATE)', () => {
           const rows = await tx.select().from(schema.sessionSets);
           expect(rows).toHaveLength(1);
           const p = await tx.execute<{ pid: number }>(sql`SELECT pg_backend_pid() AS pid`);
-          return Number(p.rows[0]!.pid);
+          return Number(requireRow(p.rows, 'backend pid').pid);
         });
 
         const pidAfter = await cleanConn.db.execute<{ pid: number }>(sql`SELECT pg_backend_pid() AS pid`);
-        expect(Number(pidAfter.rows[0]!.pid)).toBe(pidDuring);
+        expect(Number(requireRow(pidAfter.rows, 'backend pid after checkout').pid)).toBe(pidDuring);
 
         // Identity properly cleared
         const currentIdentity = await cleanConn.db.execute<{ sub: string | null }>(
           sql`SELECT nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub' AS sub`,
         );
-        expect(currentIdentity.rows[0]!.sub).toBeNull();
+        expect(requireRow(currentIdentity.rows, 'jwt claims after checkout').sub).toBeNull();
 
         // Claims-less query sees nothing - NO LEAK
         const rows = await cleanConn.db.select().from(schema.sessionSets);
@@ -577,7 +578,7 @@ describe('M1-08: Tenancy integration gate (THE MERGE GATE)', () => {
         const rows = await withUser(isolatedConn.db, userA.claims, (tx) => tx.select().from(schema.sessionSets));
 
         expect(rows).toHaveLength(1);
-        expect(rows[0]!.userId).toBe(userA.id);
+        expect(requireRow(rows, 'visible row').userId).toBe(userA.id);
       } finally {
         await isolatedConn.close();
       }
@@ -595,7 +596,7 @@ describe('M1-08: Tenancy integration gate (THE MERGE GATE)', () => {
         const currentIdentity = await rollbackConn.db.execute<{ sub: string | null }>(
           sql`SELECT nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub' AS sub`,
         );
-        expect(currentIdentity.rows[0]!.sub).toBeNull();
+        expect(requireRow(currentIdentity.rows, 'jwt claims after checkout').sub).toBeNull();
       } finally {
         await rollbackConn.close();
       }
@@ -613,7 +614,7 @@ describe('M1-08: Tenancy integration gate (THE MERGE GATE)', () => {
 
         // Authenticated as A, reading B data - THE HAZARD
         expect(rows).toHaveLength(1);
-        expect(rows[0]!.userId).toBe(userB.id);
+        expect(requireRow(rows, 'visible row').userId).toBe(userB.id);
       } finally {
         await hazardConn.close();
       }
@@ -630,7 +631,7 @@ describe('M1-08: Tenancy integration gate (THE MERGE GATE)', () => {
 
         // Authenticated as A, reading only A data - PROTECTION WORKS
         expect(rows).toHaveLength(1);
-        expect(rows[0]!.userId).toBe(userA.id);
+        expect(requireRow(rows, 'visible row').userId).toBe(userA.id);
       } finally {
         await hardenedConn.close();
       }
@@ -642,7 +643,7 @@ describe('M1-08: Tenancy integration gate (THE MERGE GATE)', () => {
     it('should still run as app_authenticated role through pooler', async () => {
       const seen = await withUser(appPooler.db, userA.claims, async (tx) => {
         const r = await tx.execute<{ current_user: string }>(sql`SELECT current_user`);
-        return r.rows[0]!.current_user;
+        return requireRow(r.rows, 'current role at pooler').current_user;
       });
 
       expect(seen).toBe(APP_ROLE);
@@ -652,7 +653,7 @@ describe('M1-08: Tenancy integration gate (THE MERGE GATE)', () => {
       const rows = await withUser(appPooler.db, userA.claims, (tx) => tx.select().from(schema.sessionSets));
 
       expect(rows).toHaveLength(1);
-      expect(rows[0]!.userId).toBe(userA.id);
+      expect(requireRow(rows, 'visible row').userId).toBe(userA.id);
     });
 
     it('should never cross identities under 40 interleaved concurrent transactions', async () => {
@@ -695,7 +696,7 @@ describe('M1-08: Tenancy integration gate (THE MERGE GATE)', () => {
 
       // All checkouts should see no identity residue
       for (const p of probes) {
-        expect(p.rows[0]!.sub).toBeNull();
+        expect(requireRow(p.rows, 'claims residue').sub).toBeNull();
       }
 
       // Behavioral verification: no rows visible without claims
@@ -741,7 +742,7 @@ describe('M1-08: Tenancy integration gate (THE MERGE GATE)', () => {
       const forced = await ownerClient.query<{ relrowsecurity: boolean; relforcerowsecurity: boolean }>(
         `SELECT relrowsecurity, relforcerowsecurity FROM pg_class WHERE relname = 'session_sets'`
       );
-      expect(forced.rows[0]).toMatchObject({ relrowsecurity: true, relforcerowsecurity: true });
+      expect(requireRow(forced.rows, 'session_sets RLS metadata')).toMatchObject({ relrowsecurity: true, relforcerowsecurity: true });
     });
   });
 });

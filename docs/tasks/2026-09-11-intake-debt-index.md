@@ -16,7 +16,7 @@ credential that had been faking a code regression, and two structural findings (
 | :--- | :--- | :--- |
 | D1 lint red, unenforced | **CLOSED** — merged in PR #48 | 22 casts → typed helpers, 2 unused bindings dropped, `--max-warnings=0`, CI `Lint` step; `main` lint exit 0 |
 | D2 non-hermetic unit layer | open | unchanged; see the correction under D2 — it passes with a working environment, so the defect is classification, not correctness |
-| D3 phantom E2E config | **doc-closed** | `PROMPTKIT.md` §2/§3 now state E2E does not exist; `tests/e2e/` to be created with its first spec in M3/M4 |
+| D3 phantom E2E config | **CLOSED** — 2026-11-23 | `tests/e2e/` holds **16 specs** and `.github/workflows/test.yml:219` runs them against the production build; `PROMPTKIT.md` §2/§3 describe that suite, and the old “E2E does not exist” wording is gone. Card updated below |
 | D4 migration journal gap | **CLOSED** — #89 (M4-00), ADR-0006 | hand-authoring recorded as the model; `db:generate`/`db:migrate` retired, `supabase/migrations/meta/` deleted, `tests/unit/migration-authority.test.ts` gates every re-introduction (watched RED ×4) |
 | D5 route suites outside CI | **CLOSED** — merged in PR #48 | API step + preflight + declared-pending registry + anti-rot guard + env guard; `main` CI runs the gate green |
 | D6 test run rewrites tracked `tsconfig.json` | **CLOSED** — 2026-11-23 | below |
@@ -119,7 +119,14 @@ test, since its whole value is that it talks to real Postgres GUCs.
 
 ---
 
-## D3 — Playwright is configured against a directory that does not exist
+## D3 — Phantom E2E config (**CLOSED** 2026-11-23)
+
+> **CLOSED 2026-11-23 — the premise no longer holds.** `tests/e2e/` holds **16 `.spec.ts`**
+> files, and `.github/workflows/test.yml:219` (`Run E2E suite against the production build`)
+> runs them as a merge gate. `PROMPTKIT.md` §2's *Testing* bullet and §3's *E2E Tests* entry
+> both describe that suite, its production build and the browser setup, so no current text
+> claims E2E does not exist. The intake record below is kept as written: it describes the
+> tree before M3/M4 added the specs.
 
 **Severity**: Low (declared capability that does not exist) · **Priority**: `#priority/p3` · **Est**: 15m or 2h
 

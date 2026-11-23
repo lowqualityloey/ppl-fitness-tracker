@@ -1,4 +1,4 @@
-> **M4-33** · Contract honesty · `#priority/p2` · Derived from: issue **#77** ("Sync rejections carry only a code, so the client cannot explain a refused change", found while implementing #63); `docs/specs/2026-09-14-spec-m4-hardening-telemetry-decommission.md` §4.1 ("#77: additive optional message on rejections (code stays the machine truth)"); `docs/STATE.md` §5 open finding ("**#77** — sync rejections carry only a reason code; the client cannot explain a refusal").
+> **M4-36** · Contract honesty · `#priority/p2` · Derived from: issue **#77** ("Sync rejections carry only a code, so the client cannot explain a refused change", found while implementing #63); `docs/specs/2026-09-14-spec-m4-hardening-telemetry-decommission.md` §4.1 ("#77: additive optional message on rejections (code stays the machine truth)"); `docs/STATE.md` §5 open finding ("**#77** — sync rejections carry only a reason code; the client cannot explain a refusal").
 
 ## Intent
 As the athlete holding a phone with chalk on my hands, I want a refused change to tell me **what the server objected to in its own words** — "Set index exceeds the routine target set count." rather than `INVALID_MUTATION` — so the screen does not have to keep a second copy of the phase machine to guess.
@@ -137,7 +137,7 @@ and B), on a 4-core host, not a regression from a contract field. The gate line 
 
 **Docs.** `docs/STATE.md` §5 strikes the #77 bullet; §1 `Last Updated` and `Current Working Branch`
 name this branch; §8 gains a row. `docs/tasks/m4/README.md` moves #77 out of the parked list into the
-board as M4-33 and notes the #105 interaction. No other document changed: the spec's §4.1 sketch is
+board as M4-36 and notes the #105 interaction. No other document changed: the spec's §4.1 sketch is
 left as written, because it is a dated record of what was planned and this card is the record of what
 was decided instead.
 

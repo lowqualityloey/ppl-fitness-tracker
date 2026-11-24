@@ -8,6 +8,7 @@ import {
   expectPhase,
   startPushDay,
   waitForSynced,
+  warmUpAndStart,
 } from './runner-fixtures';
 
 /**
@@ -134,6 +135,36 @@ async function hidden(page: import('@playwright/test').Page, value: boolean) {
   await page.evaluate((state) => {
     (window as unknown as { __setHidden: (v: boolean) => void }).__setHidden(state);
   }, value);
+}
+
+/**
+ * Reaching `stretch` is a walk, not a jump: every set, then both checklist gates.
+ *
+ * It cannot start from `advanceIntoRest`, which crosses the warm-up gate *and* moves into `rest`.
+ * The sets are only writable while the phase is `exercise` or `rest` (`assertSetMutationAllowed`),
+ * so they must be ticked from `Working out`; and the move out of `rest` is gated on the
+ * `main_workout` task, so ticking that item and *then* advancing is the only order the server
+ * accepts. Advancing first earns a refusal — the sync queue reports "1 refused by the server" and
+ * the test fails on the walk rather than on the countdown it was written to watch.
+ */
+async function advanceIntoStretch(page: import('@playwright/test').Page) {
+  await warmUpAndStart(page);
+
+  const ticks = page.locator('[data-testid^="tick-"]');
+  for (let index = 0, total = await ticks.count(); index < total; index += 1) {
+    const tick = ticks.nth(index);
+    if ((await tick.getAttribute('aria-pressed')) === 'false') await tick.click();
+  }
+  await waitForSynced(page);
+
+  // `rest` opens to any transition; `stretch` waits on the main-workout checklist item.
+  await page.getByTestId('advance-phase').click();
+  await expectPhase(page, 'Resting');
+  await expect(page.getByTestId('phase-gate')).toContainText('Main workout complete');
+  await page.getByTestId('task-main_workout').click();
+  await waitForSynced(page);
+  await page.getByTestId('advance-phase').click();
+  await expectPhase(page, 'Stretching');
 }
 
 test.describe('session timers', () => {
@@ -342,6 +373,68 @@ test.describe('session timers', () => {
       await page.clock.fastForward(120_000);
       await page.waitForTimeout(2_000);
       await expect(page.getByTestId('session-elapsed')).toHaveText(frozen);
+    } finally {
+      await auth.cleanup();
+    }
+  });
+
+  /*
+   * M4-17 (#106): the stretch sequence counts down through the same TimerController.
+   *
+   * The defect this closes was measured rather than assumed: `main` rendered **no** hold length at
+   * all for a stretch. The list emitted a `· rest <restTime>` suffix, and `rest_time` is NULL on
+   * every stretch placement by construction (`db/seed/stretches.ts` inserts NULL there), so the
+   * suffix was dead code. The real length lives on the movement as `duration_seconds` (30 s and
+   * 45 s in the seed).
+   *
+   * So this spec asserts two things a static label cannot fake: a length is *shown*, and the digits
+   * *move*. Delete the timer and render `hold 30s` instead and the second assertion fails, which is
+   * the whole point of writing it this way.
+   */
+  test('counts down a stretch hold, and the digits move', async ({ page }) => {
+    test.setTimeout(WORKOUT_FLOW_TIMEOUT_MS);
+    const auth = await signInFreshUser(page, 'e2e-stretch-countdown');
+    try {
+      await page.clock.install({ time: Date.now() });
+      await startPushDay(page);
+      await advanceIntoStretch(page);
+
+      // The length is on screen, read from the movement's own duration rather than from the dead
+      // `rest_time` column. Every seeded stretch is 30 s or 45 s; this asserts the range, not a
+      // literal, because the sequence orders placements the seed is free to reorder.
+      await expect(page.locator('[data-testid^="stretch-"]').first()).toContainText(/hold (30|45)s/);
+
+      // Arriving at `stretch` must not start a clock — a countdown nobody began is a lie about
+      // elapsed work. Nothing is running until the athlete starts one hold.
+      //
+      // Scoped to the stretch rows on purpose: `session-elapsed` is itself `role="timer"` and is
+      // running for the whole session, so the bare role would never read zero here.
+      await expect(page.locator('[data-testid^="stretch-remaining-"]')).toHaveCount(0);
+
+      const start = page.locator('[data-testid^="stretch-start-"]').first();
+      await start.click();
+
+      const running = page.locator('[data-testid^="stretch-remaining-"]');
+      await expect(running).toHaveCount(1);
+
+      const before = secondsOf(await running.innerText());
+      expect(before, 'a fresh hold starts near its full length').toBeGreaterThan(28);
+
+      // Ten seconds of clock later the display has moved by ten. A static label would still read
+      // its original number; a counter would read roughly `before - 1` if the page had been
+      // throttled. Neither passes.
+      await page.clock.fastForward(10_000);
+      const after = secondsOf(await running.innerText());
+      expect(
+        before - after,
+        'the display followed the clock, not its own repaints',
+      ).toBeGreaterThanOrEqual(9);
+      expect(before - after).toBeLessThanOrEqual(11);
+
+      // The hold outlasts its deadline honestly rather than freezing at zero, and it says so.
+      await page.clock.fastForward(60_000);
+      await expect(running).toContainText(/^\+\d+:\d{2}$/);
+      await expect(running).toHaveAttribute('aria-label', /over by \d+:\d{2}/);
     } finally {
       await auth.cleanup();
     }

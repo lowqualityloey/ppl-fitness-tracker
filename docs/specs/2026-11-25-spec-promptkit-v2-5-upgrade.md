@@ -442,8 +442,16 @@ at S0, so nothing needs stashing.
   to the toolchain is the linter's, and the nested checkouts are already invisible to `git status`
   through their own untracked `.gitignore` (`.kilo/` additionally via `.git/info/exclude`). Removing
   the worktrees stays the owner's call. Recorded in `docs/STATE.md` section 8.
-- **F-3 — `npm test` state on this tree.** Not re-measured, not claimed. The last recorded state has
-  pre-existing failures that predate this move.
+- **F-3 — `npm test` state on this tree.** **Measured 2026-11-25, and the earlier text was wrong for
+  this host.** The bullet previously read "not re-measured, not claimed. The last recorded state has
+  pre-existing failures that predate this move"; both lanes were then run to completion on `72a1946`
+  and neither fails. `npm test` exits **0** with `Test Files 70 passed (70)` / `Tests 695 passed (695)`
+  in 47.33 s, and `npm run test:api` exits **0** with `Test Files 14 passed (14)` / `Tests 84 passed (84)`
+  in 125.82 s. No test was skipped in either lane, so the counts are executions, not a green achieved by
+  skipping. The `npm test` script excludes `tests/integration/api/**` by design, which is exactly why the
+  second lane is quoted beside it rather than folded into the first. **Not claimed**: `npm run test:e2e`
+  was not run, and neither lane is production evidence — `test:api` boots `next dev` against the local
+  stack. The earlier "pre-existing failures" sentence described a state this host no longer has.
 - **F-4 — The nine upstream commits after `v2.5.0`.** Not reviewed, not pinned. Every future pin decision
   re-opens the same `STALE(+n)` question, and the answer needs an owner call, not a green row.
 - **F-5 — Engine-side conformance and capture scripts.** `v2.5.0` adds `capture-host-session` and
@@ -470,12 +478,13 @@ eslint.config.mjs`, `bash .promptkit/scripts/validate-references.sh --strict`, `
 .promptkit/scripts/validate-execution-control.sh --root .`, `bash .promptkit/scripts/check-setup-assert.sh .
 .promptkit .promptkit`, `bash .promptkit/scripts/validate-ci-triage.sh`, `bash
 .promptkit/scripts/check-doctor.sh .`, `npm run typecheck`, `npm run lint`, `npx eslint .
---ignore-pattern .agents/** --ignore-pattern .kilo/**`, `git worktree list`.
+--ignore-pattern .agents/** --ignore-pattern .kilo/**`, `git worktree list`, `npm test`, `npm run test:api`.
 
 **Not measured, and not claimed**: the engine 18941-line source diff; the behaviour of the new engine
-scripts inside another host session; the full `npm test` suite; any CI run of the engine own workflows;
-whether `origin/main`'s nine trailing commits are safe to pin; whether removing `GEMINI.md` from the
-target list changes any other consumer, since this repository has no such file.
+scripts inside another host session; `npm run test:e2e`; whether `npm test` reads the same on a host
+that does not carry a seeded local stack, since parts of the suite touch one; any CI run of the engine
+own workflows; whether `origin/main`'s nine trailing commits are safe to pin; whether removing
+`GEMINI.md` from the target list changes any other consumer, since this repository has no such file.
 
 **Execution gate**: this plan authorized nothing by itself. The owner ratified D1-D6 and O1-O3 before S0,
 and the two commits record the result.

@@ -10,7 +10,7 @@
 
 - **Project Name**: PPL Fitness Tracker
 - **Current Milestone / Epic**: **M4: Hardening, Telemetry & Decommission — IN PROGRESS.**
-  Milestone #4 reads **open=10 / closed=32** of 42 issue-only (`gh api graphql` on `milestone(4)`, re-read 2026-11-24; the delta since the 2026-11-23 read of 12/30 is #98 closing with PR #190 and #77 closing with PR #191, and REST reads closed=33 because it counts one milestone-tagged PR). M3 is closed at
+  Milestone #4 reads **open=9 / closed=33** of 42 issue-only (`gh api graphql` on `milestone(4)`, re-read 2026-11-24 after PR #193 merged; the delta since the 2026-11-23 read of 12/30 is #98 closing with PR #190, #77 with PR #191 and #106 with PR #193, and REST reads closed=34 because it counts one milestone-tagged PR). M3 is closed at
   19/19; M1 and M2 are complete except the deferred #16.
 - **Overall Status**: ACTIVE
 - **Target Release**: **v1.0.0 — not released; no tag exists.** Readiness record:
@@ -43,7 +43,7 @@
 - [/] **M1**: Contracts & Seams — code, contracts, seeds, RLS, auth, and RED baseline complete; production SMTP/delivery remains deferred under issue #16
 - [x] **M2**: Core Domain Engine — issues #36–#42 all merged (PRs #43–#47, #51, #53). **Complete 2026-09-11.**
 - [x] **M3**: Presentation — **Complete 2026-09-12.** Milestone #3 is **open=0 / closed=19**. M3-00…M3-09 merged 2026-09-11 as PRs #69, #71, #72, #74, #75, #79, #81, #83, #85; **#67 (M3-10, the verification gate) merged as PR #86 (`8704c19`, 2026-09-11T19:23Z)**, and the milestone's last open child, **#73 (`SessionStateSchema`), merged as PR #87 (`2d5edfb`, 2026-09-12T02:00Z)** — so the milestone closed with nothing parked under it. The gate's own verdict: seven goals measured, two documented misses kept rather than relabelled, and every gate in the suite watched to fail (audit entries 9–19).
-- [/] **M4**: Hardening, telemetry, decommission the legacy static app — **IN PROGRESS.** Board **open=10 / closed=32 of 42** issue-only (`gh api graphql` on `milestone(4)`, 2026-11-24; REST reads closed=33 because it counts one milestone-tagged PR). The three release blockers became **#174** (startup env, B4), **#175** (production seed, B5) and **#176** (Deployment Protection, B1, `p0`); #175 and #178 are closed, **#16 remains owner-blocked**, and the **#164 chain is closed end-to-end** (spike #166 → slices #169/#172). Cards: `docs/tasks/m4/`; handoff: `docs/releases/2026-09-12-m3-exit-report-and-m4-handoff.md`.
+- [/] **M4**: Hardening, telemetry, decommission the legacy static app — **IN PROGRESS.** Board **open=9 / closed=33 of 42** issue-only (`gh api graphql` on `milestone(4)`, 2026-11-24 after PR #193 merged; REST reads closed=34 because it counts one milestone-tagged PR). The three release blockers became **#174** (startup env, B4), **#175** (production seed, B5) and **#176** (Deployment Protection, B1, `p0`); #175 and #178 are closed, **#16 remains owner-blocked**, and the **#164 chain is closed end-to-end** (spike #166 → slices #169/#172). Cards: `docs/tasks/m4/`; handoff: `docs/releases/2026-09-12-m3-exit-report-and-m4-handoff.md`.
 
 - **Detailed task breakdowns** — the M0/M1/M2/M3 checklists, the M2 checkpoint and the M1
   implementation notes → [`STATE-ARCHIVE.md#s2`](STATE-ARCHIVE.md#s2). Live M4 cards:

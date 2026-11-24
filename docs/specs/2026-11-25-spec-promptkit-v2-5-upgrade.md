@@ -434,9 +434,14 @@ at S0, so nothing needs stashing.
 
 - **F-1 — The `docs/reviews/2026-11-22-promptkit-v2-sync-branch.md` evidence defects.** Still untracked
   and still unaddressed; this move neither stages nor edits that report (D4).
-- **F-2 — The nested `.agents/` and `.kilo/` worktrees are invisible to `.gitignore`.** They are why a
-  bare `npm run lint` is red on this host. Either ignore them or remove the stale worktrees; that is a
-  repository-hygiene change with its own justification, not part of a governance pin.
+- **F-2 — The nested `.agents/` and `.kilo/` worktrees are invisible to `.gitignore`.**
+  **Addressed 2026-11-25 as Level 1 work, inline.** `eslint.config.mjs` now ignores `**/.agents/**` and
+  `**/.kilo/**`, and a bare `npm run lint` goes from exit 1, `28761 problems (1890 errors, 26871
+  warnings)` over 347 files, to exit 0 with no output, the linted set falling 347 to 246 with all 101
+  dropped files under a nested worktree. `.gitignore` is deliberately untouched: the ignore that matters
+  to the toolchain is the linter's, and the nested checkouts are already invisible to `git status`
+  through their own untracked `.gitignore` (`.kilo/` additionally via `.git/info/exclude`). Removing
+  the worktrees stays the owner's call. Recorded in `docs/STATE.md` section 8.
 - **F-3 — `npm test` state on this tree.** Not re-measured, not claimed. The last recorded state has
   pre-existing failures that predate this move.
 - **F-4 — The nine upstream commits after `v2.5.0`.** Not reviewed, not pinned. Every future pin decision

@@ -95,6 +95,18 @@ const eslintConfig = defineConfig([
     // with the engine, and are not this project's source: linting them reports the kit's
     // style, not ours, and the engine upgrade would flip the result on every bump.
     ".promptkit/**",
+    // Agent worktree checkouts of this same repository, nested inside the tree
+    // (`.agents/worktrees/…`, `.kilo/worktrees/…`). Each one is a full second
+    // checkout, so it carries its own copy of the application source and of the
+    // vendored engine above; linting it reports that checkout's state, not this
+    // one's. On a host that has them a bare `npm run lint` reads tens of
+    // thousands of problems that no tracked file here produces, and on a CI
+    // checkout the same command is green — the same repository answering two
+    // ways depending on local scratch directories. The `**/` prefix is the
+    // point: the nested checkout is skipped at any depth, rather than a
+    // top-level directory of this repository being skipped.
+    "**/.agents/**",
+    "**/.kilo/**",
   ]),
 ]);
 

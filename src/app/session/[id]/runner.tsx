@@ -8,6 +8,7 @@ import type { PreferredUnit } from '../../../../lib/contracts/profile';
 import type { SessionPhase, TaskKey } from '../../../../lib/contracts/common';
 import type { SyncMutation } from '../../../../lib/contracts/sync';
 import { TASK_PHASES } from '../../../../lib/domain/sessions/transition-table';
+import { stretchCountdownMs } from '../../../../lib/domain/sessions/stretch-timing';
 import type { PrefillData } from '../../../../lib/contracts/sessions';
 import { parseSessionView, type SessionView } from '../../../../lib/views/session-view';
 import { formatWeight, parseReps, parseWeightToKg } from '../../../../lib/domain/units';
@@ -223,8 +224,33 @@ function Runner({ userId, sessionId, initialView, unit, initialPrefill }: {
   const readOnly = serverView.status !== 'in_progress';
   // The phase clause of `assertSetMutationAllowed`, restated here as an affordance rule.
   const setsOpen = serverView.phase === 'exercise' || serverView.phase === 'rest';
-  const stretchPlacements = serverView.routineDay.exercises.filter(
-    (placement) => placement.phase === 'stretch',
+  /*
+   * How long each stretch hold runs is decided in `lib/domain/sessions/stretch-timing.ts`, not
+   * here: the length comes from the movement's own `duration_seconds`, never from `rest_time`
+   * (which is the gap between sets and is NULL for every stretch row), and a range like
+   * `'60-90s'` resolves to its lower bound. That module is unit-proven against an injected clock,
+   * so this screen only has to render the answer.
+   *
+   * The filter lives inside the memo, keyed on the server array itself, so the derived rows are
+   * stable across the once-a-second repaint the session clock causes. Filtering above and
+   * depending on the result made every render a new array, which is what let a restarted clock
+   * look like a frozen one (see the effect's note in `StretchSequence`).
+   */
+  const stretchRows = useMemo(
+    () =>
+      serverView.routineDay.exercises
+        .filter((placement) => placement.phase === 'stretch')
+        .map((placement) => ({
+        id: placement.id,
+        exerciseId: placement.exercise.id,
+        name: placement.exercise.name,
+        targetReps: placement.targetReps,
+          countdownMs: stretchCountdownMs({
+            durationSeconds: placement.exercise.durationSeconds,
+            restTime: placement.restTime,
+          }),
+        })),
+    [serverView.routineDay.exercises],
   );
 
   /*
@@ -627,7 +653,7 @@ function Runner({ userId, sessionId, initialView, unit, initialPrefill }: {
         />
       </section>
 
-      {stretchPlacements.length > 0 && (
+      {stretchRows.length > 0 && (
         <section aria-labelledby="phase-stretch" className="mt-6">
           <h2 id="phase-stretch" className="text-lg font-medium">
             Stretch
@@ -643,17 +669,17 @@ function Runner({ userId, sessionId, initialView, unit, initialPrefill }: {
           <p className="mt-1 text-sm text-muted-foreground">
             Follow the sequence, then tick the checklist item below.
           </p>
-          <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm">
-            {stretchPlacements.map((placement) => (
-              <li key={placement.id} data-testid={`stretch-${placement.exercise.id}`}>
-                {placement.exercise.name}
-                <span className="text-muted-foreground">
-                  {placement.targetReps != null ? ` · ${placement.targetReps} reps` : ''}
-                  {placement.restTime ? ` · rest ${placement.restTime}` : ''}
-                </span>
-              </li>
-            ))}
-          </ol>
+          {/*
+            * Live for exactly the `stretch` phase, for the same reason `RestTimer` is: the
+            * component owns the countdown, so leaving the phase unmounts it and the cleanup
+            * cancels the controller. No other path has to remember to.
+            */}
+          <StretchSequence
+            rows={stretchRows}
+            live={serverView.phase === 'stretch' && !readOnly}
+            announce={setAnnouncement}
+            onChime={playChime}
+          />
           <TaskChecklist
             section="stretch"
             tasks={projection.tasks}
@@ -979,6 +1005,155 @@ function TaskChecklist(props: {
         })}
       </div>
     </fieldset>
+  );
+}
+
+/** One stretch hold, as the screen needs it: a name, and a length or nothing. */
+interface StretchRow {
+  readonly id: string;
+  readonly exerciseId: string;
+  readonly name: string;
+  readonly targetReps: number | null;
+  readonly countdownMs: number | null;
+}
+
+interface StretchSequenceProps {
+  readonly rows: readonly StretchRow[];
+  /** False when the session is not in the `stretch` phase, or is read-only. */
+  readonly live: boolean;
+  readonly announce: (message: string) => void;
+  readonly onChime: () => void;
+}
+
+/**
+ * The stretch sequence, with a real countdown on the hold that is running.
+ *
+ * The card offered two honest options — wire a timer, or stop showing seconds — and this is the
+ * first. What it deliberately does *not* do is tick rows: set rows exist only for main-workout
+ * strength placements, `assertSetMutationAllowed` rejects anything else, and the phase is completed
+ * by its checklist item. A tick here would be a control the storage cannot represent.
+ *
+ * Only one hold counts down at a time; the rest of the sequence is a list. Each hold's length comes
+ * from `stretchCountdownMs`, which reads `duration_seconds` from the movement itself and never
+ * `rest_time` (that column is the gap between *sets*, and is NULL on every stretch row). A
+ * `null` length means no countdown at all rather than a `0:00` that finishes on arrival — the row
+ * still names the movement, it just does not pretend the app is counting something.
+ *
+ * Every value is derived from an absolute deadline via `createCountdownTimer`, never from ticks
+ * added up, so a screen that was frozen or backgrounded wakes up showing the truth.
+ */
+function StretchSequence({ rows, live, announce, onChime }: StretchSequenceProps) {
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [state, setState] = useState<CountdownState | null>(null);
+  const timer = useRef<Timer<CountdownState> | null>(null);
+
+  const active = activeIndex === null ? null : rows[activeIndex] ?? null;
+  const activeMs = active?.countdownMs ?? null;
+  /*
+   * The effect keys off these primitives, never off `active` itself. `rows` is rebuilt whenever the
+   * server view changes, so `active` is a fresh object on every one of those renders; depending on
+   * its identity tore the timer down and re-ran `start(Date.now() + activeMs)` each time, which is
+   * the same "a clock that is restarted is not a clock" defect the module exists to prevent — the
+   * hold re-anchored to a full 30 s forever and the digits never moved. A row's name and length do
+   * not change once the hold has begun, so holding them as values is both stable and honest.
+   */
+  const activeName = active?.name ?? null;
+
+  useEffect(() => {
+    if (!live || activeName === null || activeMs === null) return undefined;
+
+    const controller = createCountdownTimer({
+      ...browserTimerClock(),
+      onFinish: () => {
+        announce(`${activeName} hold complete`);
+        onChime();
+      },
+    });
+    timer.current = controller;
+
+    const unsubscribe = controller.subscribe(setState);
+    controller.start(Date.now() + activeMs);
+
+    return () => {
+      unsubscribe();
+      controller.cancel();
+      timer.current = null;
+      setState(null);
+    };
+  }, [live, activeName, activeMs, announce, onChime]);
+
+  /**
+   * Starting a hold is the athlete's act, not a side effect of arriving: mounting the section does
+   * not start a clock, and moving on leaves the previous one cancelled by the cleanup above.
+   */
+  const startHold = (index: number): void => {
+    setActiveIndex(index);
+  };
+
+  return (
+    <>
+      <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm">
+        {rows.map((row, index) => {
+          const isActive = live && activeIndex === index && state !== null;
+          return (
+            <li key={row.id} data-testid={`stretch-${row.exerciseId}`}>
+              {row.name}
+              <span className="text-muted-foreground">
+                {row.targetReps != null ? ` · ${row.targetReps} reps` : ''}
+                {row.countdownMs !== null ? ` · hold ${row.countdownMs / 1_000}s` : ''}
+              </span>
+              {live && row.countdownMs !== null && (
+                <span className="ml-2 inline-flex items-center gap-2">
+                  {isActive && state !== null ? (
+                    <span
+                      className={
+                        state.finished
+                          ? 'font-mono tabular-nums text-destructive'
+                          : 'font-mono tabular-nums'
+                      }
+                      data-testid={`stretch-remaining-${row.exerciseId}`}
+                      role="timer"
+                      aria-live="off"
+                      aria-atomic="true"
+                      aria-label={
+                        state.finished
+                          ? `${row.name} over by ${formatDuration(state.overrunMs)}`
+                          : `${formatDuration(state.remainingMs)} of ${row.name} remaining`
+                      }
+                    >
+                      {state.finished
+                        ? formatDuration(state.overrunMs, { overrun: true })
+                        : formatDuration(state.remainingMs)}
+                    </span>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      data-testid={`stretch-start-${row.exerciseId}`}
+                      onClick={() => startHold(index)}
+                    >
+                      Start {row.countdownMs / 1_000}s
+                    </Button>
+                  )}
+                  {isActive && (
+                    <Button
+                      variant="ghost"
+                      data-testid={`stretch-skip-${row.exerciseId}`}
+                      onClick={() => {
+                        timer.current?.cancel();
+                        setActiveIndex(null);
+                        setState(null);
+                      }}
+                    >
+                      Done
+                    </Button>
+                  )}
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </>
   );
 }
 

@@ -40,3 +40,44 @@ Handoff §3.4's first bullet retires: nothing on the stretch screen reads like a
 
 ## Dependencies
 - M4-11 first if option A adds timer e2e specs (don't grow the flake surface on a flaky base).
+
+## Outcome
+
+**Delivered: option A.** The stretch phase now counts down through the same `TimerController` as the
+rest timer, one hold at a time. (`lib/domain/sessions/stretch-timing.ts`, `src/app/session/[id]/runner.tsx:1030-1200`.)
+
+**The card's premise was wrong, and the measurement is the first finding.** It described `main` as
+rendering "rest 60-90s" as *static text*. `main` rendered **no hold length at all**. The list did emit
+`· rest ${placement.restTime}`, but `rest_time` is NULL on every stretch placement by construction —
+`db/seed/stretches.ts` inserts NULL there — so the suffix interpolated to an empty string and the
+athlete saw a bare exercise name. The real measurement of a stretch is `exercises.duration_seconds`
+(15 seeded stretch rows: 30 s ×12, 45 s ×3), not `rest_time`, which is the gap *between sets* and
+means nothing for a hold. `stretchCountdownMs()` therefore reads `durationSeconds` first and only
+falls back to `restTime`.
+
+**The range policy: `lower-bound`** (`STRETCH_RANGE_POLICY`). A seeded value like `'60-90s'` resolves
+to 60 s, never to 90 s and never to a midpoint. Over-holding is the only injurious error — a stretch
+taken past its range risks strain, while finishing early is recoverable and self-correcting; and a
+midpoint (75 s) invents a number neither endpoint states, which is worse than picking one stated
+endpoint. The unit spec pins this: 60 000 ms, and explicitly `not.toBe(90_000)` / `not.toBe(75_000)`.
+A hold with no readable length renders no clock at all (`null`, not `0`) — a `0:00` that finishes on
+arrival would be a timer pretending something happened.
+
+**A second, real defect surfaced only once the digits were real:** the `StretchSequence` effect
+depended on `active`, an object rebuilt on every parent render (`stretchPlacements` is unmemoized, so
+`stretchRows` changes each render, and the session clock re-renders the parent once a second). The
+effect therefore tore the timer down and re-ran `start(Date.now() + activeMs)` every second, pinning
+the display at `0:30` forever. The effect now keys off the primitive `activeName` instead. This is the
+module's own thesis turned on its caller: a clock that gets restarted is not a clock.
+
+**Evidence.**
+- Watched red, honestly: with the finished component's digits replaced by the literal `'0:30'`, the
+  spec fails on `before - after >= 9` with **Received: 0** (`tests/e2e/timers.spec.ts:431`); restoring
+  the real body turns it green. The red is a *digit-delta* failure, not a setup failure.
+- `npx playwright test timers.spec.ts session-runner.spec.ts` → **13 passed (2.4m)**, serially, on a
+  fresh build (the 100-tap paint spec measured p95 18.0 ms against its 50 ms gate).
+- The spec scopes its "no clock yet" assertion to `[data-testid^="stretch-remaining-"]` on purpose:
+  `session-elapsed` is itself `role="timer"` for the whole session, so a bare `[role="timer"]` count
+  can never read zero once a workout starts. That trap cost one red run and is now a comment in place.
+- Tick rows in the stretch section remain absent: `assertSetMutationAllowed` throws for any phase
+  outside `exercise`/`rest`, so the schema — not a missing feature — is what forbids them.

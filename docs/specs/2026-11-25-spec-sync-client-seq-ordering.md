@@ -204,8 +204,12 @@ mutations: batch.map((item) => ({ ...item.payload, clientSeq: item.seq })),
 ### S9. State file
 
 Replace the `docs/STATE.md:176` bullet under "Open findings" with a closed note naming this record, and
-prepend one line to the `\u00a71` "Last Updated" head. The M4 counts do not move: #78 is a filed
-finding, not an M4 card.
+prepend one line to the `\u00a71` "Last Updated" head. **The M4 counts do move, and this section said they
+would not.** #78 carries the M4 milestone, so closing the card takes the board from `open=7 / closed=35` to
+`open=6 / closed=36`; the claim that it was "a filed finding, not an M4 card" was wrong when written and is
+corrected here rather than quietly dropped. Sweep section 1's milestone sentence, section 2's M4 bullet and
+the section 5 finding row, and measure the new counts from `gh api graphql` on `milestone(4)` instead of
+subtracting one.
 
 ### S10. Gates, commit, push
 

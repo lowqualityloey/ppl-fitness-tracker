@@ -15,7 +15,23 @@
 - **Overall Status**: ACTIVE
 - **Target Release**: **v1.0.0 — not released; no tag exists.** Readiness record:
   `docs/releases/2026-09-21-v1.0.0-release-readiness.md`.
-- **Last Updated**: 2026-11-25 (**The spec's last unmeasured follow-up is measured, and it does not say what the
+- **Last Updated**: 2026-11-25 (**The filed finding that made a same-millisecond pair a coin flip is closed: two
+mutations for one entity that land in the same millisecond on one device are now ordered by the client's own
+outbox sequence instead of by a random UUID, so the server keeps the tap the athlete made last. The comparison
+went from effectiveTs then deviceId then mutationId to effectiveTs then deviceId then clientSeq then
+mutationId; the device stays ahead of the sequence on purpose, because the sequence is a per-session
+per-device counter and comparing it across devices would systematically favour whichever device had logged
+more taps. Sequence 0 means unknown - the outbox hands out lastSeq()+1, so no real row is 0 - which makes a
+row backfilled to 0 fall through to the mutation id and keep exactly the verdict it had before. Eight tests
+carry it: five on the comparison and the engine in `tests/unit/domain/sync-engine.test.ts`, one on the wire
+in `tests/unit/state/sync-engine.test.ts`, one on the optional field in
+`tests/unit/contracts/contracts.test.ts`, and one reading `client_seq` straight out of the table in
+`tests/integration/repository/workout-repository.test.ts`. Both lanes are green at the new count -
+`npm test` 70 files / 703 passed, `npm run test:api` 14 files / 84 passed - and every governance gate sits at
+or better than its baseline. The wire field is optional on purpose: making it required would 400 every batch
+already queued in an IndexedDB, which is a compatibility promise the contract tests hold. Recorded honestly:
+the ordering change landed before its tests, so no failing observation was captured; the record says so
+instead of claiming a red run it never had.** Immediately before that: **The spec's last unmeasured follow-up is measured, and it does not say what the
 spec said: both test lanes are green on this host. The v2.5.0 Planning Record's F-3 bullet carried \"not
 re-measured, not claimed. The last recorded state has pre-existing failures that predate this move\", which was
 honest when written and is now false here, so it was replaced with the reading instead of a promise to read.
@@ -89,27 +105,27 @@ owner's call, not a lint fix.** Immediately before that: **The governance engine
 
 ## 3A. Execution-Control Projection (Optional)
 
-> This section is a synchronized projection for checkpoint continuity when the host project uses Controlled Work. The canonical authority remains `docs/tasks/2026-11-25-promptkit-v2-5-upgrade.md`; disagreement with that record is a validation failure and leaves execution blocked or `checkpoint_due` until reconciled. The fields below mirror that record exactly; the previously projected `TASK-drizzle-rls-failures` record and its D7 branch and revision notes are retired from this projection, not rewritten.
+> This section is a synchronized projection for checkpoint continuity when the host project uses Controlled Work. The canonical authority remains `docs/tasks/2026-11-25-sync-client-seq-ordering.md`; disagreement with that record is a validation failure and leaves execution blocked or `checkpoint_due` until reconciled. The fields below mirror that record exactly. The v2.5.0 upgrade record this projection carried before is closed and its evidence stays in the commit that closed it, not here.
 
-- **Local Task Source**: `docs/tasks/2026-11-25-promptkit-v2-5-upgrade.md`
-- **Task ID**: `TASK-promptkit-v2-5-upgrade`
-- **Task Record**: `docs/tasks/2026-11-25-promptkit-v2-5-upgrade.md`
+- **Local Task Source**: `docs/tasks/2026-11-25-sync-client-seq-ordering.md`
+- **Task ID**: `TASK-sync-client-seq-ordering`
+- **Task Record**: `docs/tasks/2026-11-25-sync-client-seq-ordering.md`
 - **Ceremony Level**: `Level 2 (Controlled Work)`
-- **Specification**: `docs/specs/2026-11-25-spec-promptkit-v2-5-upgrade.md`
+- **Specification**: `docs/specs/2026-11-25-spec-sync-client-seq-ordering.md`
 - **Execution Scope**: `ppl-fitness-tracker, branch main, one worktree`
 - **Execution State**: `completed`
 - **Mapped `pk:tasks` Status**: `Done`
 - **Active Task Pointer**: `None`
 - **Owner / Current Actor**: `Agent (DeepSeek Harness / lead)`
-- **Start Time**: `2026-11-24 18:30 UTC (S0 baseline read)`
+- **Start Time**: `2026-11-25 13:45 UTC`
 - **Checkpoint Policy**: `N/A - single session; host timer cannot mechanically enforce checkpoints or terminate the session.`
-- **Blockers and Resume Condition**: `None. Execution closed with AC-1 through AC-15 PASS; the owner reviews 50bb6ff and the docs-only commit that carries the record on origin/main.`
-- **Verification Status**: `Measured 2026-11-24 after commit 1 at 50bb6ff: validate-references.sh --strict exit 0; validate-execution-control.sh --root . exit 0 with VALID over 10 records; check-setup-assert.sh exit 0 (ASSERT|submodule|status|OK); validate-ci-triage.sh unchanged at ERRORS=60|RECORDS=3; check-doctor.sh exit 1 on the version row alone at STALE(+9), with submodule OK and docs-drift OK; npm run typecheck exit 0; scoped eslint (npx eslint . --ignore-pattern .agents/** --ignore-pattern .kilo/**) exit 0. The pre-execution baseline at 8eee30b read STALE(+53) on the same row and 9 execution-control records.`
-- **CI Evidence**: `The governance workflow at .github/workflows/governance.yml runs on this push and executes exactly three validators: validate-references.sh --strict, validate-execution-control.sh --root ., and check-setup-assert.sh . .promptkit . .promptkit. The doctor version row is not a workflow step and is red by decision D1, not by defect.`
-- **Changed-File Summary**: `Ten paths across two commits on main. Commit 50bb6ff: the .promptkit gitlink to a8c5994, the five host directives (AGENTS.md, CLAUDE.md, .opencode/rules.md, .clinerules/promptkit.md, .github/copilot-instructions.md) at the v2.5.0 stamp with directive md5 98425dbe -> 7ebe005d, PROMPTKIT.md (engine prose, md5, the drift note), and the installer-written docs/STATE.md Engine Version row. The docs-only commit adds docs/STATE.md (Last Updated, one section 8 row, section 3A), docs/specs/2026-11-25-spec-promptkit-v2-5-upgrade.md, and docs/tasks/2026-11-25-promptkit-v2-5-upgrade.md. No application source, test, schema, auth, API, database, or CI runtime file changed.`
+- **Blockers and Resume Condition**: `None - execution is complete. Nothing here is waiting on a human except the push confirmation and the separate disposition of the untracked review report, neither of which blocks this task's work.`
+- **Verification Status**: `Measured 2026-11-25 on the tree that carries this record: validate-references.sh --strict exit 0; validate-execution-control.sh --root . exit 0 with VALID over 11 records; check-setup-assert.sh exit 0 (ASSERT|submodule|status|OK); validate-ci-triage.sh unchanged at ERRORS=60|RECORDS=3; check-doctor.sh exit 1 on the version row alone at STALE(+9), with submodule OK and docs-drift OK; npm run typecheck exit 0; npm test exit 0 at 70 files / 703 passed; npm run test:api exit 0 at 14 files / 84 passed.`
+- **CI Evidence**: `The governance workflow at .github/workflows/governance.yml runs on this push and executes exactly three validators: validate-references.sh --strict, validate-execution-control.sh --root ., and check-setup-assert.sh . .promptkit . .promptkit. The doctor version row is not a workflow step and is red by the v2.5.0 pin decision, not by defect.`
+- **Changed-File Summary**: `Fourteen paths in one commit on main: lib/contracts/sync.ts, lib/domain/sync/sync-engine.ts, lib/domain/sync/types.ts, lib/repositories/workout-repository.ts, db/schema/index.ts, src/app/state/sync-engine.ts, supabase/migrations/0009_sync_entity_client_seq.sql, tests/unit/domain/sync-engine.test.ts, tests/unit/state/sync-engine.test.ts, tests/unit/contracts/contracts.test.ts, tests/integration/repository/workout-repository.test.ts, docs/specs/2026-11-25-spec-sync-client-seq-ordering.md, docs/tasks/2026-11-25-sync-client-seq-ordering.md, plus this file. The change is additive: an optional wire field, an additive column with a default, and one comparison step between the device and the mutation id.`
 - **Latest Checkpoint**: `None`
 - **Latest Handoff**: `None`
-- **Next Action**: `None - this task is closed. The outstanding human step is the owner's own read of the two commits on origin/main; the accepted red on the doctor version row is a recorded decision, not queued work.`
+- **Next Action**: `None - this task is closed. The remaining human step is reading the pushed commit and, separately, deciding the disposition of the pre-existing untracked review report.`
 
 ---
 
@@ -173,7 +189,7 @@ false, are preserved in [`STATE-ARCHIVE.md#s5`](STATE-ARCHIVE.md#s5).
 ### Open findings (filed, not release blockers)
 
 - **#76** — no API path produces an `archived` session, so #63's scenario is not testable end-to-end.
-- **#78** — same-millisecond writes to one entity are ordered by a random UUID rather than arrival.
+- ~~**#78** — same-millisecond writes to one entity are ordered by a random UUID rather than arrival.~~ **resolved 2026-11-25** — ordered by the client's outbox sequence; the comparison now reads effectiveTs → deviceId → clientSeq → mutationId, and `TASK-sync-client-seq-ordering` carries the eight tests that prove it.
 
 ### Technical debt still open
 

@@ -701,6 +701,44 @@ describe('WorkoutRepository', () => {
     expect(metadata.rows).toEqual([{ status: 'applied', server_seq: 1, entity_key: `set:${exerciseId}:0` }]);
   });
 
+  it('stores the client sequence beside the version it decided (#78)', async () => {
+    const { id: sessionId } = await beginExerciseSession('2028-03-21');
+    const mutation: SyncRequest['mutations'][number] = {
+      op: 'set.upsert',
+      mutationId: randomUUID(),
+      clientTs: '2026-09-08T12:00:00.000Z',
+      sessionId,
+      exerciseId,
+      setIndex: 0,
+      isCompleted: true,
+      weightKg: 62.5,
+      reps: 8,
+      // The number the outbox gave this tap. Cheap to carry and the only record of the order
+      // the device saw, so losing it is not recoverable later from anything else on the row.
+      clientSeq: 4,
+    };
+
+    const result = await repository.applySync(userId, {
+      deviceId: randomUUID(),
+      sinceSeq: 0,
+      mutations: [mutation],
+    });
+    expect(result).toMatchObject({ applied: [mutation.mutationId], rejected: [] });
+
+    /*
+     * Read straight from the table rather than from a repository method: the field's job is to
+     * survive to storage, and a getter that read it back would pass even if the write path had
+     * dropped it somewhere between the engine and the INSERT. `entity_key` is the same
+     * `set:<exercise>:<index>` the metadata test above pins, so the row under test is the same
+     * one the conflict decision was made about.
+     */
+    const storedVersion = await owner.query<{ client_seq: number }>(
+      `SELECT client_seq FROM sync_entity_versions WHERE session_id = $1 AND entity_key = $2`,
+      [sessionId, `set:${exerciseId}:0`],
+    );
+    expect(storedVersion.rows).toEqual([{ client_seq: 4 }]);
+  });
+
   it('replays terminal mutations without reopening the session and rejects new terminal writes', async () => {
     const terminal = await engine.start(userId, routineDayId, randomUUID(), '2028-03-20');
     await owner.query(

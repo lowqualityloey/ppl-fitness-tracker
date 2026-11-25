@@ -84,14 +84,24 @@ export function mutationEntity(mutation: SyncMutation): {
 
 /** Positive means the candidate wins; zero means the versions are identical. */
 export function compareEntityVersions(
-  candidate: Pick<SyncEntityVersion, 'effectiveTs' | 'deviceId' | 'mutationId'>,
-  current: Pick<SyncEntityVersion, 'effectiveTs' | 'deviceId' | 'mutationId'>,
+  candidate: Pick<SyncEntityVersion, 'effectiveTs' | 'deviceId' | 'clientSeq' | 'mutationId'>,
+  current: Pick<SyncEntityVersion, 'effectiveTs' | 'deviceId' | 'clientSeq' | 'mutationId'>,
 ): number {
   const timestampOrder = candidate.effectiveTs.getTime() - current.effectiveTs.getTime();
   if (timestampOrder !== 0) return timestampOrder;
 
+  // Device before sequence, deliberately: the outbox counter is per session and
+  // per device, so comparing two devices' counters would hand a systematic win
+  // to whichever device happens to hold the larger number. Across devices the
+  // device id is the order; the sequence only decides within one.
   const deviceOrder = compareLexically(candidate.deviceId, current.deviceId);
   if (deviceOrder !== 0) return deviceOrder;
+
+  // 0 means the sender did not record a position, which is true of every row
+  // written before #78. Two unknown positions fall through to the mutation id,
+  // so historical data keeps the ordering it was accepted under.
+  const seqOrder = candidate.clientSeq - current.clientSeq;
+  if (seqOrder !== 0) return seqOrder;
 
   return compareLexically(candidate.mutationId, current.mutationId);
 }
@@ -225,6 +235,7 @@ export class SyncEngine {
       const candidateVersion = {
         effectiveTs,
         deviceId: this.store.deviceId,
+        clientSeq: mutation.clientSeq ?? 0,
         mutationId: mutation.mutationId,
       };
       const currentVersion = await this.store.findEntityVersion(entityType, entityKey);
@@ -266,6 +277,7 @@ export class SyncEngine {
         effectiveTs,
         deviceId: this.store.deviceId,
         mutationId: mutation.mutationId,
+        clientSeq: mutation.clientSeq ?? 0,
         serverSeq,
       });
       await this.store.appendChange({

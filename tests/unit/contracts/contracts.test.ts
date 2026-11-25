@@ -129,6 +129,18 @@ describe('sync contracts', () => {
     expect(SetUpsertMutationSchema.safeParse({ ...setMutation, setIndex: 51 }).success).toBe(false);
   });
 
+  it('treats the outbox sequence as optional so a pre-#78 batch still lands (#78)', () => {
+    // A batch already queued in a browser's IndexedDB predates the field. Rejecting it
+    // would 400 work the athlete already recorded, so absence must stay legal and read as 0.
+    expect(SyncMutationSchema.safeParse(setMutation).success).toBe(true);
+    expect(SyncRequestSchema.safeParse({ deviceId: ids.device, sinceSeq: 0, mutations: [setMutation] }).success).toBe(true);
+
+    expect(SyncMutationSchema.safeParse({ ...setMutation, clientSeq: 7 }).success).toBe(true);
+    expect(SyncMutationSchema.safeParse({ ...setMutation, clientSeq: 0 }).success).toBe(true);
+    expect(SyncMutationSchema.safeParse({ ...setMutation, clientSeq: -1 }).success).toBe(false);
+    expect(SyncMutationSchema.safeParse({ ...setMutation, clientSeq: 1.5 }).success).toBe(false);
+  });
+
   it('accepts all four mutation variants through the canonical union', () => {
     const task = {
       op: 'task.complete' as const, mutationId: ids.mutation, clientTs, sessionId: ids.session,

@@ -462,6 +462,25 @@ describe('Outbox wiring inside the engine', () => {
     expect((await engine.pending()).map((row) => row.seq)).toEqual([0, 1, 2]);
     expect(await outbox.pendingCount()).toBe(3);
   });
+
+  it('puts the outbox sequence on the wire, so a same-millisecond pair can be ordered (#78)', async () => {
+    const harness = engineHarness(() => okResponse(2, { applied: [id(1), id(2)] }));
+
+    // Seeded directly rather than through `mutate`, so both taps land in one batch.
+    await harness.storage.put(stored(0, setMutation(1, 0)));
+    await harness.storage.put(stored(1, setMutation(2, 1)));
+    await harness.engine.drain();
+
+    // The contract makes `clientSeq` optional so a queue written before #78 still drains, and
+    // that optionality is what makes this line load-bearing: nothing else forces the field onto
+    // the wire. Without it both taps travel as `undefined`, the server reads 0 for both, and a
+    // same-millisecond pair falls back to the random mutation id — the defect, restored by
+    // omission, and invisible to every other test in this file.
+    expect(harness.sends[0]?.map((mutation) => mutation.clientSeq)).toEqual([0, 1]);
+    // The stored payload is not rewritten: the outbox row owns the sequence and the request is
+    // where it is joined on, so a retry sends the same number rather than renumbering.
+    expect(harness.storage.rows).toEqual([]);
+  });
 });
 
 /*

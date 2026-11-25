@@ -938,6 +938,7 @@ export class WorkoutRepository {
           deviceId: row.deviceId,
           mutationId: row.mutationId,
           serverSeq: row.serverSeq,
+          clientSeq: row.clientSeq,
         });
       }
 
@@ -984,6 +985,7 @@ export class WorkoutRepository {
             deviceId: ZERO_UUID,
             mutationId: ZERO_UUID,
             serverSeq: 0,
+            clientSeq: 0,
           } : null);
         }
       }
@@ -1010,6 +1012,7 @@ export class WorkoutRepository {
             deviceId: ZERO_UUID,
             mutationId: ZERO_UUID,
             serverSeq: 0,
+            clientSeq: 0,
           } : null);
         }
       }
@@ -1026,6 +1029,7 @@ export class WorkoutRepository {
           deviceId: ZERO_UUID,
           mutationId: ZERO_UUID,
           serverSeq: 0,
+          clientSeq: 0,
         });
       }
 
@@ -1077,6 +1081,7 @@ export class WorkoutRepository {
               deviceId: sql`excluded.device_id`,
               mutationId: sql`excluded.mutation_id`,
               serverSeq: sql`excluded.server_seq`,
+              clientSeq: sql`excluded.client_seq`,
             },
           });
       }
@@ -1174,6 +1179,7 @@ export class WorkoutRepository {
           deviceId: version.deviceId,
           mutationId: version.mutationId,
           serverSeq: version.serverSeq,
+          clientSeq: version.clientSeq,
         });
       },
       appendChange: async (input): Promise<void> => {

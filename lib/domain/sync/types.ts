@@ -19,6 +19,12 @@ export interface SyncEntityVersion {
   deviceId: string;
   mutationId: string;
   serverSeq: number;
+  /**
+   * The sender's outbox position, or 0 when unknown. Compared only after
+   * effectiveTs and deviceId, because the counter is per-session and per-device
+   * (#78).
+   */
+  clientSeq: number;
 }
 
 export type SyncReservation =

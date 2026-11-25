@@ -208,8 +208,17 @@ export const syncEntityVersions = pgTable('sync_entity_versions', {
   deviceId: uuid('device_id').notNull(),
   mutationId: uuid('mutation_id').notNull().references(() => syncMutations.mutationId, { onDelete: 'cascade' }),
   serverSeq: integer('server_seq').notNull(),
+  /**
+   * The sender's outbox position at the time it made the write (#78). 0 means
+   * "unknown": either the row predates the field or the client omitted it. It is
+   * recorded, never derived from server_seq, because the two answer different
+   * questions - server_seq is the order the server chose, this is the order the
+   * athlete tapped.
+   */
+  clientSeq: integer('client_seq').notNull().default(0),
 }, (t) => ({
   entityTypeValid: check('sync_entity_versions_entity_type_valid', sql`entity_type IN ('set', 'task', 'session')`),
+  clientSeqNonNegative: check('sync_entity_versions_client_seq_nonnegative', sql`client_seq >= 0`),
   entityVersionUnique: uniqueIndex('sync_entity_versions_entity_key').on(t.sessionId, t.entityType, t.entityKey),
   sessionLookup: index('sync_entity_versions_session_lookup').on(t.userId, t.sessionId),
   sequenceLookup: index('sync_entity_versions_sequence_lookup').on(t.sessionId, t.serverSeq),

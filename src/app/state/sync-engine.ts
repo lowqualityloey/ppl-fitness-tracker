@@ -254,7 +254,11 @@ export class SyncEngine {
     const outcome = await this.deps.send({
       deviceId: this.deps.deviceId,
       sinceSeq: this.serverSeq,
-      mutations: batch.map((item) => item.payload),
+      // The outbox already numbers its rows; hand the number to the server so a
+      // second tap in the same millisecond is ordered by when it was made rather
+      // than by a random UUID (#78). The stored payload is left untouched - one
+      // fact, one owner - and the sequence is joined in on the way out.
+      mutations: batch.map((item) => ({ ...item.payload, clientSeq: item.seq })),
     });
 
     if (outcome.kind === 'retryable') {

@@ -144,13 +144,44 @@ describe('SyncEngine policy', () => {
   it('uses device ID and mutation ID as deterministic tie-breakers', () => {
     const timestamp = new Date('2026-09-08T12:00:00.000Z');
     expect(compareEntityVersions(
-      { effectiveTs: timestamp, deviceId: deviceB, mutationId: 'ffffffff-ffff-4fff-8fff-ffffffffffff' },
-      { effectiveTs: timestamp, deviceId: deviceA, mutationId: '00000000-0000-4000-8000-000000000000' },
+      { effectiveTs: timestamp, deviceId: deviceB, clientSeq: 0, mutationId: 'ffffffff-ffff-4fff-8fff-ffffffffffff' },
+      { effectiveTs: timestamp, deviceId: deviceA, clientSeq: 0, mutationId: '00000000-0000-4000-8000-000000000000' },
     )).toBeGreaterThan(0);
     expect(compareEntityVersions(
-      { effectiveTs: timestamp, deviceId: deviceA, mutationId: 'FFFFFFFF-FFFF-4FFF-8FFF-FFFFFFFFFFFF' },
-      { effectiveTs: timestamp, deviceId: deviceA, mutationId: 'ffffffff-ffff-4fff-8fff-ffffffffffff' },
+      { effectiveTs: timestamp, deviceId: deviceA, clientSeq: 0, mutationId: 'FFFFFFFF-FFFF-4FFF-8FFF-FFFFFFFFFFFF' },
+      { effectiveTs: timestamp, deviceId: deviceA, clientSeq: 0, mutationId: 'ffffffff-ffff-4fff-8fff-ffffffffffff' },
     )).toBe(0);
+  });
+
+  it('orders a same-millisecond pair on one device by the outbox sequence (#78)', () => {
+    const timestamp = new Date('2026-09-08T12:00:00.000Z');
+    const later = { effectiveTs: timestamp, deviceId: deviceA, clientSeq: 2, mutationId: '11111111-1111-4111-8111-111111111111' };
+    const earlier = { effectiveTs: timestamp, deviceId: deviceA, clientSeq: 1, mutationId: '99999999-9999-4999-8999-999999999999' };
+
+    // The sequence decides even though the losing mutation id sorts higher.
+    expect(compareEntityVersions(later, earlier)).toBeGreaterThan(0);
+    expect(compareEntityVersions(earlier, later)).toBeLessThan(0);
+  });
+
+  it('keeps the device ahead of the sequence so a bigger counter cannot cross devices (#78)', () => {
+    const timestamp = new Date('2026-09-08T12:00:00.000Z');
+    const fromA = { effectiveTs: timestamp, deviceId: deviceA, clientSeq: 9, mutationId: '11111111-1111-4111-8111-111111111111' };
+    const fromB = { effectiveTs: timestamp, deviceId: deviceB, clientSeq: 1, mutationId: '11111111-1111-4111-8111-111111111111' };
+
+    // deviceB sorts after deviceA lexically, so it wins despite the smaller sequence.
+    expect(compareEntityVersions(fromA, fromB)).toBeLessThan(0);
+    expect(compareEntityVersions(fromB, fromA)).toBeGreaterThan(0);
+  });
+
+  it('falls through to the mutation id when neither side recorded a sequence (#78)', () => {
+    const timestamp = new Date('2026-09-08T12:00:00.000Z');
+    const unknown = { effectiveTs: timestamp, deviceId: deviceA, clientSeq: 0, mutationId: '00000000-0000-4000-8000-000000000000' };
+    const alsoUnknown = { effectiveTs: timestamp, deviceId: deviceA, clientSeq: 0, mutationId: 'ffffffff-ffff-4fff-8fff-ffffffffffff' };
+
+    // 0 is "unknown", not "first": pre-#78 rows keep the order they were accepted under.
+    expect(compareEntityVersions(alsoUnknown, unknown)).toBeGreaterThan(0);
+    expect(compareEntityVersions(unknown, alsoUnknown)).toBeLessThan(0);
+    expect(compareEntityVersions(unknown, { ...unknown })).toBe(0);
   });
 
   it('applies a mutation once and makes an identical replay side-effect free', async () => {
@@ -207,6 +238,7 @@ describe('SyncEngine policy', () => {
       deviceId: deviceB,
       mutationId: '44444444-4444-4444-8444-444444444444',
       serverSeq: 1,
+      clientSeq: 1,
     });
 
     const oldMutation = mutation({ clientTs: '2026-09-08T11:00:00.000Z' });
@@ -219,6 +251,47 @@ describe('SyncEngine policy', () => {
     }]);
     expect(store.appliedMutations).toEqual([]);
     expect(store.records.get(oldMutation.mutationId)?.status).toBe('rejected');
+  });
+
+  /*
+   * #78 — two writes to one entity in the same millisecond.
+   *
+   * The comparison used to end on `mutationId`, a random UUID, so which of two same-millisecond
+   * taps survived was a coin flip that could differ between two devices syncing the same batch.
+   * The outbox already numbers its rows; the sequence now decides, and the mutation id is only
+   * reached when neither side recorded one.
+   */
+  it('applies a same-millisecond pair on one device in outbox order (#78)', async () => {
+    const store = new FakeSyncStore();
+    const engine = new SyncEngine(store);
+    const first = mutation({ mutationId: '11111111-1111-4111-8111-111111111111', clientSeq: 1, weightKg: 60 });
+    const second = mutation({ mutationId: '22222222-2222-4222-8222-222222222222', clientSeq: 2, weightKg: 62 });
+
+    const result = await engine.apply(request([first, second]));
+
+    expect(result.rejected).toEqual([]);
+    expect(result.applied).toEqual([first.mutationId, second.mutationId]);
+    expect(store.versions.get(`set:set:${exerciseId}:0`)?.clientSeq).toBe(2);
+  });
+
+  it('rejects the earlier of a same-millisecond pair when it arrives second (#78)', async () => {
+    const store = new FakeSyncStore();
+    const engine = new SyncEngine(store);
+    const earlier = mutation({ mutationId: '11111111-1111-4111-8111-111111111111', clientSeq: 1, weightKg: 60 });
+    const later = mutation({ mutationId: '22222222-2222-4222-8222-222222222222', clientSeq: 2, weightKg: 62 });
+
+    await engine.apply(request([later]));
+    const result = await engine.apply(request([earlier]));
+
+    expect(result.applied).toEqual([]);
+    expect(result.rejected).toEqual([{
+      mutationId: earlier.mutationId,
+      reason: 'STALE_CONFLICT',
+      message: 'A newer change to this set already reached the server.',
+    }]);
+    // The winner still stands: the version the earlier write tried to displace is untouched.
+    expect(store.versions.get(`set:set:${exerciseId}:0`)?.clientSeq).toBe(2);
+    expect(store.appliedMutations).toEqual([later.mutationId]);
   });
 
   /*

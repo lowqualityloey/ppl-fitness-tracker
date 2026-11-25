@@ -14,6 +14,15 @@ const MutationIdentityShape = {
   mutationId: UuidSchema,
   clientTs: IsoDateTimeSchema,
   sessionId: UuidSchema,
+  /**
+   * The mutation's position in the sender's outbox, used to order two writes to
+   * the same entity that land in the same millisecond (#78). Optional because a
+   * batch already queued in a browser's IndexedDB at deploy time predates this
+   * field; the server reads a missing value as 0, which is "unknown" and falls
+   * through to the previous tie-breaker. The outbox hands out `lastSeq() + 1`,
+   * so a real mutation never carries 0.
+   */
+  clientSeq: NonNegativeIntegerSchema.optional(),
 };
 
 /** Matches session_sets.weight_kg numeric(6,2) as well as its 0–1000 check. */

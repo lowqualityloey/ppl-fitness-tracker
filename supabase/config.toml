@@ -158,7 +158,12 @@ enabled = true
 site_url = "http://127.0.0.1:3001"
 # The app runs on port 3001 — the port question #104 recorded: the legacy Vite app's 3000
 # stayed vacant rather than becoming a second truth for the e2e/GoTrue/CI configs.
-additional_redirect_urls = ["http://127.0.0.1:3001/auth/confirm"]
+# Both loopback spellings are listed on purpose. GoTrue compares redirect_to against
+# this allow-list by exact string and silently falls back to site_url when it misses, so a
+# host mismatch does not fail loudly — it produces a link to "/" that never reaches
+# /auth/confirm. CI sets NEXT_PUBLIC_APP_URL to the localhost spelling (test.yml) while
+# site_url here is the 127.0.0.1 spelling, and confirmUrl() derives from the former.
+additional_redirect_urls = ["http://127.0.0.1:3001/auth/confirm", "http://localhost:3001/auth/confirm"]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # JWT issuer URL. If not set, defaults to auth.external_url.

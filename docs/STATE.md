@@ -190,7 +190,7 @@ Added by the M0 spike (ADR-0003 Amendment A1):
 | :--- | :--- | :--- | :--- | :--- |
 | ~~**B1**~~ | ~~Production alias is behind Vercel Deployment Protection — every path `302`s to SSO~~ — **resolved 2026-11-24 (#176 Scenario 3)**: protection no longer intercepts, the release is publicly reachable | #176 (p0) | Owner | **RESOLVED 2026-11-24, card CLOSED 2026-11-25** — the decision is recorded on #176; the card stayed open only because it was held for B9, and was then closed as completed once B9 also resolved |
 | ~~**B9**~~ | ~~**Hosted Supabase project `kkzzwzzkysyvvzgifymk` is `INACTIVE`**, so the app cannot reach its database: `GET /api/health` → `503 SERVICE_UNAVAILABLE`, `GET /api/exercises` → `500 INTERNAL_ERROR`, while `/sign-in` → `200` and `/api/sessions`/`/api/profile` → `401`. Publicly reachable and failing on the database, not on a wall~~ — **resolved 2026-11-25**: the owner restored the project to `ACTIVE_HEALTHY` and the application reads it — `GET /api/health` → `200` with `db.ok: true` (`latencyMs` 1142.3 / 1078.1 / 210.4 / 210.2 across four calls) and `GET /api/exercises` → `200` with seed rows instead of `500` | #176 (p0) | Owner | **RESOLVED 2026-11-25** |
-| **B2** | No production SMTP — the magic link cannot be delivered, so sign-in cannot complete | #16 (p0) | Owner | **OPEN** — accepted for this release by the 2026-09-21 scope decision |
+| **B2** | No production SMTP — the magic link cannot be delivered, so sign-in cannot complete. **The measurement half now exists (2026-11-26):** `scripts/check-magic-link.ts` runs the full round trip — request through `POST /auth/signin`, read the message out of Mailpit, follow the link, land with a session cookie, then confirm the same link is refused — and `.github/workflows/magic-link-monitor.yml` runs it hourly. What is **left** is the production wiring only the owner can supply: (a) a provider account and its SMTP credentials in the hosted project, (b) a verified sending domain with SPF and DKIM records (without both, the message is accepted by the provider and then lands in spam or is rejected outright), and (c) `[auth.rate_limit] email_sent = 2` raised, which no amount of monitoring can fix — the monitor is what will prove the raise took | #16 (p0) | Owner | **OPEN** — accepted for this release by the 2026-09-21 scope decision; the monitor is not a substitute for it, it is the instrument that will show when it clears |
 | **B8** | `v1.0.0` tag uncreated | — | Owner | **OPEN** — human-only; no workflow creates it |
 | ~~**B6**~~ | ~~Production Vercel environment variables unset, so the deployment could not boot against its database~~ — **resolved and closed 2026-11-25**: the four required Production-scoped variables are in place and `GET /api/health` records a `200` with `db.ok: true` | #177 (p0) | Owner | **RESOLVED 2026-11-25, card CLOSED** — closed as completed against its own criterion (the recorded production `200`), not against the configuration change |
 
@@ -295,9 +295,17 @@ the readiness check.
    `/api/exercises` `200` with seed rows). The release record now reads `Pass`.
 3. **Then B2 (#16)** — production SMTP gates sign-in. Without it the release is non-functional
    for end users, which the 2026-09-21 decision already states. **This is now the only functional
-   gate**, and it needs credentials only the owner can supply.
+   gate.** Its two halves are now split and only one is still open: the **measurement** half
+   landed 2026-11-26 (`scripts/check-magic-link.ts` + `magic-link-monitor.yml`, hourly, proving a
+   real round trip against the local stack), and the **production wiring** half needs credentials
+   only the owner can supply — a provider account, a verified sending domain with SPF/DKIM, and
+   `email_sent` raised above 2. Run `npm run monitor:magic-link` against the deployment once those
+   exist; a green run is what closes this, not a configuration diff.
 4. **Then the tag** — `v1.0.0` at the current `main`, only after explicit owner approval (B8). No
-   workflow creates it; `git tag -l` is empty.
+   workflow creates it. `git tag -l` is **not** empty, contrary to what this item said until
+   2026-11-26: it carried one tag, `freebuff-snapshot/60ba45e8-ec63-4204-beec-7d78546c3db0` at
+   `8bd19e1` — a snapshot marker, not a release. The statement was corrected rather than deleted
+   because "no `v*` tag exists" is the fact the item actually needs, and it is still true.
 
 > **Archive:** items 1–22 are preserved verbatim in
 > [`STATE-ARCHIVE.md#s7`](STATE-ARCHIVE.md#s7); items 23–57 are in

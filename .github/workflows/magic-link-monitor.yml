@@ -1,0 +1,154 @@
+name: Magic link monitor
+
+# Synthetic monitor for issue #16 / blocker B2: the magic-link round trip.
+#
+# What it proves, and why nothing cheaper will do: POST /auth/signin answers
+# { ok: true } unconditionally (src/app/auth/signin/route.ts), so its 200 is a
+# statement about the request, never about delivery. /api/health answers 200 with
+# the mail path entirely dead. The only honest evidence is the full loop — request
+# a link through the app, read the message out of Mailpit, follow the link, land
+# with a session cookie, and confirm the same link is refused the second time.
+# scripts/check-magic-link.ts does exactly that and exits non-zero on any break.
+#
+# Deliberately hourly, one message per run: supabase/config.toml caps
+# [auth.rate_limit] email_sent at 2 per hour, and the defect under test is that
+# very counter being exhausted in production. A monitor that spent the budget it
+# is meant to be watching would break the thing it measures. `--volume N` exists
+# for manual runs and is never used here.
+#
+# This workflow boots the local stack rather than a deployed origin. That is not a
+# placeholder: the local stack is the only environment with a real SMTP sink
+# today, so it is the only one where a round trip can actually complete. Pointing
+# it at a deployment is an env change (MONITOR_BASE_URL) plus a real provider, which
+# is the remaining half of B2 and belongs to whoever holds the provider account.
+on:
+  schedule:
+    # :17 keeps this off the top of the hour, where scheduling queues are longest,
+    # so the timestamp in the log is close to the timestamp the run actually started.
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+# This job needs nothing but the repository contents.
+permissions:
+  contents: read
+
+# A run that overlaps the next one would spend the hourly email budget twice and
+# race two stacks on the same ports. Queue instead of cancel: unlike the test
+# suite, a cancelled monitor run leaves the hour unaccounted for.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      # Same DATABASE_URL fixtures as .github/workflows/test.yml. The app-role
+      # password is the PUBLIC local/CI literal from migration 0001, not a credential.
+      DATABASE_URL: postgresql://app_authenticated.pooler-dev:Wd7EmwRWWqY9s7jMVD3kVqnt+OaW5PowxNIxCY5Ful0=@127.0.0.1:54329/postgres
+      MIGRATION_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+      # The Supabase URL and both API keys are deliberately NOT written here. The
+      # `Expose the local stack credentials` step reads them from the stack that was
+      # just started (`supabase status -o env`) and exports them through GITHUB_ENV.
+      # Hardcoding a JWT-shaped literal would make every future key rotation a silent
+      # drift between the workflow and the stack it is talking to — and a local anon
+      # key pasted into a workflow reads like a leak to any reviewer or scanner.
+
+      # The 127.0.0.1 spelling, matching site_url in supabase/config.toml. Using the
+      # localhost spelling here is exactly the trap this monitor found: GoTrue
+      # matches redirect_to against an allow-list by exact string and silently
+      # degrades a miss to site_url, so the link arrives pointing at / and never
+      # reaches /auth/confirm. Both spellings are now allowed, and this stays on the
+      # one the rest of the stack uses so the next mismatch still shows up here.
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3001
+      MONITOR_BASE_URL: http://127.0.0.1:3001
+      MONITOR_MAILPIT_URL: http://127.0.0.1:54324
+      MONITOR_MAIL_DOMAIN: ppl-fitness-tracker.test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The same stack and the same exclusions as `npm run db:up`. Mailpit stays
+      # because it is the sink for the message under test.
+      - name: Start Supabase
+        run: npx supabase start -x realtime,storage-api,imgproxy,edge-runtime,logflare,vector
+
+      # The keys come from the stack that was just started, never from a copy in this
+      # file. `supabase status -o env` prints anon and service-role keys for the local
+      # stack only; exporting them through GITHUB_ENV keeps them out of the diff and
+      # makes a key rotation a non-event here. Nothing is echoed: the run logs the
+      # URL and the key lengths, which is enough to tell a missing key from a wrong one
+      # without printing either value.
+      - name: Expose the local stack credentials
+        run: |
+          set -euo pipefail
+          eval "$(npx supabase status -o env)"
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
+          } >> "$GITHUB_ENV"
+          echo "api=$API_URL anon_len=${#ANON_KEY} service_len=${#SERVICE_ROLE_KEY}"
+
+      # A built server, not `next dev`: dev compiles routes on first request, which
+      # would make the request phase of the very first run slow enough to look like
+      # a delivery problem. It also matches how the app is actually served.
+      - name: Build the app
+        run: npm run build
+
+      - name: Start the app on :3001
+        run: |
+          npm run start > /tmp/app.log 2>&1 &
+          echo $! > /tmp/app.pid
+          echo "app pid $(cat /tmp/app.pid)"
+
+      # Poll rather than sleep: a fixed sleep is either too short (flaky red) or too
+      # long (wasted minutes every hour). The monitor itself would report an
+      # unstarted app as app-unreachable, which is true but says nothing about why —
+      # so fail here, where the app log is still attached to the run.
+      - name: Wait for the app to answer
+        run: |
+          for attempt in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3001/api/health || true)
+            if [ "$code" = "200" ]; then
+              echo "/api/health answered 200 after ${attempt}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo 'The app never answered /api/health. Its log follows:'
+          cat /tmp/app.log
+          exit 1
+
+      # tee, so the operator sees the phases in the job view and the log is still
+      # there to upload. tee alone would swallow the exit code, hence PIPESTATUS.
+      - name: Run the magic-link round trip
+        run: |
+          set -o pipefail
+          npm run monitor:magic-link 2>&1 | tee /tmp/monitor.log
+
+      # Always, not on failure: a green run is the evidence that the mail path works,
+      # and its timings are what shows a slow degradation before it turns red. It
+      # must not mask the monitor's own failure, so the step above keeps its status.
+      - name: Upload monitor log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: magic-link-monitor-log
+          path: |
+            /tmp/monitor.log
+            /tmp/app.log
+          if-no-files-found: warn
+          retention-days: 14

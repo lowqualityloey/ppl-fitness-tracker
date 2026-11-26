@@ -73,8 +73,8 @@ export default async function HistoryDetailPage({ params }: { params: Promise<{ 
         </Button>
         <div className="flex items-center justify-between gap-3">
           <h1 className="text-2xl font-semibold">{view.routineDay.name}</h1>
-          <Badge variant={view.status === 'completed' ? 'outline' : 'secondary'}>
-            {view.status === 'completed' ? 'Complete' : 'Not finished'}
+          <Badge variant={view.status === 'in_progress' ? 'secondary' : 'outline'}>
+            {STATUS_LABEL[view.status]}
           </Badge>
         </div>
         <p className="text-sm text-muted-foreground">{summaryLine(view)}</p>
@@ -186,11 +186,25 @@ const TASK_LABEL: Record<string, string> = {
   stretch: 'Stretching',
 };
 
+/*
+ * #76. An archived session is not an unfinished one: it came in through the legacy importer, which
+ * writes `status: 'archived'` with a deliberately NULL `completedAt` because the old payload
+ * recorded no end time. Calling that "Not finished" told the athlete they had abandoned a workout
+ * they never abandoned, so archived gets its own word and its own summary suffix.
+ */
+const STATUS_LABEL: Record<string, string> = {
+  in_progress: 'Not finished',
+  completed: 'Complete',
+  archived: 'Archived',
+};
+
 function summaryLine(view: ReturnType<typeof parseSessionView>): string {
   const started = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short' }).format(
     new Date(view.startedAt),
   );
-  if (view.completedAt === null) return `${started} · not finished`;
+  if (view.completedAt === null) {
+    return `${started} · ${view.status === 'archived' ? 'length not recorded' : 'not finished'}`;
+  }
   const minutes = Date.parse(view.completedAt) - Date.parse(view.startedAt);
   return `${started} · ${formatDuration(Math.max(0, minutes))}`;
 }

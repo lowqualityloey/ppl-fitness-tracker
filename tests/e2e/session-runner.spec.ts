@@ -15,6 +15,7 @@ import {
 } from './runner-fixtures';
 import { refusedSyncResponseBody } from './sync-fixtures';
 import { latencySummary } from './latency-helpers.js';
+import { openHistoryDb, seedSession } from './history-fixtures';
 
 /**
  * M3-06 (#63): the runner, and with it the first real execution of everything M3-05
@@ -319,6 +320,111 @@ test.describe('session runner', () => {
       // end: zero rows at start, one per tick, matched on (`exerciseId`, `setIndex`).
       expect(completedSetCount(body)).toBe(await page.locator('[data-testid^="tick-"]').count());
     } finally {
+      await auth.cleanup();
+    }
+  });
+
+  /*
+   * #76. The archived read-only screen, opened the only way it can be opened.
+   *
+   * The card that filed this said no API path produces an archived session. That was wrong:
+   * `POST /api/import/legacy` writes `status: 'archived'` with a deliberately NULL `completedAt`
+   * (`lib/repositories/legacy-import-repository.ts:152`), and it always did. So the state is real,
+   * and what was missing is exactly what this test supplies — proof that the screen it leads to
+   * behaves, from the state the importer actually writes rather than a hand-shaped fiction.
+   *
+   * `/history/[id]` deliberately offers no link here: the report page is the receipt, and sending
+   * an athlete into a runner full of disabled controls from a record that cannot change invites
+   * the misreading the banner exists to prevent. A URL is how this state is reached, so a URL is
+   * how it is tested.
+   *
+   * `phase: 'exercise'` is not incidental. It is the one phase in which the set controls render
+   * *and* the phase gate would let them be used, so a disabled tick here is disabled by the
+   * session's status alone. Seeding `post_workout` would have proved nothing about read-only:
+   * `setsOpen` would have disabled the same buttons for an unrelated reason.
+   */
+  test('opens an archived session read-only, with no length and nothing left to record', async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(WORKOUT_FLOW_TIMEOUT_MS);
+    const auth = await signInFreshUser(page, 'e2e-archived');
+    const db = await openHistoryDb();
+    try {
+      const sessionId = await seedSession(db, {
+        userId: auth.userId,
+        localDate: '2026-09-11',
+        status: 'archived',
+        phase: 'exercise',
+        source: 'legacy_import',
+        // The importer's own shape: archived, and no end time because the legacy payload never
+        // recorded one. This is the row that used to make the screen count up forever.
+        completedAt: null,
+        sets: [
+          { weightKg: 60, reps: 5 },
+          { weightKg: 60, reps: 5 },
+        ],
+      });
+
+      await page.goto(`/session/${sessionId}`);
+
+      await expect(page.getByRole('heading', { level: 1, name: START_DAY })).toBeVisible();
+      // The badge names the state, and the banner says which state it is — "archived", not the
+      // generic "not in progress" that would read as abandoned.
+      await expect(page.getByText('Archived', { exact: true })).toBeVisible();
+      await expect(page.getByText(/archived, so it is read-only/i)).toBeVisible();
+
+      /*
+       * A session with no end time has no length, and the label has to say so.
+       *
+       * The assertion is exact text, not a substring, because "Length not recorded" is the only
+       * string this screen can produce when `readOnly && completedAt === null`. The defect this
+       * closes printed "Workout length 3:14" over a counter still climbing; that can only render
+       * with a number in it, so re-reading the exact text after real seconds have passed is enough
+       * to fail it — and it fails *because* a number appeared, not because of a timing race.
+       */
+      await expect(page.getByTestId('session-elapsed')).toHaveText('Length not recorded');
+      await page.waitForTimeout(3_000);
+      await expect(page.getByTestId('session-elapsed')).toHaveText('Length not recorded');
+
+      // Every set row is present and every control on it is inert. Asserting presence matters as
+      // much as the disabled flag: an empty screen would satisfy "nothing is enabled".
+      // The plan, not the seed, decides how many rows exist: the runner renders every planned set
+      // and marks the recorded ones. So the count is the routine day's, and the *state* is what the
+      // seed proves — exactly the two imported sets are logged, and every row is inert.
+      const ticks = page.locator('[data-testid^="tick-"]');
+      const tickCount = await ticks.count();
+      expect(tickCount).toBeGreaterThanOrEqual(2);
+      for (let index = 0; index < tickCount; index += 1) {
+        await expect(ticks.nth(index)).toBeDisabled();
+      }
+      await expect(page.locator('[data-testid^="tick-"][aria-pressed="true"]')).toHaveCount(2);
+      await expect(page.getByTestId('finish-session')).toHaveCount(0);
+      // The stepper still renders — the phase is information — but its button is inert.
+      await expect(page.getByTestId('advance-phase')).toBeDisabled();
+
+      // A forced click on a disabled button reaches no handler, and the assertion that matters is
+      // the server's: the row is unchanged after the screen was poked.
+      const writes: string[] = [];
+      page.on('request', (event) => {
+        if (event.method() === 'POST' && new URL(event.url()).pathname === '/api/sync') {
+          writes.push(event.url());
+        }
+      });
+      // Captured, not assumed: the first row is already logged by the seed, so "unchanged" means
+      // it is still logged — not that it flipped to false. Asserting a literal would have pinned
+      // the seed's shape instead of the screen's behaviour.
+      const pressedBefore = await ticks.first().getAttribute('aria-pressed');
+      await ticks.first().click({ force: true });
+      await page.waitForTimeout(1_500);
+      await expect(ticks.first()).toHaveAttribute('aria-pressed', pressedBefore ?? 'true');
+      expect(writes, 'a read-only screen must never enqueue a mutation').toEqual([]);
+
+      const body = await fetchSession(request, auth, sessionId);
+      expect(body.data.status).toBe('archived');
+      expect(completedSetCount(body)).toBe(2);
+    } finally {
+      await db.end();
       await auth.cleanup();
     }
   });

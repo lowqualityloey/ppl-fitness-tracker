@@ -160,7 +160,11 @@ function HistoryRow({ entry, dayName: name }: { entry: HistoryEntry; dayName: st
       <CardContent>
         <p className="text-sm text-muted-foreground">
           {clockTime(entry.startedAt)}
-          {duration !== null ? ` · ${formatDuration(duration)}` : ' · not finished'}
+          {duration !== null
+            ? ` · ${formatDuration(duration)}`
+            : entry.status === 'archived'
+              ? ' · length not recorded'
+              : ' · not finished'}
           {entry.source === 'legacy_import' ? ' · recorded without load' : ''}
         </p>
       </CardContent>

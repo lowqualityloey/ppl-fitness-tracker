@@ -271,10 +271,16 @@ function Runner({ userId, sessionId, initialView, unit, initialPrefill }: {
   // read-only screen is a live measurement of something that stopped happening. Derived rather
   // than set from the effect below, because writing state synchronously inside an effect is how a
   // render loop starts.
+  //
+  // A read-only session without a `completedAt` (#76) has no length to show at all — the legacy
+  // importer writes exactly that row, deliberately, because the old payload recorded no end time.
+  // Such a session must not borrow the live clock: it would print "Workout length" over a value
+  // still counting up, which is the one thing this screen must never do. The timer effect below is
+  // therefore gated on `readOnly` rather than on "has a finished length".
   const elapsedMs = finishedElapsedMs ?? liveElapsedMs;
 
   useEffect(() => {
-    if (finishedElapsedMs !== null) return;
+    if (readOnly) return;
     const timer = createElapsedTimer(browserTimerClock());
     const unsubscribe = timer.subscribe((state) => setLiveElapsedMs(state.elapsedMs));
     timer.start(Date.parse(serverView.startedAt));
@@ -282,7 +288,7 @@ function Runner({ userId, sessionId, initialView, unit, initialPrefill }: {
       unsubscribe();
       timer.cancel();
     };
-  }, [finishedElapsedMs, serverView.startedAt]);
+  }, [readOnly, serverView.startedAt]);
 
   /*
    * Audio unlocks on the first gesture, because a context constructed on mount arrives suspended
@@ -499,9 +505,11 @@ function Runner({ userId, sessionId, initialView, unit, initialPrefill }: {
         aria-live="off"
         aria-atomic="true"
       >
-        {elapsedMs === null
-          ? 'Timing…'
-          : `${readOnly ? 'Workout length' : 'Elapsed'} ${formatDuration(elapsedMs)}`}
+        {readOnly && serverView.completedAt === null
+          ? 'Length not recorded'
+          : elapsedMs === null
+            ? 'Timing…'
+            : `${readOnly ? 'Workout length' : 'Elapsed'} ${formatDuration(elapsedMs)}`}
       </p>
 
       {unavailable !== null && <Banner tone="error">{unavailable}</Banner>}

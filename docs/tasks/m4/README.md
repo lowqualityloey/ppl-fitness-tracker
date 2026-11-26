@@ -49,7 +49,7 @@ implementation on 2026-09-15)
 | M4-24 | #142 | CSP baseline on every document response — server-sent, nonce'd, Sentry-aware `connect-src` | p1 |
 | M4-25 | **#149** | Lighthouse gate runnable on a WSL dev box — Node API, not chrome-launcher | p2 |
 | M4-36 | **#77** | Rejection messages — the domain's own sentence on the wire | p2 |
-| parked | **#76** | no API path produces `archived` | p2 |
+| M4-37 | **#76** | The archived session's screen — no length, no mislabel, nothing to record | p2 |
 | parked | **#78** | same-ms writes decided by random UUID | p2 |
 | parked | **#80** | one hardcoded fixture id set (M4-11's precondition) | p2 |
 | parked | **#82** | `?from=`/`?to=` contract decision | p3 |
@@ -59,7 +59,10 @@ implementation on 2026-09-15)
 **No duplicates filed:** the six parked issues were re-milestoned and cross-referenced, not re-derived
 (handoff §3.5: "raise them, don't re-derive them"). M4-16 explicitly excludes #77's seam; M4-11 names
 #80 as its blocker rather than absorbing it. **#77 left the parked list on 2026-11-24** — it became
-M4-36, five parked issues remain.
+M4-36. **#76 left it on 2026-11-26** — it became M4-37, and its filed premise ("no API path produces
+`archived`") was measured false: `POST /api/import/legacy` has written `status: 'archived'` since
+`3ecaf2f`, so the card became the screen-and-coverage work it was really about. Four parked issues
+remain.
 
 ## Dependency map (arrows = must-land-first)
 

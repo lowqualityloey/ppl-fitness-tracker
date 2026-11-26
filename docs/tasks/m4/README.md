@@ -61,8 +61,9 @@ implementation on 2026-09-15)
 #80 as its blocker rather than absorbing it. **#77 left the parked list on 2026-11-24** — it became
 M4-36. **#76 left it on 2026-11-26** — it became M4-37, and its filed premise ("no API path produces
 `archived`") was measured false: `POST /api/import/legacy` has written `status: 'archived'` since
-`3ecaf2f`, so the card became the screen-and-coverage work it was really about. Four parked issues
-remain.
+`3ecaf2f`, so the card became the screen-and-coverage work it was really about; it shipped in `773e59c`
+and was **signed off and closed on 2026-11-26**, moving the board to `open=5 / closed=37` of 42. Four
+parked issues remain.
 
 ## Dependency map (arrows = must-land-first)
 

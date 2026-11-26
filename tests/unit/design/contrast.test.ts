@@ -12,11 +12,16 @@ import { describe, expect, it } from 'vitest';
 
 import {
   contrastRatio,
+  deriveMatrix,
   formatResults,
   GATE_MATRIX,
   loadShippedPalette,
+  MIN_REASON,
   parseRootTokens,
+  parseThemeColors,
   runGate,
+  THEME_DECLARATIONS,
+  validateDeclarations,
   type GateResult,
 } from '../../../scripts/check-contrast';
 
@@ -136,6 +141,82 @@ describe('the gate can fail (Scenario 2: observed red, permanently)', () => {
     expect(row, formatResults(failures)).toBeDefined();
     expect(row!.label).toContain('unmeasurable');
     expect(row!.pass).toBe(false);
+  });
+});
+
+describe('the rows are generated from @theme inline, not enumerated (M4-39)', () => {
+  it('derives one row per declared --color-* alias plus the primitive leaves', () => {
+    // The old matrix was a hand-written literal: a *new* alias was invisible
+    // until somebody remembered to add it. Now the stylesheet is the source.
+    const colors = parseThemeColors(globalsCss);
+    expect(colors.length).toBe(19);
+    for (const row of GATE_MATRIX) {
+      const isThemeRow = colors.some((color) => color.aliasToken === row.token);
+      const isPrimitiveRow = row.source.startsWith('primitive ');
+      expect(isThemeRow || isPrimitiveRow, row.label + ' (' + row.source + ')').toBe(true);
+    }
+  });
+
+  it('measures a scratch-registered alias nobody declared, and goes red on it', () => {
+    // The permanent control for the omission class audit entry 14 named:
+    // register an alias in CSS only, touch no list here, and the gate must
+    // both see it and fail it. --outline is the 1.47:1 leaf.
+    const injected = globalsCss
+      .replace(
+        '  --ring: var(--focus-ring);',
+        '  --ring: var(--focus-ring);\n  --scratch-foreground: var(--outline);',
+      )
+      .replace(
+        '  --color-ring: var(--ring);',
+        '  --color-ring: var(--ring);\n  --color-scratch-foreground: var(--scratch-foreground);',
+      );
+    expect(injected).not.toBe(globalsCss);
+
+    const rows = deriveMatrix(injected);
+    expect(rows.some((row) => row.token === '--scratch-foreground')).toBe(true);
+    // The shipped matrix has no such row: the measurement came from the CSS.
+    expect(GATE_MATRIX.some((row) => row.token === '--scratch-foreground')).toBe(false);
+
+    const failures = runGate(parseRootTokens(injected), rows).filter((row) => !row.pass);
+    expect(failures.map((row) => row.token)).toContain('--scratch-foreground');
+    const printed = formatResults(failures);
+    expect(printed).toContain('1.47:1');
+    expect(printed).toContain('1.41:1');
+    expect(printed).toContain('UNDECLARED');
+  });
+
+  it('refuses an allowlisted token that carries no machine-checked reason', () => {
+    // The exclusions used to live in a comment, so deleting one was silent.
+    // A declaration must say why, in at least MIN_REASON characters.
+    const colors = parseThemeColors(globalsCss);
+    const bare = { ...THEME_DECLARATIONS, '--ring': { kind: 'allowlist' as const, why: '' } };
+    expect(() => validateDeclarations(bare, colors)).toThrow(/--ring.*machine-checked reason/);
+
+    const terse = { ...THEME_DECLARATIONS, '--ring': { kind: 'allowlist' as const, why: 'not needed' } };
+    expect(() => validateDeclarations(terse, colors)).toThrow(/at least 40 characters/);
+
+    // And the shipped set passes its own check, with all three named exclusions.
+    expect(() => validateDeclarations(THEME_DECLARATIONS, colors)).not.toThrow();
+    for (const token of ['--ring', '--popover-foreground', '--accent-foreground']) {
+      const declaration = THEME_DECLARATIONS[token];
+      expect(declaration?.kind, token).toBe('allowlist');
+      expect(declaration!.why.length, token).toBeGreaterThanOrEqual(MIN_REASON);
+    }
+  });
+
+  it('refuses a declaration for a token @theme no longer registers', () => {
+    const colors = parseThemeColors(globalsCss).filter((color) => color.aliasToken !== '--ring');
+    expect(() => validateDeclarations(THEME_DECLARATIONS, colors)).toThrow(/Stale declaration: --ring/);
+  });
+
+  it('refuses a --color-* entry that is not a var() alias', () => {
+    // A literal here would bypass the alias layer the gate resolves through,
+    // and a gate that cannot resolve a token must not silently skip it.
+    const broken = globalsCss.replace(
+      '  --color-ring: var(--ring);',
+      '  --color-ring: #000000;',
+    );
+    expect(() => parseThemeColors(broken)).toThrow(/must be a var\(\) alias/);
   });
 });
 

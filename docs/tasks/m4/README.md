@@ -35,7 +35,7 @@ implementation on 2026-09-15)
 | M4-10 | #99 | `tsconfig.json` churn (D6) | p3 |
 | M4-11 | #100 | Contention flakes: root-cause or fence | p1 |
 | M4-12 | #101 | ZWSP accessible-name structural gate | p2 |
-| M4-13 | #102 | Contrast rows generated from `@theme inline` | p3 |
+| M4-39 | **#102** | Contrast rows derived from `@theme inline`, exclusions allowlisted with checked reasons | p3 |
 | M4-14 | #103 | Legacy modules + keys + READMEs deleted, parity scan **flipped** | p1 |
 | M4-15 | #104 | Retire the zero-JS legacy build scripts | p2 |
 | M4-16 | #105 | `SyncResponseData.state` consumer-or-drop + honest e2e mock | p2 |
@@ -65,7 +65,12 @@ M4-36. **#76 left it on 2026-11-26** — it became M4-37, and its filed premise 
 and was **signed off and closed on 2026-11-26**. **#82 left it the same day** — it became M4-38: the
 range is an inclusive filter on `local_date` that composes with the opaque cursor by conjunction, and
 its contract test pins all eight from/to × cursor combinations rather than the happy path. With it
-closed the board reads `open=4 / closed=38` of 42. Three parked issues remain.
+closed the board reads `open=4 / closed=38` of 42. **#102 left it on 2026-11-26** — it became M4-39: the
+matrix is now *derived* from the nineteen `--color-*` aliases in `@theme inline` rather than enumerated, an
+undeclared alias is still measured (conservatively, labelled `UNDECLARED`), and the six exclusions carry a
+reason the gate checks — so removing a row is a written decision and adding a token needs no list edit.
+It shipped in `M4-39`'s commit and awaits sign-off; on the close the board moves to `open=3 / closed=39`
+of 42, leaving two parked issues.
 
 ## Dependency map (arrows = must-land-first)
 
@@ -86,7 +91,7 @@ closed the board reads `open=4 / closed=38` of 42. Three parked issues remain.
 #103 (legacy delete) ──► #104 (build scripts)   and   #109 decides *before* #103 strands userStats
 #103, #104 ──► #111 (shell caches "the build"; settle what 'build' means first)
 #93 (limiter) ↔ #90 (harness must not measure throttling as speed) ↔ #112 (poll budget arithmetic)
-#101, #102, #108, #110 — independent; anywhere after gates are trustworthy (#100)
+#101, #108, #110 — independent; anywhere after gates are trustworthy (#100).  (#102 landed as M4-39)
 ```
 
 ## Recommended implementation order (with risk per dependency)
@@ -126,9 +131,10 @@ closed the board reads `open=4 / closed=38` of 42. Three parked issues remain.
 13. **#105** (state field + mock) — after #100 for a stable e2e base. Risk: touching it before #77
     lands re-derives rejection plumbing; coordinate, don't duplicate. **#77 landed first** (M4-36,
     2026-11-24), so #105's option A renders `message` where it renders a rejection.
-14. **#96** (outbox age), **#106** (stretch timers), **#107** (timer persistence, after #95),
-    **#102** (contrast rows). Risk: #106 adds timer specs — land it *after* #100 or it grows the flake
-    surface it depends on.
+14. **#96** (outbox age), **#106** (stretch timers), **#107** (timer persistence, after #95).
+    **#102 landed as M4-39** (2026-11-26) — the contrast matrix derives its rows from `@theme inline`,
+    so it no longer competes for the same wave slot. Risk: #106 adds timer specs — land it *after* #100
+    or it grows the flake surface it depends on.
 15. **#108** (analytics), **#110** (export), **#109** (body measurements — hard-blocked by #89, must
     *precede or co-schedule* #103 or `userStats` strands undocumented). Risk: #109 after #103 makes
     the retirement story a lie; #108 without #103 tempts porting legacy fiction.

@@ -1,3 +1,5 @@
+> **SUPERSEDED 2026-11-26 — implemented as [M4-39](M4-39-contrast-rows-generated.md).** Kept as filed; the record of what shipped is M4-39.
+>
 > **M4-13** · Gate completeness · `#priority/p3` · Derived from: handoff §3.6 bullet 2 ("The contrast matrix measures **enumerated** tokens; a brand-new alias token must be added to `GATE_MATRIX` by hand (the matrix comment records which shipped aliases are deliberately absent and why). Generating rows from the `@theme inline` mapping would close the class of omission"); audit entry 14's "residual limit, named" (verified on `main`: `GATE_MATRIX` is a hand-written literal, ~25 rows → 35 measured pairs).
 
 ## Intent

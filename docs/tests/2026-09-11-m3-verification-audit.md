@@ -262,10 +262,35 @@ The oklch form of entry 2 is now *measured and named* rather than crashing: `par
 returns it verbatim, `runGate` emits `muted text (alias) [unmeasurable: oklch(0.93 0.01 250)]` as
 a FAIL row — that behaviour is kept as a permanent assertion, as is the `var(--outline)` re-point
 (both live in `the gate can fail` in `tests/unit/design/contrast.test.ts`). Restored;
-`14 passed`. Residual limit, named: the gate measures the **enumerated** tokens — a *new* alias
-token nobody added to the matrix is still invisible to it, and the matrix comment records which
-aliases are deliberately absent because nothing renders them today. The axe/Lighthouse layers are
-what watch the rendered end.
+`14 passed`. **The residual limit named here is obsolete as of 2026-11-26 (M4-39, #102).** It read:
+"the gate measures the **enumerated** tokens — a *new* alias token nobody added to the matrix is still
+invisible to it". That is no longer true. `GATE_MATRIX` is derived at import from the `@theme inline`
+block (`scripts/check-contrast.ts:585`): `parseThemeColors` reads the nineteen `--color-*` aliases and
+each is resolved through the `:root` alias layer to its leaf, so a new alias is measured the moment it is
+registered, by nobody's edit. Measured, both ways, on the same tree: a scratch pair
+(`--scratch-foreground: var(--outline)` in `:root`, `--color-scratch-foreground:
+var(--scratch-foreground)` in `@theme inline`, pointing at the `#d0d5dd` leaf this entry used) printed
+`35/35 measured pairs pass.` with exit 0 under the enumerated matrix, and under the derived one:
+
+```
+2 of 40 measured pairs FAIL:
+  FAIL  scratch foreground (generated)   --scratch-foreground on --background: 1.41:1 (min 4.5:1)
+  FAIL  scratch foreground (generated)   --scratch-foreground on --card: 1.47:1 (min 4.5:1)
+  x scratch foreground (generated): --scratch-foreground vs --background measures 1.41:1, needs 4.5:1
+  x scratch foreground (generated): --scratch-foreground vs --card measures 1.47:1, needs 4.5:1
+
+Row provenance (label <- the declaration that produced it):
+  scratch foreground (generated)   <-  theme --color-scratch-foreground -> --scratch-foreground (UNDECLARED: default text rule)
+```
+
+The first capture is the hole, reproduced on demand; the second is the closure. Reverted and re-measured
+`38/38`, exit 0. The exclusions this entry mentioned as living in a matrix comment (`--ring`,
+`--popover-foreground`, `--accent-foreground`, plus `--popover`, `--border`, `--input`) are now
+`kind: 'allowlist'` entries in `THEME_DECLARATIONS`, each with a `why` of at least 40 characters that
+`validateDeclarations` enforces — a bare removal fails the gate — and the gate prints all of them with
+their reasons. Both permanent assertions this entry installed still hold (`--accent-pull` at 2.88:1, the
+`var(--outline)` re-point at 1.47:1 / 1.41:1), as does the `[unmeasurable: oklch(...)]` FAIL row. The
+axe/Lighthouse layers are still what watch the rendered end.
 
 ## 15. The hang ceiling caught a real defect, not a flake (incidental, production build) → RED → FIXED → GREEN
 

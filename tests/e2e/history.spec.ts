@@ -88,6 +88,97 @@ test.describe('workout history', () => {
     }
   });
 
+  /*
+   * #82. The range is a filter on the walk, so the two things worth proving are that it narrows
+   * the list and that it is still narrow on page two — a next-page link that dropped `from`/`to`
+   * would quietly widen the list the moment the athlete asked for the second page.
+   */
+  test('narrows the list to a date range and says the range is the end, not the log', async ({
+    page,
+  }) => {
+    const auth = await signInFreshUser(page, 'e2e-history-range');
+    const db = await openHistoryDb();
+    try {
+      await seedSession(db, { userId: auth.userId, localDate: '2026-09-08' });
+      await seedSession(db, { userId: auth.userId, localDate: '2026-09-09' });
+      await seedSession(db, { userId: auth.userId, localDate: '2026-09-10' });
+
+      await page.goto('/history');
+      await expect(page.getByTestId('history-row')).toHaveCount(3);
+
+      await page.getByLabel('From').fill('2026-09-09');
+      await page.getByLabel('To').fill('2026-09-10');
+      await page.getByRole('button', { name: 'Show range' }).click();
+
+      await expect(page).toHaveURL(/from=2026-09-09/);
+      await expect(page).toHaveURL(/to=2026-09-10/);
+      await expect(page.getByTestId('history-row')).toHaveCount(2);
+      await expect(page.getByTestId('history-day')).toHaveText(['2026-09-10', '2026-09-09']);
+      // Both ends inclusive: 2026-09-09 is in the window, which is the off-by-one a half-open
+      // range would introduce in a URL that reads as a closed interval. (The count above is the
+      // assertion; 2026-09-08 being absent follows from two rows out of three.)
+
+      // The end of a filtered page must not be called the end of the log — the athlete would stop
+      // looking for the workouts outside the window they forgot they set.
+      await expect(page.getByText('That is the whole range.')).toBeVisible();
+      await expect(page.getByText('That is the whole log.')).toHaveCount(0);
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText('History');
+      // The header must stop claiming the page is the whole log, and the form must still show the
+      // window it applied — a form that reset itself would look like the range had been ignored.
+      await expect(page.locator('main')).not.toContainText('Every session you have logged');
+      await expect(page.getByLabel('From')).toHaveValue('2026-09-09');
+      await expect(page.getByLabel('To')).toHaveValue('2026-09-10');
+
+      // An empty window is an empty window, not an empty log.
+      await page.goto('/history?from=2026-10-01&to=2026-10-31');
+      await expect(page.getByTestId('history-empty')).toContainText('No workouts in this range.');
+      await expect(page.getByTestId('history-empty')).not.toContainText('No workouts yet');
+      await expect(page.getByTestId('history-row')).toHaveCount(0);
+
+      // Clearing returns to the unfiltered log in one click. Two affordances do it on this page —
+      // the form's Clear and the empty state's "clear the range" — so the assertion names one
+      // exactly rather than matching whichever comes first.
+      await page.getByRole('link', { name: 'Clear', exact: true }).click();
+      await expect(page).toHaveURL(/\/history$/);
+      await expect(page.getByTestId('history-row')).toHaveCount(3);
+      await expect(page.getByText('That is the whole log.')).toBeVisible();
+    } finally {
+      await db.end();
+      await auth.cleanup();
+    }
+  });
+
+  test('keeps the date range on the next-page link instead of widening the walk', async ({ page }) => {
+    const auth = await signInFreshUser(page, 'e2e-history-range-cursor');
+    const db = await openHistoryDb();
+    try {
+      for (let day = 1; day <= 21; day += 1) {
+        await seedSession(db, {
+          userId: auth.userId,
+          localDate: `2026-08-${String(day).padStart(2, '0')}`,
+        });
+      }
+
+      await page.goto('/history?from=2026-08-01&to=2026-08-21');
+      await expect(page.getByTestId('history-row')).toHaveCount(20);
+
+      const older = page.getByRole('link', { name: 'Older workouts' });
+      const href = await older.getAttribute('href');
+      expect(href).toContain('from=2026-08-01');
+      expect(href).toContain('to=2026-08-21');
+      expect(href).toContain('cursor=');
+
+      await older.click();
+      await expect(page.getByTestId('history-row')).toHaveCount(1);
+      await expect(page.getByTestId('history-day')).toHaveText('2026-08-01');
+      await expect(page.getByRole('link', { name: 'Older workouts' })).toHaveCount(0);
+      await expect(page.getByText('That is the whole range.')).toBeVisible();
+    } finally {
+      await db.end();
+      await auth.cleanup();
+    }
+  });
+
   test('renders an imported session as recorded without load, and never as a zero', async ({
     page,
   }) => {

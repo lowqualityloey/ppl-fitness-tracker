@@ -79,6 +79,58 @@ describe('M2-01: /api/sessions', () => {
     await expectAppError(response, 400, 'VALIDATION_ERROR');
   });
 
+  /*
+   * #82 / ASSUMPTION-m4-006. The fixture pair is the whole assertion: the owner's session is
+   * 2026-09-07 and the other user's is 2026-09-06, so a one-day window can prove inclusion and
+   * exclusion at once without seeding anything.
+   */
+  it('filters history by an inclusive date range, and still scopes it to the caller', async () => {
+    const response = await apiRequest('/api/sessions?from=2026-09-07&to=2026-09-07', {
+      headers: authHeaders(owner),
+    });
+    expect(response.status).toBe(200);
+    const parsed = SessionsListResponseSchema.safeParse(await responseBody(response));
+    expect(parsed.success).toBe(true);
+    if (parsed.success && parsed.data.ok) {
+      const listed = parsed.data.data.sessions;
+      expect(listed).toEqual(expect.arrayContaining([expect.objectContaining({ id: ids.session })]));
+      expect(listed.map((session) => session.id)).not.toContain(ids.foreignSession);
+      // A filter is a filter, not a widening: every row in the answer is inside the window.
+      expect(listed.every((session) => session.localDate === '2026-09-07')).toBe(true);
+    }
+
+    // The same window one day earlier holds the owner's log empty — the other user's row must not
+    // leak into it.
+    const empty = await apiRequest('/api/sessions?from=2026-09-06&to=2026-09-06', {
+      headers: authHeaders(owner),
+    });
+    const emptyParsed = SessionsListResponseSchema.safeParse(await responseBody(empty));
+    expect(emptyParsed.success).toBe(true);
+    if (emptyParsed.success && emptyParsed.data.ok) {
+      expect(emptyParsed.data.data.sessions).toEqual([]);
+      expect(emptyParsed.data.data.nextCursor).toBeNull();
+    }
+  });
+
+  it('rejects a backwards or impossible date range as a validation error', async () => {
+    await expectAppError(
+      await apiRequest('/api/sessions?from=2026-09-30&to=2026-09-01', { headers: authHeaders(owner) }),
+      400,
+      'VALIDATION_ERROR',
+    );
+    // 2026-02-31 would otherwise reach Postgres as a `date` cast and come back a 500.
+    await expectAppError(
+      await apiRequest('/api/sessions?from=2026-02-31', { headers: authHeaders(owner) }),
+      400,
+      'VALIDATION_ERROR',
+    );
+    await expectAppError(
+      await apiRequest('/api/sessions?from=', { headers: authHeaders(owner) }),
+      400,
+      'VALIDATION_ERROR',
+    );
+  });
+
   it('starts a new session with routineDayId and clientId', async () => {
     const response = await jsonRequest('/api/sessions', {
       routineDayId: ids.routineDay,

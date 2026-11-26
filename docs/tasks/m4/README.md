@@ -50,9 +50,9 @@ implementation on 2026-09-15)
 | M4-25 | **#149** | Lighthouse gate runnable on a WSL dev box — Node API, not chrome-launcher | p2 |
 | M4-36 | **#77** | Rejection messages — the domain's own sentence on the wire | p2 |
 | M4-37 | **#76** | The archived session's screen — no length, no mislabel, nothing to record | p2 |
+| M4-38 | **#82** | `?from=`/`?to=` as an inclusive filter that composes with the cursor | p3 |
 | parked | **#78** | same-ms writes decided by random UUID | p2 |
 | parked | **#80** | one hardcoded fixture id set (M4-11's precondition) | p2 |
-| parked | **#82** | `?from=`/`?to=` contract decision | p3 |
 | parked | **#84** | thousands-grouped weight parse ceiling | p3 |
 | stays on M1 | **#16** | production SMTP — deliberately *not* re-milestoned (M1's deferred exit item; blocks deploy, tracked in the milestone description) |
 
@@ -62,8 +62,10 @@ implementation on 2026-09-15)
 M4-36. **#76 left it on 2026-11-26** — it became M4-37, and its filed premise ("no API path produces
 `archived`") was measured false: `POST /api/import/legacy` has written `status: 'archived'` since
 `3ecaf2f`, so the card became the screen-and-coverage work it was really about; it shipped in `773e59c`
-and was **signed off and closed on 2026-11-26**, moving the board to `open=5 / closed=37` of 42. Four
-parked issues remain.
+and was **signed off and closed on 2026-11-26**. **#82 left it the same day** — it became M4-38: the
+range is an inclusive filter on `local_date` that composes with the opaque cursor by conjunction, and
+its contract test pins all eight from/to × cursor combinations rather than the happy path. With it
+closed the board reads `open=4 / closed=38` of 42. Three parked issues remain.
 
 ## Dependency map (arrows = must-land-first)
 

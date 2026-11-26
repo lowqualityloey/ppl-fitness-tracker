@@ -23,7 +23,11 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   try {
     const context = await requireUserContext();
     const repository = new WorkoutRepository(getDb(), context.claims);
-    const data = await repository.listSessions(context.userId, parsed.data.cursor);
+    const data = await repository.listSessions(context.userId, {
+      cursor: parsed.data.cursor,
+      from: parsed.data.from,
+      to: parsed.data.to,
+    });
     return NextResponse.json(appSuccess(data), { status: 200 });
   } catch (error) {
     return routeErrorResponse(error);

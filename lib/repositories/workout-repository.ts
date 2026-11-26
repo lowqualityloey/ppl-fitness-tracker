@@ -120,6 +120,20 @@ type SessionCursor = {
   id: string;
 };
 
+/**
+ * How to read one page of a user's history (#82).
+ *
+ * `cursor` is a position in the descending `(localDate, id)` order; `from`/`to` are an
+ * inclusive filter on `local_date`. They compose by conjunction — the walk stays monotone
+ * inside the window, so a page boundary can neither repeat nor skip a row that the range
+ * admits. Passing `{}` is the plain newest-first list this repository has always answered.
+ */
+export type ListSessionsQuery = {
+  cursor?: string;
+  from?: string;
+  to?: string;
+};
+
 type PlanRow = {
   placement: typeof routineExercises.$inferSelect;
   exercise: typeof exercises.$inferSelect;
@@ -219,9 +233,9 @@ export class WorkoutRepository {
     private readonly claims: JwtClaims,
   ) {}
 
-  async listSessions(userId: string, cursor?: string): Promise<SessionPage> {
+  async listSessions(userId: string, query: ListSessionsQuery = {}): Promise<SessionPage> {
     return this.forUser(userId, async (tx) => {
-      const decodedCursor = cursor ? decodeCursor(cursor) : undefined;
+      const decodedCursor = query.cursor ? decodeCursor(query.cursor) : undefined;
       const cursorFilter = decodedCursor
         ? or(
             lt(workoutSessions.localDate, decodedCursor.localDate),
@@ -238,6 +252,10 @@ export class WorkoutRepository {
         .where(and(
           eq(workoutSessions.userId, userId),
           cursorFilter,
+          // Inclusive on both ends: the range is a filter, so `from=to` is one day, not an
+          // empty window. Rides `session_history` (user_id, local_date desc).
+          query.from ? gte(workoutSessions.localDate, query.from) : undefined,
+          query.to ? lte(workoutSessions.localDate, query.to) : undefined,
         ))
         .orderBy(desc(workoutSessions.localDate), desc(workoutSessions.id))
         .limit(PAGE_SIZE + 1);

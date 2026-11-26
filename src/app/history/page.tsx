@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
+import { Input } from '../../components/ui/input';
 import { AppErrorException } from '../../../lib/contracts/envelope';
 import { SessionsListQuerySchema } from '../../../lib/contracts/sessions';
 import { requireUserContext } from '../../../lib/auth/require-user';
@@ -35,12 +36,15 @@ export default async function HistoryPage({ searchParams }: { searchParams: Sear
     throw error;
   }
 
-  // The cursor is validated by the *same* schema the list endpoint uses, not a copy of it. A page
+  // The query is validated by the *same* schema the list endpoint uses, not a copy of it. A page
   // that invented its own check would drift from the contract the moment the contract moved, and
   // the drift would show up as `/history?cursor=…` 500-ing while `GET /api/sessions` was fine.
+  // `?from=`/`?to=` (#82) arrive through the same door for the same reason: a malformed or
+  // backwards range is a 404 here and a 400 on the API, from one definition.
   const parsedQuery = SessionsListQuerySchema.safeParse(await searchParams);
   if (!parsedQuery.success) notFound();
-  const cursor = parsedQuery.data.cursor;
+  const { cursor, from, to } = parsedQuery.data;
+  const rangeLabel = describeRange(from, to);
 
   const workoutRepository = new WorkoutRepository(getDb(), context.claims);
   const contentRepository = new ContentRepository();
@@ -49,7 +53,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Sear
   let days: Awaited<ReturnType<ContentRepository['listSystemDayPlans']>>;
   try {
     [page, days] = await Promise.all([
-      workoutRepository.listSessions(context.userId, cursor),
+      workoutRepository.listSessions(context.userId, { cursor, from, to }),
       contentRepository.listSystemDayPlans(),
     ]);
   } catch (error) {
@@ -67,6 +71,9 @@ export default async function HistoryPage({ searchParams }: { searchParams: Sear
   const { entries, nextCursor } = parseHistoryPage(page);
   const dayNames = new Map(days.map((day) => [day.id, day.name]));
   const groups = groupByDay(entries);
+  // The walk has to stay inside the window it started in: a next-page link that dropped the
+  // range would silently widen the list on page two.
+  const olderHref = nextCursor ? historyHref({ cursor: nextCursor, from, to }) : null;
 
   return (
     <main className="mx-auto flex max-w-3xl flex-col gap-6 p-6">
@@ -74,7 +81,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Sear
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-semibold">History</h1>
           <p className="text-sm text-muted-foreground">
-            Every session you have logged, newest first.
+            {rangeLabel ?? 'Every session you have logged, newest first.'}
           </p>
         </div>
         <Button asChild variant="ghost">
@@ -82,15 +89,60 @@ export default async function HistoryPage({ searchParams }: { searchParams: Sear
         </Button>
       </header>
 
+      {/*
+        A plain GET form, no client JavaScript: the page is already `force-dynamic` and the
+        server is the only thing that can answer "which sessions fall in this window". A range
+        change is a fresh walk, so it submits without a cursor.
+      */}
+      <form method="get" action="/history" className="flex flex-wrap items-end gap-3">
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="text-muted-foreground">From</span>
+          <Input type="date" name="from" defaultValue={from ?? ''} className="w-44" />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="text-muted-foreground">To</span>
+          <Input type="date" name="to" defaultValue={to ?? ''} className="w-44" />
+        </label>
+        <Button type="submit" variant="secondary">
+          Show range
+        </Button>
+        {rangeLabel ? (
+          <Button asChild variant="ghost">
+            <Link href="/history">Clear</Link>
+          </Button>
+        ) : null}
+      </form>
+
       {groups.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col gap-2 p-6" data-testid="history-empty">
-            <p className="text-sm">
-              No workouts yet. Your sessions appear here as soon as you finish one.
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Workouts you import from the legacy dashboard also show up here, marked as imported.
-            </p>
+            {/*
+              A filtered page that says "No workouts yet" would be telling the athlete their log
+              is empty when it is the window that is empty — the same lie #76 fixed on an archived
+              session's receipt, one screen over.
+            */}
+            {rangeLabel ? (
+              <>
+                <p className="text-sm">No workouts in this range.</p>
+                <p className="text-xs text-muted-foreground">
+                  Try a wider window, or{' '}
+                  <Link href="/history" className="underline underline-offset-4">
+                    clear the range
+                  </Link>
+                  .
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm">
+                  No workouts yet. Your sessions appear here as soon as you finish one.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Workouts you import from the legacy dashboard also show up here, marked as
+                  imported.
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -112,17 +164,52 @@ export default async function HistoryPage({ searchParams }: { searchParams: Sear
         </ul>
       )}
 
-      {nextCursor ? (
+      {olderHref ? (
         <nav aria-label="Older workouts" className="flex justify-between gap-3">
           <Button asChild variant="secondary">
-            <Link href={`/history?cursor=${encodeURIComponent(nextCursor)}`}>Older workouts</Link>
+            <Link href={olderHref}>Older workouts</Link>
           </Button>
         </nav>
       ) : groups.length > 0 ? (
-        <p className="text-xs text-muted-foreground">That is the whole log.</p>
+        <p className="text-xs text-muted-foreground">
+          {rangeLabel ? 'That is the whole range.' : 'That is the whole log.'}
+        </p>
       ) : null}
     </main>
   );
+}
+
+/**
+ * "Sep 1 – Sep 30, 2026", or one end alone when the other is missing.
+ *
+ * The header must not keep saying "every session you have logged" while a window is applied —
+ * that is the sentence a reader trusts instead of checking the form.
+ */
+function describeRange(from: string | undefined, to: string | undefined): string | null {
+  const format = (iso: string) =>
+    new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).format(
+      // A `YYYY-MM-DD` string is parsed as UTC midnight; format it in UTC too, or a browser west
+      // of Greenwich would render the day before the one the athlete typed.
+      new Date(`${iso}T00:00:00Z`),
+    );
+  if (from && to) return `${format(from)} to ${format(to)}`;
+  if (from) return `From ${format(from)}`;
+  if (to) return `Up to ${format(to)}`;
+  return null;
+}
+
+/**
+ * The one place a `/history` URL is built, so a next-page link cannot forget the range.
+ * Absent parameters are omitted rather than written empty — `?from=` would fail the schema
+ * (`z.iso.date()` rejects the empty string) and 404 the page.
+ */
+function historyHref(params: { cursor?: string; from?: string; to?: string }): string {
+  const search = new URLSearchParams();
+  if (params.cursor) search.set('cursor', params.cursor);
+  if (params.from) search.set('from', params.from);
+  if (params.to) search.set('to', params.to);
+  const query = search.toString();
+  return query ? `/history?${query}` : '/history';
 }
 
 function resolveDayName(names: Map<string, string>, entry: HistoryEntry): string {

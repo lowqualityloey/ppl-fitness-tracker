@@ -265,7 +265,9 @@ describe('WorkoutRepository', () => {
     expect(firstPage.sessions).toHaveLength(20);
     expect(firstPage.nextCursor).toEqual(expect.any(String));
 
-    const secondPage = await repository.listSessions(userId, firstPage.nextCursor ?? undefined);
+    const secondPage = await repository.listSessions(userId, {
+      cursor: firstPage.nextCursor ?? undefined,
+    });
     expect(secondPage.sessions.length).toBeGreaterThan(0);
     expect(secondPage.nextCursor).toBeNull();
     const firstDate = firstPage.sessions[0]?.localDate;
@@ -274,8 +276,49 @@ describe('WorkoutRepository', () => {
 
     const malformedCursor = Buffer.from(JSON.stringify({ localDate: 'not-a-date', id: 'not-a-uuid' }))
       .toString('base64url');
-    await expect(repository.listSessions(userId, malformedCursor))
+    await expect(repository.listSessions(userId, { cursor: malformedCursor }))
       .rejects.toBeInstanceOf(InvalidSessionCursorError);
+  });
+
+  it('filters history by an inclusive local_date range', async () => {
+    // The 21 sessions above run 2027-01-01..2027-01-21. This narrows to a 6-day window and pins
+    // both ends as inclusive: from=to is one day, not an empty window.
+    const inRange = await repository.listSessions(userId, { from: '2027-01-05', to: '2027-01-10' });
+    expect(inRange.sessions.map((session) => session.localDate)).toEqual([
+      '2027-01-10',
+      '2027-01-09',
+      '2027-01-08',
+      '2027-01-07',
+      '2027-01-06',
+      '2027-01-05',
+    ]);
+    expect(inRange.nextCursor).toBeNull();
+
+    const oneDay = await repository.listSessions(userId, { from: '2027-01-07', to: '2027-01-07' });
+    expect(oneDay.sessions.map((session) => session.localDate)).toEqual(['2027-01-07']);
+
+    // Each end alone is a half-open window: the missing end is absent, not defaulted.
+    expect(
+      (await repository.listSessions(userId, { from: '2027-01-18' })).sessions.map(
+        (session) => session.localDate,
+      ),
+    ).toEqual(['2027-01-21', '2027-01-20', '2027-01-19', '2027-01-18']);
+    // The upper end is asserted as a bound, not as a total: earlier tests in this file left this
+    // user sessions on 2026-11-01/02, and they are legitimately inside "everything up to
+    // 2027-01-03". What the end must do is cut the January log at the third.
+    const upToThird = await repository.listSessions(userId, { to: '2027-01-03' });
+    expect(upToThird.sessions.slice(0, 3).map((session) => session.localDate)).toEqual([
+      '2027-01-03',
+      '2027-01-02',
+      '2027-01-01',
+    ]);
+    expect(upToThird.sessions.every((session) => session.localDate <= '2027-01-03')).toBe(true);
+
+    // A window that matches nothing is an empty page — not an error, and not the whole log.
+    expect(await repository.listSessions(userId, { from: '2027-02-01', to: '2027-02-28' })).toEqual({
+      sessions: [],
+      nextCursor: null,
+    });
   });
 
   it('materializes a source-linked PR, preserves higher records, and recomputes edited sets', async () => {

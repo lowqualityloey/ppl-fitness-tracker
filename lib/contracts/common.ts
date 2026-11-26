@@ -2,7 +2,14 @@ import { z } from 'zod';
 
 export const UuidSchema = z.string().uuid();
 export const IsoDateTimeSchema = z.string().datetime({ offset: true });
-export const LocalDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected a YYYY-MM-DD date.');
+/**
+ * A calendar date, not a date-shaped string: `z.iso.date()` rejects `2026-02-31` and
+ * `2025-02-29`, which the previous regex accepted. That matters wherever a date goes
+ * straight into a Postgres `date` column: an impossible date used to pass the contract and
+ * come back as a 500 from the cast. It is now a 400 at the same boundary as every other
+ * malformed input (#82).
+ */
+export const LocalDateSchema = z.iso.date('Expected a YYYY-MM-DD date.');
 export const NonNegativeIntegerSchema = z.number().int().nonnegative();
 
 /**

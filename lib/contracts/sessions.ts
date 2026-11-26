@@ -48,9 +48,26 @@ const QuerySequenceSchema = z.union([
   NonNegativeIntegerSchema,
 ]).transform(Number);
 
-export const SessionsListQuerySchema = z.object({
-  cursor: CursorSchema.optional(),
-}).strict();
+/**
+ * `?from=`/`?to=` are an additive filter on the list, not a second listing: they are
+ * inclusive on both ends and validated against the session's `local_date`, and they compose
+ * with the opaque cursor by conjunction — the cursor says *where to resume*, the range says
+ * *what counts* (#82, ASSUMPTION-m4-006). Neither is required, so the bare call is unchanged.
+ *
+ * Both boundaries are inclusive because `from=2026-09-01&to=2026-09-30` reads as September;
+ * a half-open window would be an off-by-one the URL does not warn about.
+ */
+export const SessionsListQuerySchema = z
+  .object({
+    cursor: CursorSchema.optional(),
+    from: LocalDateSchema.optional(),
+    to: LocalDateSchema.optional(),
+  })
+  .strict()
+  .refine((query) => !(query.from && query.to) || query.from <= query.to, {
+    message: 'from must not exceed to',
+    path: ['from'],
+  });
 
 export const SessionStartRequestSchema = z.object({
   routineDayId: UuidSchema,

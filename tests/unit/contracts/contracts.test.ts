@@ -275,6 +275,45 @@ describe('session, exercise, and progress contracts', () => {
     expect(SessionDetailResponseSchema.safeParse({ ok: true, data: {} }).success).toBe(false);
   });
 
+  /*
+   * #82 / ASSUMPTION-m4-006. The spec's accepted answer is additive `?from=`/`?to=` combinable
+   * with the existing opaque cursor, and it asks this test to pin all four from/to x cursor
+   * combinations rather than the happy path alone. All eight are here: neither/both/from-only/
+   * to-only, each with and without a cursor. If a future edit makes the range replace the cursor,
+   * or makes one end mandatory, one of these lines goes red.
+   */
+  it('composes an optional inclusive date range with the opaque cursor', () => {
+    const cursor = 'opaque-cursor';
+    const windows = [
+      {}, // neither end — the list is unchanged from before #82
+      { from: '2026-09-01', to: '2026-09-30' }, // both ends
+      { from: '2026-09-01' }, // from alone
+      { to: '2026-09-30' }, // to alone
+    ];
+    for (const window of windows) {
+      expect(SessionsListQuerySchema.safeParse(window).success).toBe(true);
+      expect(SessionsListQuerySchema.safeParse({ ...window, cursor }).success).toBe(true);
+    }
+
+    // Both ends are inclusive, so a one-day window is a real window and not an off-by-one.
+    expect(SessionsListQuerySchema.safeParse({ from: '2026-09-07', to: '2026-09-07' }).success)
+      .toBe(true);
+    // A backwards window is a mistake the server can name, not an empty page to puzzle over.
+    expect(SessionsListQuerySchema.safeParse({ from: '2026-09-30', to: '2026-09-01' }).success)
+      .toBe(false);
+
+    // A date that does not exist on the calendar must fail here, at the boundary: passed to
+    // Postgres it would be a 500 from the `date` cast instead of a 400 naming the field.
+    expect(SessionsListQuerySchema.safeParse({ from: '2026-02-31' }).success).toBe(false);
+    expect(SessionsListQuerySchema.safeParse({ to: '2025-02-29' }).success).toBe(false);
+    expect(SessionsListQuerySchema.safeParse({ from: '2024-02-29' }).success).toBe(true);
+    // An empty parameter is absent, not unbounded — `?from=` is a malformed request.
+    expect(SessionsListQuerySchema.safeParse({ from: '' }).success).toBe(false);
+    expect(SessionsListQuerySchema.safeParse({ from: '2026-9-1' }).success).toBe(false);
+    // `.strict()` still holds: widening the object did not open it.
+    expect(SessionsListQuerySchema.safeParse({ since: '12' }).success).toBe(false);
+  });
+
   it('validates exercise output and the no-input library query', () => {
     expect(ExercisesListQuerySchema.safeParse({}).success).toBe(true);
     const exercise = {

@@ -65,12 +65,13 @@ M4-36. **#76 left it on 2026-11-26** — it became M4-37, and its filed premise 
 and was **signed off and closed on 2026-11-26**. **#82 left it the same day** — it became M4-38: the
 range is an inclusive filter on `local_date` that composes with the opaque cursor by conjunction, and
 its contract test pins all eight from/to × cursor combinations rather than the happy path. With it
-closed the board reads `open=4 / closed=38` of 42. **#102 left it on 2026-11-26** — it became M4-39: the
+closed the board read `open=4 / closed=38` of 42. **#102 left it on 2026-11-26** — it became M4-39: the
 matrix is now *derived* from the nineteen `--color-*` aliases in `@theme inline` rather than enumerated, an
 undeclared alias is still measured (conservatively, labelled `UNDECLARED`), and the six exclusions carry a
 reason the gate checks — so removing a row is a written decision and adding a token needs no list edit.
-It shipped in `M4-39`'s commit and awaits sign-off; on the close the board moves to `open=3 / closed=39`
-of 42, leaving two parked issues.
+It shipped in `M4-39`'s commit (`3756336`) and was **signed off and closed on 2026-11-26**, so the board
+now reads `open=3 / closed=39` of 42. Of the six parked issues, five are closed (#78, #80, #77, #76, #82);
+**#84** is the one still open, and **#16** stays the owner-blocked M1 gate.
 
 ## Dependency map (arrows = must-land-first)
 
